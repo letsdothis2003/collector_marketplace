@@ -1,0 +1,75 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&family=Space+Grotesk:wght@500;700&display=swap');
+
+:root {
+    --bg: #0a0f1a;
+    --card-bg: #111827;
+    --accent: #10b981;
+    --danger: #ef4444;
+}
+
+body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    background-color: var(--bg);
+    color: #f8fafc;
+}
+
+h1, h2, h3 { font-family: 'Space Grotesk', sans-serif; }
+
+.glass {
+    background: rgba(17, 24, 39, 0.8);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Integrity Indicators */
+.card-scalper { border: 1px solid rgba(239, 68, 68, 0.3); }
+.card-fair { border: 1px solid rgba(16, 185, 129, 0.3); }
+
+.listing-card {
+    transition: all 0.3s ease;
+    animation: cardEntrance 0.5s ease-out forwards;
+}
+
+.listing-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 20px 40px -10px rgba(0,0,0,0.5);
+}
+
+@keyframes cardEntrance {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.ai-insight-list {
+    list-style: none;
+    padding: 0;
+}
+
+.ai-insight-list li {
+    position: relative;
+    padding-left: 1.5rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.875rem;
+    color: #cbd5e1;
+}
+
+.ai-insight-list li::before {
+    content: "✦";
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+}
+
+.price-bar-container {
+    height: 8px;
+    background: #1e293b;
+    border-radius: 99px;
+    overflow: hidden;
+    margin: 10px 0;
+}
+
+.price-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), #eab308, var(--danger));
+    transition: width 1s ease-in-out;
+}
