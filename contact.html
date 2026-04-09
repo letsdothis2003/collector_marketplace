@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contact | Obtainum</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div id="nav-root"></div>
+
+  <main>
+    <div class="container" style="padding-top:3rem;padding-bottom:4rem;max-width:680px">
+      <div class="page-header" style="text-align:center;margin-bottom:3rem">
+        <h1 class="page-title">Get in Touch</h1>
+        <p class="page-sub">Have a question, a report, or just want to connect with the team?</p>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;margin-bottom:2.5rem">
+        <div class="glass" style="padding:1.25rem;text-align:center">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" style="margin:0 auto .75rem"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.25rem">Email</div>
+          <div style="font-size:.875rem;color:var(--primary)">hello@obtainum.com</div>
+        </div>
+        <div class="glass" style="padding:1.25rem;text-align:center">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" style="margin:0 auto .75rem"><path d="M23 3a10.9 10.9 0 01-3.14 1.53A4.48 4.48 0 0020 4a4.48 4.48 0 00-7.86 3v1A10.66 10.66 0 013 4s-4 9 5 13a11.64 11.64 0 01-7 2c9 5 20 0 20-11.5a4.5 4.5 0 00-.08-.83A7.72 7.72 0 0023 3z"/></svg>
+          <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.25rem">Twitter / X</div>
+          <div style="font-size:.875rem;color:var(--blue)">@obtainum</div>
+        </div>
+        <div class="glass" style="padding:1.25rem;text-align:center">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2" style="margin:0 auto .75rem"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.25rem">Discord</div>
+          <div style="font-size:.875rem;color:var(--amber)">discord.gg/obtainum</div>
+        </div>
+      </div>
+
+      <form class="glass" style="padding:2rem" onsubmit="submitContact(event)">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+          <div class="form-group">
+            <label class="input-label" for="cf-name">Name</label>
+            <input class="input" id="cf-name" placeholder="Your name" required>
+          </div>
+          <div class="form-group">
+            <label class="input-label" for="cf-email">Email</label>
+            <input class="input" id="cf-email" type="email" placeholder="you@example.com" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="input-label" for="cf-subject">Subject</label>
+          <select class="input" id="cf-subject">
+            <option>General Question</option>
+            <option>Report a Scalper</option>
+            <option>Listing Issue</option>
+            <option>Partnership</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="input-label" for="cf-message">Message</label>
+          <textarea class="input" id="cf-message" rows="5" placeholder="Tell us what's on your mind…" required></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary btn-full btn-lg" id="contact-btn">
+          Send Message
+        </button>
+        <div id="contact-result" style="margin-top:1rem"></div>
+      </form>
+    </div>
+  </main>
+  <div id="footer-root"></div>
+
+  <script src="js/api.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/theme.js"></script>
+  <script src="js/assistant.js"></script>
+  <script>
+    window.submitContact = function(e) {
+      e.preventDefault();
+      const btn = document.getElementById('contact-btn');
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+      setTimeout(() => {
+        document.getElementById('contact-result').innerHTML = '<div class="fair-note">✓ Message sent! We\'ll get back to you within 24 hours.</div>';
+        btn.textContent = 'Sent!';
+        e.target.reset();
+      }, 900);
+    };
+  </script>
+</body>
+</html>

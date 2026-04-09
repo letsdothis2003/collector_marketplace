@@ -1,102 +1,69 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Obtainum</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Obtainum | Fair Prices for True Collectors</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body class="selection:bg-emerald-500/30">
+<body>
+  <div id="nav-root"></div>
 
-    <div id="crashOverlay" class="hidden fixed inset-0 z-[100] bg-slate-950/90 flex flex-col items-center justify-center text-center p-6">
-        <i class="fas fa-triangle-exclamation text-emerald-500 text-6xl mb-6"></i>
-        <h2 class="text-3xl font-bold text-white mb-2">System Stabilizing...</h2>
-        <p class="text-slate-400 max-w-md">We've detected a data inconsistency. To prevent data loss, the platform is temporarily paused. Please wait while we restore the link.</p>
+  <main>
+    <!-- Hero -->
+    <section class="hero">
+      <div class="container">
+        <div class="hero-tag">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Anti-Scalp Technology
+        </div>
+        <h1>Fair Prices for<br><span>True Collectors.</span></h1>
+        <p>The only marketplace built for collectors. Trade, buy, and sell marketplace-only listings without Amazon or eBay-style sourcing.</p>
+        <div class="hero-actions">
+          <a href="shop.html" class="btn btn-primary btn-lg">
+            Explore the Shop
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </a>
+          <a href="sell.html" class="btn btn-outline btn-lg">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4a2 2 0 012 2v6a2 2 0 01-2 2H6a2 2 0 01-2-2v-1"/></svg>
+            List an Item
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stats -->
+    <div class="stats-bar" id="stats-bar">
+      <div class="stat-item"><div class="stat-num skeleton" style="height:2rem;width:60px;margin:0 auto .25rem">&#8203;</div><div class="stat-label">Total Listings</div></div>
+      <div class="stat-item"><div class="stat-num skeleton" style="height:2rem;width:60px;margin:0 auto .25rem">&#8203;</div><div class="stat-label">Fair Deals</div></div>
+      <div class="stat-item"><div class="stat-num skeleton" style="height:2rem;width:60px;margin:0 auto .25rem">&#8203;</div><div class="stat-label">Scalped Items</div></div>
+      <div class="stat-item"><div class="stat-num" style="color:var(--primary)">5</div><div class="stat-label">Categories</div></div>
     </div>
 
-    <nav class="sticky top-0 z-50 glass border-b border-white/5 p-4">
-        <div class="max-w-7xl mx-auto flex justify-between items-center gap-4">
-            <div class="flex items-center gap-2 cursor-pointer" onclick="showView('marketplace')">
-                <div class="bg-emerald-500 w-10 h-10 flex items-center justify-center rounded-xl rotate-3 hover:rotate-0 transition-transform">
-                    <i class="fas fa-box-open text-slate-900 text-lg"></i>
-                </div>
-                <h1 class="text-xl font-bold tracking-tight text-white hidden md:block">OBTAINUM</h1>
-            </div>
+    <!-- Source filter -->
+    <div class="container">
+      <div class="source-tabs" id="source-tabs">
+        <button class="source-tab active" data-source="Marketplace">Marketplace Only</button>
+      </div>
 
-            <div class="flex-1 max-w-xl relative">
-                <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"></i>
-                <input type="text" id="searchInput" placeholder="Search Transformers, Marvel, Tech..." 
-                    class="w-full bg-slate-900/50 border border-white/10 rounded-2xl py-2.5 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500/50 text-sm transition-all text-white">
-            </div>
+      <!-- Featured grid -->
+      <div id="featured-grid" class="listing-grid">
+        <!-- skeleton -->
+        <div class="listing-card" style="pointer-events:none"><div style="aspect-ratio:4/3" class="skeleton"></div><div style="padding:1rem"><div class="skeleton" style="height:14px;margin-bottom:.5rem"></div><div class="skeleton" style="height:14px;width:60%;margin-bottom:.5rem"></div></div></div>
+        <div class="listing-card" style="pointer-events:none"><div style="aspect-ratio:4/3" class="skeleton"></div><div style="padding:1rem"><div class="skeleton" style="height:14px;margin-bottom:.5rem"></div><div class="skeleton" style="height:14px;width:60%;margin-bottom:.5rem"></div></div></div>
+        <div class="listing-card" style="pointer-events:none"><div style="aspect-ratio:4/3" class="skeleton"></div><div style="padding:1rem"><div class="skeleton" style="height:14px;margin-bottom:.5rem"></div><div class="skeleton" style="height:14px;width:60%;margin-bottom:.5rem"></div></div></div>
+      </div>
+    </div>
+    <div style="height:4rem"></div>
+  </main>
+  <div id="footer-root"></div>
 
-            <div class="flex items-center gap-4">
-                <button id="loginBtn" class="text-slate-400 hover:text-white text-sm font-bold">LOG IN</button>
-                <button onclick="showView('sell')" class="bg-white text-slate-900 font-bold px-5 py-2.5 rounded-xl text-sm hover:bg-emerald-400 transition-colors flex items-center gap-2">
-                    <i class="fas fa-plus"></i> <span class="hidden sm:inline">List Item</span>
-                </button>
-            </div>
-        </div>
-    </nav>
-
-    <main class="max-w-7xl mx-auto px-4 mt-8 pb-32">
-        <div id="marketplaceView" class="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            <aside class="space-y-6">
-                <div class="glass p-6 rounded-2xl border-white/5">
-                    <h3 class="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-4">Market Source</h3>
-                    <div class="space-y-2" id="sourceFilters">
-                        <label class="flex items-center gap-3 text-sm text-slate-300 cursor-pointer">
-                            <input type="checkbox" checked value="Retail" class="accent-emerald-500"> Retail (Amazon/Target)
-                        </label>
-                        <label class="flex items-center gap-3 text-sm text-slate-300 cursor-pointer">
-                            <input type="checkbox" checked value="Local" class="accent-emerald-500"> Local (eBay/FB)
-                        </label>
-                        <label class="flex items-center gap-3 text-sm text-slate-300 cursor-pointer">
-                            <input type="checkbox" checked value="Marketplace" class="accent-emerald-500"> Your Store
-                        </label>
-                    </div>
-                </div>
-
-                <div class="glass p-6 rounded-2xl border-white/5">
-                    <h3 class="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-4">Price Range</h3>
-                    <div class="flex items-center gap-2">
-                        <input type="number" id="minPrice" placeholder="Min" class="w-full bg-slate-950 border border-white/10 rounded-lg p-2 text-xs">
-                        <input type="number" id="maxPrice" placeholder="Max" class="w-full bg-slate-950 border border-white/10 rounded-lg p-2 text-xs">
-                    </div>
-                </div>
-            </aside>
-
-            <div class="lg:col-span-3">
-                <div class="flex justify-between items-center mb-6">
-                    <p id="resultCount" class="text-xs text-slate-500 font-mono">0 RESULTS FOUND</p>
-                    <select id="sortSelect" class="bg-transparent text-xs font-bold text-emerald-400 outline-none">
-                        <option value="newest">Sort: Newest</option>
-                        <option value="price-low">Price: Low to High</option>
-                        <option value="price-high">Price: High to Low</option>
-                    </select>
-                </div>
-                <div id="itemGrid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
-                    </div>
-            </div>
-        </div>
-
-        <section id="detailView" class="hidden max-w-5xl mx-auto">
-            </section>
-
-        <section id="sellView" class="hidden max-w-xl mx-auto glass p-8 rounded-[32px]">
-            <h2 class="text-2xl font-bold mb-6">List Your Collectible</h2>
-            <form id="sellForm" class="space-y-4">
-                <input type="text" id="formTitle" placeholder="Item Name" required class="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white">
-                <div class="grid grid-cols-2 gap-4">
-                    <input type="number" id="formMsrp" placeholder="MSRP ($)" required class="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white">
-                    <input type="number" id="formPrice" placeholder="Selling Price ($)" required class="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white">
-                </div>
-                <button type="submit" class="w-full bg-emerald-500 text-slate-900 font-bold py-4 rounded-xl">POST TO MARKETPLACE</button>
-            </form>
-        </section>
-    </main>
-
-    <script src="script.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/theme.js"></script>
+  <script src="js/home.js"></script>
+  <script src="js/main.js"></script>
+  <script src="js/assistant.js"></script>
 </body>
 </html>

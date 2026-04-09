@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>About | Obtainum</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+</head>
+<body>
+  <div id="nav-root"></div>
+
+  <main>
+    <div class="container" style="padding-top:3rem;padding-bottom:4rem;max-width:800px">
+
+      <div style="text-align:center;margin-bottom:4rem">
+        <div style="display:inline-flex;align-items:center;gap:.5rem;padding:.35rem .875rem;border-radius:999px;border:1px solid rgba(16,185,129,.3);background:rgba(16,185,129,.08);font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--primary);margin-bottom:1.5rem">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Our Mission
+        </div>
+        <h1 style="font-family:'Space Grotesk',sans-serif;font-size:2.75rem;font-weight:700;line-height:1.15;margin-bottom:1rem">
+          Protecting Collectors.<br>
+          <span style="color:var(--primary)">One Listing at a Time.</span>
+        </h1>
+        <p style="color:var(--muted);font-size:1.05rem;line-height:1.7;max-width:560px;margin:0 auto">
+          Obtainum was founded by collectors who were tired of scalpers destroying the hobby. We built the technology to fight back — real-time MSRP verification, AI-powered market analysis, and a community-first platform.
+        </p>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.25rem;margin-bottom:4rem">
+        <div class="glass" style="padding:1.75rem">
+          <div style="width:40px;height:40px;border-radius:.875rem;background:rgba(16,185,129,.12);display:flex;align-items:center;justify-content:center;margin-bottom:1rem; cursor: pointer;" onclick="openAssistant()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3 style="font-weight:700;margin-bottom:.5rem">Anti-Scalp Engine</h3>
+          <p style="font-size:.875rem;color:var(--muted);line-height:1.6">Every listing is automatically compared against real-time MSRP data. Scalped items are flagged instantly — no algorithms, no guessing.</p>
+        </div>
+        <div class="glass" style="padding:1.75rem">
+          <div style="width:40px;height:40px;border-radius:.875rem;background:rgba(96,165,250,.12);display:flex;align-items:center;justify-content:center;margin-bottom:1rem">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          </div>
+          <h3 style="font-weight:700;margin-bottom:.5rem">AI Market Intelligence</h3>
+          <p style="font-size:.875rem;color:var(--muted);line-height:1.6">Our AI analyzes every listing for collectibility, market conditions, and buy worthiness — giving you a real edge as a collector.</p>
+        </div>
+        <div class="glass" style="padding:1.75rem">
+          <div style="width:40px;height:40px;border-radius:.875rem;background:rgba(245,158,11,.12);display:flex;align-items:center;justify-content:center;margin-bottom:1rem">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87m-4-12a4 4 0 010 7.75"/></svg>
+          </div>
+          <h3 style="font-weight:700;margin-bottom:.5rem">Community First</h3>
+          <p style="font-size:.875rem;color:var(--muted);line-height:1.6">Built by collectors, for collectors. Every feature is designed to protect the hobby and ensure fair deals for everyone in the community.</p>
+        </div>
+      </div>
+
+      <div class="glass" style="padding:2rem;text-align:center">
+        <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:.75rem">Ready to find your next grail?</h2>
+        <p style="color:var(--muted);margin-bottom:1.5rem">Browse thousands of marketplace-only collectible listings from devoted sellers.</p>
+        <a href="shop.html" class="btn btn-primary btn-lg">Explore the Shop</a>
+      </div>
+    </div>
+  </main>
+  <div id="footer-root"></div>
+
+  <script src="js/api.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/theme.js"></script>
+  <script src="js/assistant.js"></script>
+</body>
+</html>

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Obtainum AI Assistant</title>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/style.css">
+
+</head>
+<body>
+
+<div id="chat-container">
+    <header>
+        <div class="brand-name">OBTAINUM</div>
+        <div class="status-text">
+            <div class="status-dot"></div>
+            Market Expert & Safety Assistant
+        </div>
+    </header>
+    <div id="messages">
+        <div class="message bot-message">Welcome to Obtainum. I can help you value your toys, clothes, shoes, or trading cards, and provide safety tips for your local pickups. What are you looking to buy or sell today?</div>
+    </div>
+    <div class="input-area">
+        <input type="text" id="user-input" placeholder="Value an item or check pickup safety..." autocomplete="off">
+        <button id="send-btn" title="Send message">
+            <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+        </button>
+    </div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+    const messagesContainer = document.getElementById('messages');
+    const userInput = document.getElementById('user-input');
+    const sendBtn = document.getElementById('send-btn');
+    const chat = []; // Store chat history as { sender, text }
+
+    function addMessage(text, sender, isError = false) {
+        const msgDiv = document.createElement('div');
+        msgDiv.classList.add('message');
+        if (isError) {
+            msgDiv.classList.add('error-message');
+        } else {
+            msgDiv.classList.add(sender === 'user' ? 'user-message' : 'bot-message');
+        }
+        
+        // Basic Markdown-to-HTML conversion for bold text
+        text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        msgDiv.innerHTML = text; // Use innerHTML to render formatted text
+
+        messagesContainer.appendChild(msgDiv);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        return msgDiv;
+    }
+
+    async function handleChat() {
+        const text = userInput.value.trim();
+        if (!text) return;
+
+        addMessage(text, 'user');
+        chat.push({ sender: 'user', text: text });
+
+        userInput.value = "";
+        userInput.disabled = true;
+        sendBtn.disabled = true;
+
+        const typingIndicator = document.createElement('div');
+        typingIndicator.className = 'typing';
+        typingIndicator.textContent = "Obtainum is analyzing market data...";
+        messagesContainer.appendChild(typingIndicator);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+        try {
+            // Convert history to the format expected by the backend
+            const historyForAPI = chat.slice(0, -1).map(c => ({
+                role: c.sender === 'user' ? 'user' : 'model',
+                parts: [{ text: c.text }]
+            }));
+            
+            // Use the secure, existing API endpoint from api.js
+            const aiResponse = await API.chatWithAI(text, historyForAPI);
+            
+            chat.push({ sender: 'bot', text: aiResponse });
+            typingIndicator.remove();
+            addMessage(aiResponse, 'bot');
+
+        } catch (error) {
+            typingIndicator.remove();
+            let errorMessage = "An unknown error occurred. Please try again.";
+            if (error.message.includes('Authentication required')) {
+                errorMessage = "You must be logged in to use the AI Assistant. Please <a href='/login.html'>log in</a> and try again.";
+            } else if (error.message.includes('AI chat failed')) {
+                 errorMessage = "Sorry, I'm having trouble connecting to the AI. Please try again in a moment.";
+            }
+            addMessage(errorMessage, 'bot', true);
+        } finally {
+            userInput.disabled = false;
+            sendBtn.disabled = false;
+            userInput.focus();
+        }
+    }
+
+    sendBtn.addEventListener('click', handleChat);
+    userInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleChat();
+    });
+
+    async function initializeChat() {
+        userInput.disabled = true;
+        sendBtn.disabled = true;
+        userInput.placeholder = "Connecting to AI Assistant...";
+        try {
+            await API.ready; // Wait for api.js to be fully initialized
+            userInput.disabled = false;
+            sendBtn.disabled = false;
+            userInput.placeholder = "Value an item or check pickup safety...";
+            userInput.focus();
+        } catch (e) {
+             addMessage("Failed to initialize the AI Assistant. Please refresh the page.", 'bot', true);
+             userInput.placeholder = "Connection failed.";
+        }
+    }
+    
+    window.onload = initializeChat;
+</script>
+
+</body>
+</html>
