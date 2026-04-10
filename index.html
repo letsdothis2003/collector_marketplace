@@ -1,245 +1,1392 @@
-
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Obtainum | The Anti-Scalp Marketplace</title>
+  <meta name="description" content="Obtainium: The Anti-Scalp Collector Marketplace. Buy and sell collectibles, electronics, apparel, and more — at fair prices.">
+  <meta property="og:title" content="Obtainium | The Anti-Scalp Marketplace">
+  <meta property="og:description" content="Buy and sell collectibles without the scalpers.">
+  <title>Obtainium | The Anti-Scalp Marketplace</title>
+
+  <!-- External CDNs -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+  <!-- Stylesheet -->
+  <!-- Potentially split into: variables.css, global.css, nav.css, hero.css, product.css, shop.css, form.css, cart.css, profile.css, chat.css, modal.css, footer.css, responsive.css -->
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <nav id="nav-root">
-    <div class="container">
-      <a href="#" onclick="showPage('home')">Obtainum</a>
-      <div class="nav-links">
-        <a href="#" onclick="showPage('shop')">Shop</a>
-        <a href="#" onclick="showPage('sell')">Sell</a>
-        <a href="#" onclick="showPage('assistant')">AI Assistant</a>
-        <a href="#" onclick="showPage('about')">About</a>
-        <a href="#" onclick="showPage('cart')">Cart</a>
-        <a href="#" onclick="showPage('login')" id="login-link">Login</a>
+
+  <!-- ================================================================
+       TOAST NOTIFICATION CONTAINER
+       Potentially: components/Toast.js
+  ================================================================ -->
+  <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- ================================================================
+       MOBILE MENU OVERLAY
+       Potentially: components/MobileMenu.js
+  ================================================================ -->
+  <div id="mobile-overlay" class="mobile-overlay"></div>
+
+  <!-- ================================================================
+       NAV / HEADER
+       Potentially: components/Header.js or header.html partial
+  ================================================================ -->
+  <nav id="nav-root" role="navigation" aria-label="Main navigation">
+    <div class="nav-inner">
+
+      <!-- Brand -->
+      <a href="#" class="brand" onclick="showPage('home')" aria-label="Obtainium Home">
+        <span class="brand-icon"><i class="fas fa-gem"></i></span>
+        <span class="brand-text">Obtainium</span>
+        <span class="brand-tagline">Anti-Scalp</span>
+      </a>
+
+      <!-- Desktop Search Bar -->
+      <!-- Potentially: components/SearchBar.js -->
+      <div class="nav-search" role="search">
+        <i class="fas fa-search search-icon" aria-hidden="true"></i>
+        <input type="text" id="global-search" placeholder="Search for items, categories, sellers..." aria-label="Search marketplace">
+        <button id="search-clear-btn" class="search-clear" aria-label="Clear search" style="display:none;"><i class="fas fa-times"></i></button>
       </div>
+
+      <!-- Nav Links -->
+      <div class="nav-links" id="nav-links">
+        <a href="#" onclick="showPage('home')" class="nav-link" data-page="home">
+          <i class="fas fa-home"></i><span>Home</span>
+        </a>
+        <a href="#" onclick="showPage('shop')" class="nav-link" data-page="shop">
+          <i class="fas fa-store"></i><span>Shop</span>
+        </a>
+        <a href="#" onclick="showPage('sell')" class="nav-link" data-page="sell">
+          <i class="fas fa-tag"></i><span>Sell</span>
+        </a>
+        <a href="#" onclick="showPage('about')" class="nav-link" data-page="about">
+          <i class="fas fa-info-circle"></i><span>About</span>
+        </a>
+        <a href="#" onclick="showPage('donate')" class="nav-link nav-donate-btn" data-page="donate">
+          <i class="fas fa-hand-holding-heart"></i><span>Donate</span>
+        </a>
+        <a href="#" onclick="showPage('assistant')" class="nav-link" data-page="assistant">
+          <i class="fas fa-robot"></i><span>AI Assistant</span>
+        </a>
+        <a href="#" onclick="showPage('cart')" class="nav-link cart-link" data-page="cart" aria-label="Shopping Cart">
+          <i class="fas fa-shopping-cart"></i>
+          <span>Cart</span>
+          <span id="cart-count" class="cart-badge" aria-label="Items in cart">0</span>
+        </a>
+        <!-- Auth-dependent links -->
+        <a href="#" onclick="showPage('profile')" class="nav-link" id="profile-link" data-page="profile" style="display:none;">
+          <i class="fas fa-user-circle"></i><span>Profile</span>
+        </a>
+        <a href="#" onclick="showPage('login')" class="nav-link nav-login-btn" id="login-link">
+          <i class="fas fa-sign-in-alt"></i><span>Login</span>
+        </a>
+        <a href="#" id="logout-link" class="nav-link nav-logout-btn" style="display:none;" onclick="logout()">
+          <i class="fas fa-sign-out-alt"></i><span>Logout</span>
+        </a>
+
+        <!-- Theme Toggle -->
+        <!-- Potentially: components/ThemeToggle.js -->
+        <button id="theme-toggle" class="theme-toggle-btn" aria-label="Toggle dark/light mode" title="Toggle theme">
+          <i class="fas fa-moon" id="theme-icon"></i>
+        </button>
+      </div>
+
+      <!-- Mobile Hamburger -->
+      <button id="mobile-menu-btn" class="mobile-menu-btn" aria-label="Open menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
     </div>
   </nav>
 
-  <main id="view-container">
-    
+  <!-- ================================================================
+       ANNOUNCEMENT BANNER
+       Potentially: components/AnnouncementBanner.js
+  ================================================================ -->
+  <div id="announcement-banner" class="announcement-banner">
+    <i class="fas fa-shield-alt"></i>
+    <span>Obtainium is <strong>anti-scalp</strong> — we flag listings priced above MSRP. Fair prices guaranteed.</span>
+    <button id="close-banner" aria-label="Close announcement"><i class="fas fa-times"></i></button>
+  </div>
+
+  <!-- ================================================================
+       MAIN VIEW CONTAINER
+  ================================================================ -->
+  <main id="view-container" role="main">
+
+    <!-- ============================================================
+         HOME PAGE
+         Potentially: pages/HomePage.js or pages/home.html
+    ============================================================ -->
     <section id="page-home" class="page-view active">
-      <div class="hero">
-        <div class="container">
-          <div class="hero-tag">Anti-Scalp Technology</div>
-          <h1>Fair Prices for<br><span>True Collectors.</span></h1>
-          <p>The only marketplace built for collectors. Trade, buy, and sell marketplace-only listings without Amazon or eBay-style sourcing.</p>
+
+      <!-- Hero Section — Potentially: components/Hero.js -->
+      <div class="hero-section" id="hero">
+        <div class="hero-bg-shapes" aria-hidden="true">
+          <div class="shape shape-1"></div>
+          <div class="shape shape-2"></div>
+          <div class="shape shape-3"></div>
+        </div>
+        <div class="hero-content">
+          <div class="hero-badge"><i class="fas fa-shield-alt"></i> Anti-Scalp Certified</div>
+          <h1 class="hero-title">The Collector's <span class="hero-highlight">Fair Price</span> Marketplace</h1>
+          <p class="hero-subtitle">Buy and sell collectibles, electronics, apparel, and more — without dealing with scalpers. Every listing is community-verified.</p>
           <div class="hero-actions">
-            <button class="btn btn-primary" onclick="showPage('shop')">Explore the Shop</button>
-            <button class="btn btn-outline" onclick="showPage('sell')">List an Item</button>
+            <button class="btn btn-primary btn-lg" onclick="showPage('shop')">
+              <i class="fas fa-store"></i> Browse Marketplace
+            </button>
+            <button class="btn btn-outline btn-lg" onclick="showPage('sell')">
+              <i class="fas fa-plus-circle"></i> List an Item
+            </button>
+          </div>
+          <div class="hero-stats">
+            <div class="hero-stat"><span class="stat-number" data-target="12400">0</span><span class="stat-label">Active Listings</span></div>
+            <div class="hero-stat"><span class="stat-number" data-target="8900">0</span><span class="stat-label">Happy Sellers</span></div>
+            <div class="hero-stat"><span class="stat-number" data-target="99">0</span><span class="stat-label">% Fair Price Rate</span></div>
+          </div>
+        </div>
+        <div class="hero-image-area" aria-hidden="true">
+          <div class="hero-cards-stack">
+            <div class="hcard hcard-3"><i class="fas fa-gamepad"></i><span>Gaming</span></div>
+            <div class="hcard hcard-2"><i class="fas fa-tshirt"></i><span>Apparel</span></div>
+            <div class="hcard hcard-1"><i class="fas fa-star"></i><span>Collectibles</span></div>
           </div>
         </div>
       </div>
-      <div class="stats-bar container">
-        <div class="stat-item"><div class="stat-num">2,401</div><div class="stat-label">Total Listings</div></div>
-        <div class="stat-item"><div class="stat-num">98%</div><div class="stat-label">Fair Deals</div></div>
-        <div class="stat-item"><div class="stat-num">0</div><div class="stat-label">Scalped Items</div></div>
+
+      <!-- Category Quick Links — Potentially: components/CategoryGrid.js -->
+      <div class="container section-block">
+        <h2 class="section-title">Shop by Category</h2>
+        <div class="category-grid">
+          <button class="category-card" onclick="filterAndGoShop('electronics')">
+            <div class="cat-icon-wrap cat-electronics"><i class="fas fa-microchip"></i></div>
+            <span class="cat-name">Electronics</span>
+            <span class="cat-count" id="cat-count-electronics">0 items</span>
+          </button>
+          <button class="category-card" onclick="filterAndGoShop('toys')">
+            <div class="cat-icon-wrap cat-toys"><i class="fas fa-puzzle-piece"></i></div>
+            <span class="cat-name">Toys &amp; Collectibles</span>
+            <span class="cat-count" id="cat-count-toys">0 items</span>
+          </button>
+          <button class="category-card" onclick="filterAndGoShop('apparel')">
+            <div class="cat-icon-wrap cat-apparel"><i class="fas fa-tshirt"></i></div>
+            <span class="cat-name">Apparel</span>
+            <span class="cat-count" id="cat-count-apparel">0 items</span>
+          </button>
+          <button class="category-card" onclick="filterAndGoShop('sports')">
+            <div class="cat-icon-wrap cat-sports"><i class="fas fa-futbol"></i></div>
+            <span class="cat-name">Sports &amp; Outdoors</span>
+            <span class="cat-count" id="cat-count-sports">0 items</span>
+          </button>
+          <button class="category-card" onclick="filterAndGoShop('books')">
+            <div class="cat-icon-wrap cat-books"><i class="fas fa-book"></i></div>
+            <span class="cat-name">Books &amp; Media</span>
+            <span class="cat-count" id="cat-count-books">0 items</span>
+          </button>
+          <button class="category-card" onclick="filterAndGoShop('home')">
+            <div class="cat-icon-wrap cat-home"><i class="fas fa-home"></i></div>
+            <span class="cat-name">Home &amp; Garden</span>
+            <span class="cat-count" id="cat-count-home">0 items</span>
+          </button>
+          <button class="category-card" onclick="filterAndGoShop('vehicles')">
+            <div class="cat-icon-wrap cat-vehicles"><i class="fas fa-car"></i></div>
+            <span class="cat-name">Vehicles &amp; Parts</span>
+            <span class="cat-count" id="cat-count-vehicles">0 items</span>
+          </button>
+          <button class="category-card" onclick="filterAndGoShop('other')">
+            <div class="cat-icon-wrap cat-other"><i class="fas fa-box-open"></i></div>
+            <span class="cat-name">Other</span>
+            <span class="cat-count" id="cat-count-other">0 items</span>
+          </button>
+        </div>
       </div>
+
+      <!-- Featured Listings — Potentially: components/FeaturedProducts.js -->
+      <div class="container section-block" id="featured-section">
+        <div class="section-header">
+          <h2 class="section-title">Featured Listings</h2>
+          <a href="#" class="section-link" onclick="showPage('shop')">View all <i class="fas fa-arrow-right"></i></a>
+        </div>
+        <div id="featured-products" class="product-grid" role="list">
+          <!-- Dynamically inserted -->
+        </div>
+      </div>
+
+      <!-- Recent Listings — Potentially: components/RecentListings.js -->
+      <div class="container section-block">
+        <div class="section-header">
+          <h2 class="section-title">Newly Listed</h2>
+          <a href="#" class="section-link" onclick="showPage('shop')">See all <i class="fas fa-arrow-right"></i></a>
+        </div>
+        <div id="recent-products" class="product-grid" role="list">
+          <!-- Dynamically inserted -->
+        </div>
+      </div>
+
+      <!-- Trust Signals — Potentially: components/TrustBar.js -->
+      <div class="trust-bar">
+        <div class="container trust-inner">
+          <div class="trust-item">
+            <i class="fas fa-shield-alt"></i>
+            <div><strong>Buyer Protection</strong><span>Every purchase covered</span></div>
+          </div>
+          <div class="trust-item">
+            <i class="fas fa-hand-holding-usd"></i>
+            <div><strong>No Scalping</strong><span>AI-monitored pricing</span></div>
+          </div>
+          <div class="trust-item">
+            <i class="fas fa-comments"></i>
+            <div><strong>Community Reviews</strong><span>Verified seller ratings</span></div>
+          </div>
+          <div class="trust-item">
+            <i class="fas fa-lock"></i>
+            <div><strong>Secure Payments</strong><span>Encrypted transactions</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI Assistant CTA — Potentially: components/AICta.js -->
+      <div class="container section-block">
+        <div class="ai-cta-banner">
+          <div class="ai-cta-content">
+            <div class="ai-badge"><i class="fas fa-robot"></i> Powered by Gemini AI</div>
+            <h3>Not sure what to buy?</h3>
+            <p>Our AI assistant analyzes current listings and market prices to give you personalized recommendations and fair price alerts.</p>
+            <button class="btn btn-primary" onclick="showPage('assistant')">
+              <i class="fas fa-comment-dots"></i> Chat with AI Assistant
+            </button>
+          </div>
+          <div class="ai-cta-visual" aria-hidden="true">
+            <div class="ai-bot-icon"><i class="fas fa-robot"></i></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- How It Works — Potentially: components/HowItWorks.js -->
+      <div class="how-it-works">
+        <div class="container">
+          <h2 class="section-title text-center">How Obtainium Works</h2>
+          <div class="steps-grid">
+            <div class="step-card">
+              <div class="step-number">1</div>
+              <div class="step-icon"><i class="fas fa-user-plus"></i></div>
+              <h4>Create Account</h4>
+              <p>Register for free and join a community of fair-price collectors.</p>
+            </div>
+            <div class="step-card">
+              <div class="step-number">2</div>
+              <div class="step-icon"><i class="fas fa-search"></i></div>
+              <h4>Browse &amp; Filter</h4>
+              <p>Find exactly what you're looking for with powerful search and filters.</p>
+            </div>
+            <div class="step-card">
+              <div class="step-number">3</div>
+              <div class="step-icon"><i class="fas fa-handshake"></i></div>
+              <h4>Buy or Sell</h4>
+              <p>Complete secure transactions with our built-in buyer/seller protection.</p>
+            </div>
+            <div class="step-card">
+              <div class="step-number">4</div>
+              <div class="step-icon"><i class="fas fa-star"></i></div>
+              <h4>Rate &amp; Review</h4>
+              <p>Help the community by reviewing sellers and flagging scalpers.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </section>
 
+    <!-- ============================================================
+         SHOP PAGE
+         Potentially: pages/ShopPage.js or pages/shop.html
+    ============================================================ -->
     <section id="page-shop" class="page-view">
       <div class="container">
-        <div class="page-header">
-          <h1 class="page-title">Shop</h1>
-          <p class="page-sub" id="listing-count">Loading listings…</p>
-        </div>
-        <div class="shop-layout">
-          <aside class="sidebar">
-            <div class="glass"><h3>Filters</h3><button onclick="clearFilters()">Clear All</button></div>
-            <div class="glass"><h3>Category</h3><div id="category-filters"></div></div>
-            <div class="glass"><h3>Fulfillment</h3><div id="fulfillment-filters"></div></div>
-          </aside>
-          <div class="shop-main">
-            <div class="shop-toolbar">
-              <input type="search" id="shop-search" placeholder="Search listings…">
-              <select id="shop-sort">
-                <option value="newest">Sort: Newest</option>
-                <option value="price_asc">Price: Low to High</option>
+        <div class="shop-header">
+          <h1 class="page-title">Marketplace</h1>
+          <!-- Mobile filter toggle — Potentially: components/FilterToggle.js -->
+          <div class="shop-toolbar">
+            <button class="btn btn-outline btn-sm" id="mobile-filter-btn">
+              <i class="fas fa-sliders-h"></i> Filters
+            </button>
+            <div class="shop-sort-wrap">
+              <label for="sort-select" class="sr-only">Sort by</label>
+              <select id="sort-select" class="sort-select" aria-label="Sort listings">
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="price-asc">Price: Low to High</option>
+                <option value="price-desc">Price: High to Low</option>
+                <option value="name-asc">Name: A–Z</option>
+                <option value="name-desc">Name: Z–A</option>
               </select>
             </div>
-            <div id="shop-grid" class="listing-grid"></div>
+            <span id="results-count" class="results-count">0 listings</span>
           </div>
         </div>
+
+        <div class="shop-layout">
+
+          <!-- FILTERS SIDEBAR — Potentially: components/FilterSidebar.js or filters.js -->
+          <aside class="filters" id="filters-sidebar" aria-label="Filters">
+            <div class="filter-sidebar-header">
+              <h3><i class="fas fa-sliders-h"></i> Filters</h3>
+              <button class="btn-text" id="clear-filters-btn" onclick="clearAllFilters()">Clear All</button>
+            </div>
+
+            <!-- Active Filter Tags — Potentially: components/ActiveFilters.js -->
+            <div id="active-filters" class="active-filters" style="display:none;"></div>
+
+            <!-- Search within shop — Potentially: components/ShopSearch.js -->
+            <div class="filter-group">
+              <h4 class="filter-label"><i class="fas fa-search"></i> Search</h4>
+              <input type="text" id="shop-search" placeholder="Search listings..." aria-label="Search listings" class="filter-input">
+            </div>
+
+            <!-- Category Filter — Potentially: components/CategoryFilter.js -->
+            <div class="filter-group">
+              <h4 class="filter-label"><i class="fas fa-th-large"></i> Category</h4>
+              <div class="filter-checkbox-list" id="category-filter-list">
+                <label class="filter-checkbox"><input type="radio" name="category-filter" value="all" checked> <span>All Categories</span></label>
+                <label class="filter-checkbox"><input type="radio" name="category-filter" value="electronics"> <span><i class="fas fa-microchip"></i> Electronics</span></label>
+                <label class="filter-checkbox"><input type="radio" name="category-filter" value="toys"> <span><i class="fas fa-puzzle-piece"></i> Toys &amp; Collectibles</span></label>
+                <label class="filter-checkbox"><input type="radio" name="category-filter" value="apparel"> <span><i class="fas fa-tshirt"></i> Apparel</span></label>
+                <label class="filter-checkbox"><input type="radio" name="category-filter" value="sports"> <span><i class="fas fa-futbol"></i> Sports &amp; Outdoors</span></label>
+                <label class="filter-checkbox"><input type="radio" name="category-filter" value="books"> <span><i class="fas fa-book"></i> Books &amp; Media</span></label>
+                <label class="filter-checkbox"><input type="radio" name="category-filter" value="home"> <span><i class="fas fa-home"></i> Home &amp; Garden</span></label>
+                <label class="filter-checkbox"><input type="radio" name="category-filter" value="vehicles"> <span><i class="fas fa-car"></i> Vehicles &amp; Parts</span></label>
+                <label class="filter-checkbox"><input type="radio" name="category-filter" value="other"> <span><i class="fas fa-box-open"></i> Other</span></label>
+              </div>
+            </div>
+
+            <!-- Price Filter — Potentially: components/PriceFilter.js -->
+            <div class="filter-group">
+              <h4 class="filter-label"><i class="fas fa-dollar-sign"></i> Price Range</h4>
+              <div class="price-range-inputs">
+                <input type="number" id="price-min" placeholder="Min $" min="0" class="filter-input price-input" aria-label="Minimum price">
+                <span class="price-sep">—</span>
+                <input type="number" id="price-max" placeholder="Max $" min="0" class="filter-input price-input" aria-label="Maximum price">
+              </div>
+              <input type="range" id="price-slider" min="0" max="5000" value="5000" aria-label="Maximum price slider">
+              <div class="price-display">Up to <strong id="price-filter-value">$5,000</strong></div>
+            </div>
+
+            <!-- Condition Filter — Potentially: components/ConditionFilter.js -->
+            <div class="filter-group">
+              <h4 class="filter-label"><i class="fas fa-star-half-alt"></i> Condition</h4>
+              <div class="filter-checkbox-list">
+                <label class="filter-checkbox"><input type="checkbox" class="condition-filter" value="new"> <span class="condition-badge condition-new">New</span></label>
+                <label class="filter-checkbox"><input type="checkbox" class="condition-filter" value="like-new"> <span class="condition-badge condition-like-new">Like New</span></label>
+                <label class="filter-checkbox"><input type="checkbox" class="condition-filter" value="good"> <span class="condition-badge condition-good">Good</span></label>
+                <label class="filter-checkbox"><input type="checkbox" class="condition-filter" value="fair"> <span class="condition-badge condition-fair">Fair</span></label>
+                <label class="filter-checkbox"><input type="checkbox" class="condition-filter" value="poor"> <span class="condition-badge condition-poor">For Parts</span></label>
+              </div>
+            </div>
+
+            <!-- Location Filter — Potentially: components/LocationFilter.js -->
+            <div class="filter-group">
+              <h4 class="filter-label"><i class="fas fa-map-marker-alt"></i> Location</h4>
+              <input type="text" id="location-filter" placeholder="City, State or ZIP" class="filter-input" aria-label="Location filter">
+            </div>
+
+            <!-- Listing Type — Potentially: components/ListingTypeFilter.js -->
+            <div class="filter-group">
+              <h4 class="filter-label"><i class="fas fa-tag"></i> Listing Type</h4>
+              <div class="filter-checkbox-list">
+                <label class="filter-checkbox"><input type="checkbox" class="listing-type-filter" value="buy-now" checked> <span>Buy Now</span></label>
+                <label class="filter-checkbox"><input type="checkbox" class="listing-type-filter" value="auction"> <span>Auction</span></label>
+                <label class="filter-checkbox"><input type="checkbox" class="listing-type-filter" value="offers"> <span>Offers Welcome</span></label>
+              </div>
+            </div>
+
+            <!-- Seller Rating Filter — Potentially: components/SellerRatingFilter.js -->
+            <div class="filter-group">
+              <h4 class="filter-label"><i class="fas fa-award"></i> Seller Rating</h4>
+              <div class="filter-checkbox-list">
+                <label class="filter-checkbox"><input type="radio" name="rating-filter" value="all" checked> <span>Any Rating</span></label>
+                <label class="filter-checkbox"><input type="radio" name="rating-filter" value="4"> <span><i class="fas fa-star star"></i><i class="fas fa-star star"></i><i class="fas fa-star star"></i><i class="fas fa-star star"></i> &amp; up</span></label>
+                <label class="filter-checkbox"><input type="radio" name="rating-filter" value="3"> <span><i class="fas fa-star star"></i><i class="fas fa-star star"></i><i class="fas fa-star star"></i> &amp; up</span></label>
+              </div>
+            </div>
+
+            <!-- Anti-Scalp Toggle — Potentially: components/AntiScalpFilter.js -->
+            <div class="filter-group">
+              <h4 class="filter-label"><i class="fas fa-shield-alt"></i> Anti-Scalp</h4>
+              <label class="toggle-switch">
+                <input type="checkbox" id="anti-scalp-filter" checked>
+                <span class="toggle-slider"></span>
+                <span class="toggle-label">Fair price only</span>
+              </label>
+            </div>
+
+            <!-- Free Shipping Filter — Potentially: components/ShippingFilter.js -->
+            <div class="filter-group">
+              <h4 class="filter-label"><i class="fas fa-shipping-fast"></i> Shipping</h4>
+              <label class="toggle-switch">
+                <input type="checkbox" id="free-shipping-filter">
+                <span class="toggle-slider"></span>
+                <span class="toggle-label">Free shipping only</span>
+              </label>
+            </div>
+
+            <button class="btn btn-primary btn-block apply-filters-btn" id="apply-filters-btn">
+              <i class="fas fa-check"></i> Apply Filters
+            </button>
+          </aside>
+
+          <!-- PRODUCT GRID — Potentially: components/ProductGrid.js -->
+          <main class="shop-products" aria-label="Product listings">
+            <!-- View Toggle — Potentially: components/ViewToggle.js -->
+            <div class="view-toggle-bar">
+              <div class="view-toggle" role="group" aria-label="View mode">
+                <button class="view-btn active" id="grid-view-btn" onclick="setView('grid')" aria-label="Grid view" title="Grid view"><i class="fas fa-th-large"></i></button>
+                <button class="view-btn" id="list-view-btn" onclick="setView('list')" aria-label="List view" title="List view"><i class="fas fa-list"></i></button>
+              </div>
+            </div>
+            <div id="product-grid" class="product-grid grid-view" role="list" aria-live="polite">
+              <!-- Dynamically populated -->
+            </div>
+            <!-- Pagination — Potentially: components/Pagination.js -->
+            <div id="pagination" class="pagination-wrap" role="navigation" aria-label="Pagination">
+              <!-- Dynamically inserted -->
+            </div>
+          </main>
+        </div>
       </div>
     </section>
 
-    <section id="page-listing" class="page-view">
-      <div class="container">
-        <div id="listing-content"></div>
-        <div id="ai-section" class="glass">
-          <h3>AI-Powered Analysis</h3>
-          <button class="btn" id="generate-btn" onclick="generateReport()">Generate Report</button>
-          <div id="ai-report-content"></div>
-        </div>
-        <div id="market-sentiment" class="glass">
-          <p>🔥 High Demand Alert! This item is currently trending.</p>
+    <!-- ============================================================
+         PRODUCT DETAIL MODAL
+         Potentially: components/ProductModal.js or ProductDetail.js
+    ============================================================ -->
+    <div id="product-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-product-name" style="display:none;">
+      <div class="modal-box modal-product">
+        <button class="modal-close" onclick="closeProductModal()" aria-label="Close"><i class="fas fa-times"></i></button>
+        <div id="modal-product-content" class="modal-product-inner">
+          <!-- Dynamically populated -->
         </div>
       </div>
-    </section>
+    </div>
 
+    <!-- ============================================================
+         SELL PAGE
+         Potentially: pages/SellPage.js or pages/sell.html
+    ============================================================ -->
     <section id="page-sell" class="page-view">
-      <div class="container" style="max-width:680px">
-        <h1>List an Item</h1>
-        <p>Verified against real-time MSRP data.</p>
-        <form id="sell-form" class="glass" onsubmit="handleSellSubmit(event)">
-          <div class="form-group">
-            <label>Item Title *</label>
-            <input id="title" class="input" placeholder="e.g. Voyager Class Optimus Prime" required>
-          </div>
-          <div class="grid-2">
-            <div class="form-group">
-              <label>Your Price ($) *</label>
-              <input id="price" type="number" step="0.01" required oninput="checkMarkup()">
-            </div>
-            <div class="form-group">
-              <label>MSRP ($) *</label>
-              <input id="msrp" type="number" step="0.01" required oninput="checkMarkup()">
-            </div>
-          </div>
-          <div id="fairness-meter-wrap" class="meter-container">
-            <div class="meter-bar"><div id="meter-fill" class="meter-fill"></div></div>
-            <div class="meter-labels"><span>Fair</span><span>MSRP</span><span>Scalped</span></div>
-          </div>
-          <div class="form-group">
-            <label>Fulfillment Options *</label>
-            <input type="checkbox" name="fulfillment" value="shipping"> Shipping
-            <input type="checkbox" name="fulfillment" value="local_pickup"> Local Pickup
-          </div>
-          <button type="submit" class="btn btn-primary btn-full">Publish Listing</button>
-        </form>
-      </div>
-    </section>
-
-    <section id="page-assistant" class="page-view">
-      <div id="chat-container">
-        <header>
-          <div class="brand-name">OBTAINUM</div>
-          <div class="status-text"><div class="status-dot"></div>Market Expert</div>
-        </header>
-        <div id="messages" style="height: 400px; overflow-y: auto;">
-          <div class="message bot-message">Welcome. I can value toys, cards, or shoes. What are you looking to buy or sell today?</div>
+      <div class="container form-page">
+        <div class="form-page-header">
+          <h1 class="page-title"><i class="fas fa-tag"></i> List an Item</h1>
+          <p class="page-subtitle">Reach thousands of collectors. Fair pricing enforced by our community.</p>
         </div>
-        <div class="input-area">
-          <input type="text" id="user-input" placeholder="Value an item...">
-          <button id="send-btn" onclick="handleChat()">Send</button>
+
+        <!-- Sell Form — Potentially: components/SellForm.js -->
+        <div class="form-card">
+          <form id="sell-form" class="sell-form" novalidate>
+
+            <!-- Item Details -->
+            <fieldset class="form-fieldset">
+              <legend>Item Details</legend>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="sell-item-name">Item Name <span class="required">*</span></label>
+                  <input type="text" id="sell-item-name" placeholder="e.g. Nintendo Switch OLED – White" required maxlength="120" autocomplete="off">
+                  <span class="char-count"><span id="name-char-count">0</span>/120</span>
+                </div>
+                <div class="form-group">
+                  <label for="sell-item-category">Category <span class="required">*</span></label>
+                  <select id="sell-item-category" required>
+                    <option value="">Select a category</option>
+                    <option value="electronics">Electronics</option>
+                    <option value="toys">Toys &amp; Collectibles</option>
+                    <option value="apparel">Apparel</option>
+                    <option value="sports">Sports &amp; Outdoors</option>
+                    <option value="books">Books &amp; Media</option>
+                    <option value="home">Home &amp; Garden</option>
+                    <option value="vehicles">Vehicles &amp; Parts</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="sell-item-description">Description <span class="required">*</span></label>
+                <textarea id="sell-item-description" placeholder="Describe the item's condition, any included accessories, history, etc." required rows="5" maxlength="2000"></textarea>
+                <span class="char-count"><span id="desc-char-count">0</span>/2000</span>
+              </div>
+            </fieldset>
+
+            <!-- Condition & Tags — Potentially: components/ConditionSelector.js -->
+            <fieldset class="form-fieldset">
+              <legend>Condition &amp; Tags</legend>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="sell-item-condition">Condition <span class="required">*</span></label>
+                  <select id="sell-item-condition" required>
+                    <option value="">Select condition</option>
+                    <option value="new">New (Sealed/Unopened)</option>
+                    <option value="like-new">Like New (Opened, never used)</option>
+                    <option value="good">Good (Light use, minor signs of wear)</option>
+                    <option value="fair">Fair (Visible wear, fully functional)</option>
+                    <option value="poor">For Parts / Not Working</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="sell-item-location">Your Location</label>
+                  <input type="text" id="sell-item-location" placeholder="City, State (e.g. Austin, TX)">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="sell-item-tags">Tags (comma-separated)</label>
+                <input type="text" id="sell-item-tags" placeholder="e.g. retro, limited edition, OLED, vintage">
+                <small>Tags help buyers discover your listing.</small>
+              </div>
+            </fieldset>
+
+            <!-- Pricing — Potentially: components/PricingSection.js -->
+            <fieldset class="form-fieldset">
+              <legend>Pricing</legend>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="sell-item-price">Asking Price ($) <span class="required">*</span></label>
+                  <div class="input-prefix-wrap">
+                    <span class="input-prefix">$</span>
+                    <input type="number" id="sell-item-price" placeholder="0.00" required min="0.01" step="0.01">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="sell-item-msrp">MSRP / Retail Price ($)</label>
+                  <div class="input-prefix-wrap">
+                    <span class="input-prefix">$</span>
+                    <input type="number" id="sell-item-msrp" placeholder="0.00" min="0" step="0.01">
+                  </div>
+                  <small>Provide MSRP for anti-scalp verification.</small>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="sell-item-type">Listing Type <span class="required">*</span></label>
+                  <select id="sell-item-type" required>
+                    <option value="buy-now">Buy Now</option>
+                    <option value="auction">Auction</option>
+                    <option value="offers">Offers Welcome</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="sell-item-shipping">Shipping</label>
+                  <select id="sell-item-shipping">
+                    <option value="paid">Buyer Pays Shipping</option>
+                    <option value="free">Free Shipping</option>
+                    <option value="local">Local Pickup Only</option>
+                    <option value="negotiable">Negotiable</option>
+                  </select>
+                </div>
+              </div>
+              <!-- Price fairness indicator — Potentially: components/PriceFairnessIndicator.js -->
+              <div id="price-fairness-indicator" class="price-fairness" style="display:none;">
+                <i class="fas fa-info-circle"></i>
+                <span id="price-fairness-text"></span>
+              </div>
+            </fieldset>
+
+            <!-- Payment & Trade — Potentially: components/PaymentOptions.js -->
+            <fieldset class="form-fieldset">
+              <legend><i class="fas fa-dollar-sign"></i> Payment &amp; Trade Options</legend>
+              <p style="font-size:0.88rem;color:var(--text-muted);margin-bottom:16px;">Select all payment methods you accept. This is a peer-to-peer marketplace — choose what works for you.</p>
+
+              <div class="payment-options-grid" id="payment-options-grid">
+                <label class="payment-option-card" id="pay-cash-card">
+                  <input type="checkbox" class="payment-method-check" value="cash" name="payment_methods">
+                  <div class="payment-option-inner">
+                    <i class="fas fa-money-bill-wave"></i>
+                    <strong>Cash</strong>
+                    <span>In-person meetup</span>
+                  </div>
+                </label>
+                <label class="payment-option-card" id="pay-trade-card">
+                  <input type="checkbox" class="payment-method-check" value="trade" name="payment_methods">
+                  <div class="payment-option-inner">
+                    <i class="fas fa-exchange-alt"></i>
+                    <strong>Trade / Swap</strong>
+                    <span>Exchange items</span>
+                  </div>
+                </label>
+                <label class="payment-option-card pay-online-card" id="pay-online-card">
+                  <input type="checkbox" class="payment-method-check" value="online" name="payment_methods" disabled>
+                  <div class="payment-option-inner">
+                    <i class="fas fa-credit-card"></i>
+                    <strong>Online Payment</strong>
+                    <span class="coming-soon-badge">Coming Soon</span>
+                  </div>
+                </label>
+              </div>
+
+              <!-- Trade details — shown when trade is checked -->
+              <div id="trade-details-wrap" style="display:none;margin-top:16px;">
+                <div class="form-group">
+                  <label for="sell-trade-for"><i class="fas fa-exchange-alt"></i> What are you looking to trade for?</label>
+                  <input type="text" id="sell-trade-for" placeholder="e.g. Nintendo Switch games, trading cards, vintage clothing…">
+                  <small>Tell buyers what you'd swap for. Be specific for better matches.</small>
+                </div>
+              </div>
+
+              <!-- Cash meetup preferences — shown when cash is checked -->
+              <div id="cash-details-wrap" style="display:none;margin-top:16px;">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="sell-meetup-pref"><i class="fas fa-map-marker-alt"></i> Preferred Meetup Spot</label>
+                    <input type="text" id="sell-meetup-pref" placeholder="e.g. Starbucks on Main St, Police station parking lot">
+                    <small>Public places are recommended for safe transactions.</small>
+                  </div>
+                  <div class="form-group">
+                    <label for="sell-meetup-hours">Available Hours</label>
+                    <input type="text" id="sell-meetup-hours" placeholder="e.g. Weekdays 5–8pm, Weekends anytime">
+                  </div>
+                </div>
+              </div>
+            </fieldset>
+
+            <!-- Image Upload — Potentially: components/ImageUploader.js -->
+            <fieldset class="form-fieldset">
+              <legend>Photos</legend>
+              <div class="image-upload-area" id="image-upload-area">
+                <input type="file" id="sell-item-images" accept="image/*" multiple style="display:none;">
+                <div class="upload-prompt" onclick="document.getElementById('sell-item-images').click()">
+                  <i class="fas fa-camera-retro"></i>
+                  <p><strong>Click to upload photos</strong> or drag and drop</p>
+                  <small>Up to 8 photos. JPEG, PNG, WebP. Max 5MB each.</small>
+                </div>
+                <div id="image-preview-row" class="image-preview-row"></div>
+              </div>
+            </fieldset>
+
+            <!-- Submit -->
+            <div class="form-actions">
+              <button type="button" class="btn btn-outline" onclick="showPage('home')">Cancel</button>
+              <button type="submit" class="btn btn-primary btn-lg" id="sell-submit-btn">
+                <i class="fas fa-paper-plane"></i> Publish Listing
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </section>
 
-    <section id="page-cart" class="page-view">
-      <div class="container" style="max-width:760px">
-        <h1>Your Cart</h1>
-        <p id="cart-sub">Checking items...</p>
-        <div id="cart-content"></div>
-      </div>
-    </section>
-
+    <!-- ============================================================
+         ABOUT PAGE
+         Potentially: pages/AboutPage.js or pages/about.html
+    ============================================================ -->
     <section id="page-about" class="page-view">
-      <div class="container" style="max-width:800px">
-        <h1>Protecting Collectors. <span class="primary">One Listing at a Time.</span></h1>
-        <p>Obtainum was founded to fight back against scalpers destroying the hobby.</p>
-        <div class="grid-3">
-          <div class="glass"><h3>Anti-Scalp Engine</h3><p>Real-time MSRP verification.</p></div>
-          <div class="glass"><h3>AI Intelligence</h3><p>Market condition analysis.</p></div>
-          <div class="glass"><h3>Community First</h3><p>Built for the hobby.</p></div>
+      <div class="about-hero">
+        <div class="container">
+          <h1 class="page-title">About Obtainium</h1>
+          <p class="about-lead">We built Obtainium because we were tired of scalpers ruining the hobby. This is the marketplace we wished existed.</p>
+        </div>
+      </div>
+      <div class="container">
+        <div class="about-grid">
+          <div class="about-card">
+            <div class="about-icon"><i class="fas fa-fist-raised"></i></div>
+            <h3>Our Mission</h3>
+            <p>To build a community marketplace where collectors can buy and sell at fair, MSRP-anchored prices — free from bots, scalpers, and price gouging. Every listing is community-monitored.</p>
+          </div>
+          <div class="about-card">
+            <div class="about-icon"><i class="fas fa-users"></i></div>
+            <h3>Community First</h3>
+            <p>Obtainium is powered by its community. Users can flag unfair listings, review sellers, and earn trust badges. Bad actors are removed fast — good sellers are celebrated.</p>
+          </div>
+          <div class="about-card">
+            <div class="about-icon"><i class="fas fa-robot"></i></div>
+            <h3>AI-Powered Fairness</h3>
+            <p>Our Gemini-powered AI scans every listing and compares prices to MSRP and market data, automatically flagging suspected scalp pricing before it harms buyers.</p>
+          </div>
+          <div class="about-card">
+            <div class="about-icon"><i class="fas fa-shield-alt"></i></div>
+            <h3>Buyer &amp; Seller Protection</h3>
+            <p>Every transaction is covered by our guarantee. Buyers get what they paid for, or they get their money back. Sellers are protected from fraudulent claims.</p>
+          </div>
+        </div>
+
+        <div class="about-stats-row">
+          <div class="astat"><span>12,400+</span><small>Active Listings</small></div>
+          <div class="astat"><span>8,900+</span><small>Registered Sellers</small></div>
+          <div class="astat"><span>99%</span><small>Fair Price Rate</small></div>
+          <div class="astat"><span>4.9/5</span><small>Average Seller Rating</small></div>
+        </div>
+
+        <div class="about-rules">
+          <h2>The Obtainium Code</h2>
+          <ul>
+            <li><i class="fas fa-check-circle"></i> List at or below MSRP whenever possible.</li>
+            <li><i class="fas fa-check-circle"></i> Describe your item honestly — disclose all flaws.</li>
+            <li><i class="fas fa-check-circle"></i> Respond to buyers within 24 hours.</li>
+            <li><i class="fas fa-check-circle"></i> Ship within 3 business days of payment.</li>
+            <li><i class="fas fa-times-circle"></i> No bot-purchased inventory.</li>
+            <li><i class="fas fa-times-circle"></i> No price gouging during shortages.</li>
+            <li><i class="fas fa-times-circle"></i> No fake listings or bait-and-switch.</li>
+          </ul>
+        </div>
+
+        <div class="contact-section">
+          <h2>Get in Touch</h2>
+          <p>Have questions, feedback, or a scalper to report? We're here.</p>
+          <div class="contact-links">
+            <a href="mailto:hello@obtainium.market" class="btn btn-outline"><i class="fas fa-envelope"></i> Email Us</a>
+            <a href="#" class="btn btn-outline"><i class="fab fa-twitter"></i> @ObtainiumMkt</a>
+            <a href="#" class="btn btn-outline"><i class="fab fa-discord"></i> Discord Community</a>
+          </div>
         </div>
       </div>
     </section>
 
-    <section id="page-login" class="page-view">
-      <div class="auth-form glass">
-        <h1>Login to Obtainum</h1>
-        <form id="login-form">
-          <input type="email" id="login-email" class="input" placeholder="Email" required>
-          <input type="password" id="login-pass" class="input" placeholder="Password" required>
-          <button type="submit" class="btn btn-primary btn-full">Login</button>
-          <p>Don't have an account? <a href="#" onclick="showPage('signup')">Sign Up</a></p>
-        </form>
+    <!-- ============================================================
+         DONATE PAGE
+         Potentially: pages/DonatePage.js or pages/donate.html
+    ============================================================ -->
+    <section id="page-donate" class="page-view">
+
+      <!-- Donate Hero -->
+      <div class="donate-hero">
+        <div class="container">
+          <div class="donate-hero-content">
+            <div class="donate-hero-icon"><i class="fas fa-hand-holding-heart"></i></div>
+            <h1>Donate Toys &amp; Books to Kids Who Need Them</h1>
+            <p>Partner with Obtainium to give pre-loved toys, books, and games a second life. We connect donors with verified local charities — you drop off or ship, we handle the rest.</p>
+            <div class="donate-hero-stats">
+              <div class="dhstat"><span>1,240</span><small>Items Donated</small></div>
+              <div class="dhstat"><span>8</span><small>Partner Charities</small></div>
+              <div class="dhstat"><span>14</span><small>Cities Covered</small></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="container" style="padding-top:48px;padding-bottom:72px;">
+        <div class="donate-layout">
+
+          <!-- LEFT: Partner Charities — Potentially: components/CharityList.js -->
+          <div class="donate-charities-col">
+            <h2 class="section-title" style="font-size:1.3rem;margin-bottom:20px;">
+              <i class="fas fa-building" style="color:var(--primary);margin-right:8px;"></i> Partner Charities
+            </h2>
+
+            <div class="charity-cards" id="charity-list">
+              <div class="charity-card" data-charity-id="1">
+                <div class="charity-badge"><i class="fas fa-check-circle"></i> Verified</div>
+                <div class="charity-header">
+                  <div class="charity-icon" style="background:#ede9ff;color:#5b4fcf;"><i class="fas fa-child"></i></div>
+                  <div>
+                    <div class="charity-name">Kids First Foundation</div>
+                    <div class="charity-city"><i class="fas fa-map-marker-alt"></i> Austin, TX</div>
+                  </div>
+                </div>
+                <div class="charity-accepts">Accepts: Toys, Books, Board Games, Art Supplies</div>
+                <div class="charity-info-row">
+                  <div class="charity-addr"><i class="fas fa-building"></i> 1420 Mueller Blvd, Austin, TX 78723</div>
+                  <div class="charity-hours"><i class="fas fa-clock"></i> Mon–Sat 9am–5pm</div>
+                </div>
+                <div class="charity-ship-addr">
+                  <i class="fas fa-shipping-fast"></i>
+                  <div><strong>Ship to:</strong> Kids First Foundation, Attn: Donations<br>1420 Mueller Blvd, Austin, TX 78723</div>
+                </div>
+                <button class="btn btn-primary btn-sm donate-select-btn" onclick="selectCharity(1, 'Kids First Foundation', 'Austin, TX')">
+                  Select This Charity
+                </button>
+              </div>
+
+              <div class="charity-card" data-charity-id="2">
+                <div class="charity-badge"><i class="fas fa-check-circle"></i> Verified</div>
+                <div class="charity-header">
+                  <div class="charity-icon" style="background:#f0fdf4;color:#22c55e;"><i class="fas fa-book-open"></i></div>
+                  <div>
+                    <div class="charity-name">Chicago Reads Initiative</div>
+                    <div class="charity-city"><i class="fas fa-map-marker-alt"></i> Chicago, IL</div>
+                  </div>
+                </div>
+                <div class="charity-accepts">Accepts: Books, Educational Materials, Puzzles</div>
+                <div class="charity-info-row">
+                  <div class="charity-addr"><i class="fas fa-building"></i> 342 N. Michigan Ave, Chicago, IL 60601</div>
+                  <div class="charity-hours"><i class="fas fa-clock"></i> Tue–Sat 10am–6pm</div>
+                </div>
+                <div class="charity-ship-addr">
+                  <i class="fas fa-shipping-fast"></i>
+                  <div><strong>Ship to:</strong> Chicago Reads Initiative, Attn: Book Drive<br>342 N. Michigan Ave, Chicago, IL 60601</div>
+                </div>
+                <button class="btn btn-primary btn-sm donate-select-btn" onclick="selectCharity(2, 'Chicago Reads Initiative', 'Chicago, IL')">
+                  Select This Charity
+                </button>
+              </div>
+
+              <div class="charity-card" data-charity-id="3">
+                <div class="charity-badge"><i class="fas fa-check-circle"></i> Verified</div>
+                <div class="charity-header">
+                  <div class="charity-icon" style="background:#eff6ff;color:#3b82f6;"><i class="fas fa-gamepad"></i></div>
+                  <div>
+                    <div class="charity-name">LA Play for All</div>
+                    <div class="charity-city"><i class="fas fa-map-marker-alt"></i> Los Angeles, CA</div>
+                  </div>
+                </div>
+                <div class="charity-accepts">Accepts: Toys, Video Games, Stuffed Animals, Bikes</div>
+                <div class="charity-info-row">
+                  <div class="charity-addr"><i class="fas fa-building"></i> 5100 W. Sunset Blvd, Los Angeles, CA 90027</div>
+                  <div class="charity-hours"><i class="fas fa-clock"></i> Mon–Fri 8am–4pm</div>
+                </div>
+                <div class="charity-ship-addr">
+                  <i class="fas fa-shipping-fast"></i>
+                  <div><strong>Ship to:</strong> LA Play for All, Attn: Toy Donations<br>5100 W. Sunset Blvd, Los Angeles, CA 90027</div>
+                </div>
+                <button class="btn btn-primary btn-sm donate-select-btn" onclick="selectCharity(3, 'LA Play for All', 'Los Angeles, CA')">
+                  Select This Charity
+                </button>
+              </div>
+
+              <div class="charity-card" data-charity-id="4">
+                <div class="charity-badge"><i class="fas fa-check-circle"></i> Verified</div>
+                <div class="charity-header">
+                  <div class="charity-icon" style="background:#fff4ed;color:#f97316;"><i class="fas fa-star"></i></div>
+                  <div>
+                    <div class="charity-name">NYC Joy Box</div>
+                    <div class="charity-city"><i class="fas fa-map-marker-alt"></i> New York, NY</div>
+                  </div>
+                </div>
+                <div class="charity-accepts">Accepts: All Toys, Games, Sports Equipment, Art Supplies</div>
+                <div class="charity-info-row">
+                  <div class="charity-addr"><i class="fas fa-building"></i> 82 Delancey St, New York, NY 10002</div>
+                  <div class="charity-hours"><i class="fas fa-clock"></i> Daily 9am–7pm</div>
+                </div>
+                <div class="charity-ship-addr">
+                  <i class="fas fa-shipping-fast"></i>
+                  <div><strong>Ship to:</strong> NYC Joy Box, Attn: Donations Dept<br>82 Delancey St, New York, NY 10002</div>
+                </div>
+                <button class="btn btn-primary btn-sm donate-select-btn" onclick="selectCharity(4, 'NYC Joy Box', 'New York, NY')">
+                  Select This Charity
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT: Donation Form — Potentially: components/DonationForm.js -->
+          <div class="donate-form-col">
+            <div class="donate-form-card">
+              <div id="donate-selected-charity" class="donate-selected-charity" style="display:none;">
+                <i class="fas fa-check-circle"></i>
+                <span id="donate-charity-name-display">—</span>
+                <button class="btn-text" onclick="clearDonateCharity()">Change</button>
+              </div>
+              <h3><i class="fas fa-gift"></i> What are you donating?</h3>
+              <form id="donate-form" class="donate-form-inner" novalidate>
+                <input type="hidden" id="donate-charity-id" value="">
+                <input type="hidden" id="donate-charity-name" value="">
+
+                <div class="form-group">
+                  <label for="donate-item-name">Item Name <span class="required">*</span></label>
+                  <input type="text" id="donate-item-name" placeholder="e.g. Lego Star Wars Set, Dr. Seuss Books x5" required>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="donate-category">Category <span class="required">*</span></label>
+                    <select id="donate-category" required>
+                      <option value="">Select type</option>
+                      <option value="toys">Toys &amp; Action Figures</option>
+                      <option value="books">Books</option>
+                      <option value="games">Board Games &amp; Puzzles</option>
+                      <option value="video-games">Video Games &amp; Consoles</option>
+                      <option value="sports">Sports &amp; Outdoor Toys</option>
+                      <option value="art">Art &amp; Craft Supplies</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label for="donate-condition">Condition <span class="required">*</span></label>
+                    <select id="donate-condition" required>
+                      <option value="">Select condition</option>
+                      <option value="new">New (Unused)</option>
+                      <option value="like-new">Like New</option>
+                      <option value="good">Good (Gently Used)</option>
+                      <option value="fair">Fair (Visible Wear)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="donate-quantity">Quantity</label>
+                    <input type="number" id="donate-quantity" value="1" min="1" max="50">
+                  </div>
+                  <div class="form-group">
+                    <label for="donate-your-location">Your Location <span class="required">*</span></label>
+                    <input type="text" id="donate-your-location" placeholder="City, State" required>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label>Donation Method <span class="required">*</span></label>
+                  <div class="donate-method-row">
+                    <label class="donate-method-option">
+                      <input type="radio" name="donate-method" value="dropoff" checked>
+                      <span><i class="fas fa-walking"></i> Drop Off at Charity</span>
+                    </label>
+                    <label class="donate-method-option">
+                      <input type="radio" name="donate-method" value="ship">
+                      <span><i class="fas fa-shipping-fast"></i> Ship to Charity</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div id="donate-dropoff-info" class="donate-info-box">
+                  <i class="fas fa-info-circle"></i>
+                  <span>After submitting, you'll receive the charity's drop-off address and hours. Please bring a valid ID.</span>
+                </div>
+                <div id="donate-ship-info" class="donate-info-box" style="display:none;">
+                  <i class="fas fa-box"></i>
+                  <span>After submitting, we'll email you the shipping address and a prepaid label (if eligible) within 24 hours.</span>
+                </div>
+
+                <div class="form-group">
+                  <label for="donate-notes">Notes for the Charity (optional)</label>
+                  <textarea id="donate-notes" rows="2" placeholder="e.g. Missing 3 puzzle pieces, batteries not included, etc."></textarea>
+                </div>
+
+                <div class="form-group">
+                  <label for="donate-email">Your Email (for confirmation)</label>
+                  <input type="email" id="donate-email" placeholder="you@example.com" autocomplete="email">
+                </div>
+
+                <div id="donate-form-msg" style="display:none;"></div>
+
+                <button type="submit" class="btn btn-primary btn-block btn-lg" id="donate-submit-btn">
+                  <i class="fas fa-heart"></i> Submit Donation
+                </button>
+                <p style="text-align:center;font-size:0.8rem;color:var(--text-muted);margin-top:10px;">
+                  <i class="fas fa-lock"></i> Your info is private and only shared with the selected charity.
+                </p>
+              </form>
+            </div>
+
+            <!-- Donation Impact — Potentially: components/DonationImpact.js -->
+            <div class="donate-impact-card">
+              <h4><i class="fas fa-heart" style="color:var(--danger);"></i> Your Donation Impact</h4>
+              <ul>
+                <li><i class="fas fa-check"></i> 1 toy donated = 1 child's day made brighter</li>
+                <li><i class="fas fa-check"></i> Books donated go to school libraries in underserved areas</li>
+                <li><i class="fas fa-check"></i> 100% of items reach the charity — zero markup</li>
+                <li><i class="fas fa-check"></i> You receive a donation receipt for tax purposes</li>
+              </ul>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
-    <section id="page-signup" class="page-view">
-      <div class="auth-form glass">
-        <h1>Create an Account</h1>
-        <form id="signup-form">
-          <input type="email" id="signup-email" class="input" placeholder="Email" required>
-          <input type="password" id="signup-pass" class="input" placeholder="Password" required>
-          <button type="submit" class="btn btn-primary btn-full">Sign Up</button>
-          <p>Already have an account? <a href="#" onclick="showPage('login')">Login</a></p>
-        </form>
+    <!-- ============================================================
+         CART PAGE
+         Potentially: pages/CartPage.js or pages/cart.html
+    ============================================================ -->
+    <section id="page-cart" class="page-view">
+      <div class="container">
+        <h1 class="page-title"><i class="fas fa-shopping-cart"></i> Your Cart</h1>
+        <div class="cart-layout" id="cart-layout">
+          <!-- Cart Items — Potentially: components/CartItemList.js -->
+          <div class="cart-items-col">
+            <div id="cart-items" role="list" aria-label="Cart items">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+          <!-- Cart Summary — Potentially: components/CartSummary.js -->
+          <aside class="cart-summary-col">
+            <div class="cart-summary-card">
+              <h3>Order Summary</h3>
+              <div class="summary-row"><span>Subtotal</span><span id="cart-subtotal">$0.00</span></div>
+              <div class="summary-row"><span>Estimated Shipping</span><span id="cart-shipping">Free</span></div>
+              <div class="summary-row"><span>Platform Fee (2%)</span><span id="cart-fee">$0.00</span></div>
+              <div class="summary-divider"></div>
+              <div class="summary-row summary-total"><strong>Total</strong><strong id="cart-total">$0.00</strong></div>
+              <button class="btn btn-primary btn-block btn-lg" id="checkout-btn" onclick="handleCheckout()">
+                <i class="fas fa-lock"></i> Secure Checkout
+              </button>
+              <p class="cart-guarantee"><i class="fas fa-shield-alt"></i> Buyer Protection applies to this order</p>
+              <div class="promo-wrap">
+                <input type="text" id="promo-code" placeholder="Promo code" class="filter-input">
+                <button class="btn btn-outline btn-sm" onclick="applyPromo()">Apply</button>
+              </div>
+            </div>
+          </aside>
+        </div>
       </div>
     </section>
 
+    <!-- ============================================================
+         PROFILE PAGE
+         Potentially: pages/ProfilePage.js or pages/profile.html
+    ============================================================ -->
     <section id="page-profile" class="page-view">
       <div class="container">
-        <h1>My Profile</h1>
-        <div id="profile-info" class="glass"></div>
+        <div id="profile-content">
+          <!-- Dynamically populated by renderProfilePage() -->
+        </div>
       </div>
     </section>
 
-    <section id="page-contact" class="page-view">
-      <div class="container" style="max-width:680px">
-        <h1>Get in Touch</h1>
-        <form id="contact-form" class="glass">
-          <input class="input" placeholder="Name" required>
-          <input type="email" class="input" placeholder="Email" required>
-          <select class="input">
-            <option>Report a Scalper</option>
-            <option>General Question</option>
-          </select>
-          <textarea class="input" rows="5" placeholder="Message..."></textarea>
-          <button class="btn btn-primary btn-full">Send Message</button>
-        </form>
+    <!-- ============================================================
+         LOGIN PAGE
+         Potentially: pages/LoginPage.js or pages/login.html
+    ============================================================ -->
+    <section id="page-login" class="page-view">
+      <div class="auth-container">
+        <div class="auth-card">
+          <div class="auth-brand" onclick="showPage('home')">
+            <i class="fas fa-gem"></i> Obtainium
+          </div>
+          <h2 class="auth-title">Welcome back</h2>
+          <p class="auth-subtitle">Sign in to your Obtainium account</p>
+
+          <!-- Social Login — Potentially: components/SocialAuth.js -->
+          <div class="social-login">
+            <button class="btn btn-social" onclick="loginWithGoogle()">
+              <i class="fab fa-google"></i> Continue with Google
+            </button>
+          </div>
+          <div class="auth-divider"><span>or sign in with email</span></div>
+
+          <form id="login-form" class="auth-form" novalidate>
+            <div class="form-group">
+              <label for="login-email">Email Address</label>
+              <div class="input-icon-wrap">
+                <i class="fas fa-envelope input-icon" aria-hidden="true"></i>
+                <input type="email" id="login-email" placeholder="you@example.com" required autocomplete="email">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="login-password">
+                Password
+                <a href="#" class="forgot-link" onclick="showPage('forgot-password')">Forgot password?</a>
+              </label>
+              <div class="input-icon-wrap">
+                <i class="fas fa-lock input-icon" aria-hidden="true"></i>
+                <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
+                <button type="button" class="toggle-password" aria-label="Show/hide password" onclick="togglePasswordVisibility('login-password', this)">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </div>
+            </div>
+            <div id="login-error" class="form-error" role="alert" style="display:none;"></div>
+            <button type="submit" class="btn btn-primary btn-block" id="login-btn">
+              <span class="btn-label">Sign In</span>
+              <span class="btn-loader" style="display:none;"><i class="fas fa-spinner fa-spin"></i></span>
+            </button>
+          </form>
+          <p class="auth-switch">Don't have an account? <a href="#" onclick="showPage('register')">Create one free</a></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         REGISTER PAGE
+         Potentially: pages/RegisterPage.js or pages/register.html
+    ============================================================ -->
+    <section id="page-register" class="page-view">
+      <div class="auth-container">
+        <div class="auth-card">
+          <div class="auth-brand" onclick="showPage('home')">
+            <i class="fas fa-gem"></i> Obtainium
+          </div>
+          <h2 class="auth-title">Join Obtainium</h2>
+          <p class="auth-subtitle">Create a free account and start buying or selling</p>
+
+          <!-- Social Register — Potentially: components/SocialAuth.js -->
+          <div class="social-login">
+            <button class="btn btn-social" onclick="loginWithGoogle()">
+              <i class="fab fa-google"></i> Sign up with Google
+            </button>
+          </div>
+          <div class="auth-divider"><span>or register with email</span></div>
+
+          <form id="register-form" class="auth-form" novalidate>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="register-first-name">First Name</label>
+                <input type="text" id="register-first-name" placeholder="First name" autocomplete="given-name">
+              </div>
+              <div class="form-group">
+                <label for="register-last-name">Last Name</label>
+                <input type="text" id="register-last-name" placeholder="Last name" autocomplete="family-name">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="register-username">Username <span class="required">*</span></label>
+              <div class="input-icon-wrap">
+                <i class="fas fa-at input-icon" aria-hidden="true"></i>
+                <input type="text" id="register-username" placeholder="your_handle" required autocomplete="username" minlength="3" maxlength="30">
+              </div>
+              <small>3–30 characters. Letters, numbers, underscores.</small>
+            </div>
+            <div class="form-group">
+              <label for="register-email">Email Address <span class="required">*</span></label>
+              <div class="input-icon-wrap">
+                <i class="fas fa-envelope input-icon" aria-hidden="true"></i>
+                <input type="email" id="register-email" placeholder="you@example.com" required autocomplete="email">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="register-password">Password <span class="required">*</span></label>
+              <div class="input-icon-wrap">
+                <i class="fas fa-lock input-icon" aria-hidden="true"></i>
+                <input type="password" id="register-password" placeholder="At least 8 characters" required autocomplete="new-password" minlength="8">
+                <button type="button" class="toggle-password" aria-label="Show/hide password" onclick="togglePasswordVisibility('register-password', this)">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </div>
+              <!-- Password strength indicator — Potentially: components/PasswordStrength.js -->
+              <div class="password-strength" id="password-strength">
+                <div class="strength-bar"><div id="strength-fill" class="strength-fill"></div></div>
+                <span id="strength-label" class="strength-label"></span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="register-confirm-password">Confirm Password <span class="required">*</span></label>
+              <div class="input-icon-wrap">
+                <i class="fas fa-lock input-icon" aria-hidden="true"></i>
+                <input type="password" id="register-confirm-password" placeholder="Re-enter password" required autocomplete="new-password">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="filter-checkbox terms-checkbox">
+                <input type="checkbox" id="register-terms" required>
+                <span>I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a> <span class="required">*</span></span>
+              </label>
+            </div>
+            <div id="register-error" class="form-error" role="alert" style="display:none;"></div>
+            <button type="submit" class="btn btn-primary btn-block" id="register-btn">
+              <span class="btn-label">Create Account</span>
+              <span class="btn-loader" style="display:none;"><i class="fas fa-spinner fa-spin"></i></span>
+            </button>
+          </form>
+          <p class="auth-switch">Already have an account? <a href="#" onclick="showPage('login')">Sign in</a></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         FORGOT PASSWORD PAGE
+         Potentially: pages/ForgotPasswordPage.js
+    ============================================================ -->
+    <section id="page-forgot-password" class="page-view">
+      <div class="auth-container">
+        <div class="auth-card">
+          <div class="auth-brand" onclick="showPage('home')">
+            <i class="fas fa-gem"></i> Obtainium
+          </div>
+          <h2 class="auth-title">Reset Password</h2>
+          <p class="auth-subtitle">Enter your email and we'll send you a reset link.</p>
+          <form id="forgot-form" class="auth-form" novalidate>
+            <div class="form-group">
+              <label for="forgot-email">Email Address</label>
+              <div class="input-icon-wrap">
+                <i class="fas fa-envelope input-icon" aria-hidden="true"></i>
+                <input type="email" id="forgot-email" placeholder="you@example.com" required>
+              </div>
+            </div>
+            <div id="forgot-msg" class="form-success" style="display:none;"></div>
+            <button type="submit" class="btn btn-primary btn-block">Send Reset Link</button>
+          </form>
+          <p class="auth-switch"><a href="#" onclick="showPage('login')"><i class="fas fa-arrow-left"></i> Back to Login</a></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         AI ASSISTANT PAGE
+         Potentially: pages/AssistantPage.js or pages/assistant.html
+    ============================================================ -->
+    <section id="page-assistant" class="page-view">
+      <div class="container assistant-page">
+        <div class="assistant-header">
+          <div class="assistant-avatar"><i class="fas fa-robot"></i></div>
+          <div class="assistant-intro">
+            <h1 class="page-title">AI Shopping Assistant</h1>
+            <p>Powered by Google Gemini. Chat for advice, or click any product in the Shop for an instant AI deal analysis.</p>
+          </div>
+        </div>
+
+        <!-- AI Mode Tabs — Potentially: components/AssistantTabs.js -->
+        <div class="ai-mode-tabs" id="ai-mode-tabs">
+          <button class="ai-tab active" id="tab-chat" onclick="switchAITab('chat')">
+            <i class="fas fa-comment-dots"></i> Chat &amp; Advice
+          </button>
+          <button class="ai-tab" id="tab-analyze" onclick="switchAITab('analyze')">
+            <i class="fas fa-chart-bar"></i> Product Analysis
+            <span class="ai-tab-badge" id="analyze-tab-badge" style="display:none;">1</span>
+          </button>
+        </div>
+
+        <!-- Gemini API Key Setup — Potentially: components/ApiKeySetup.js -->
+        <div id="gemini-key-setup" class="api-key-setup-card" style="display:none;">
+          <div class="api-key-icon"><i class="fas fa-key"></i></div>
+          <h3>Connect Gemini AI</h3>
+          <p>To use the AI Assistant, enter your Google Gemini API key. It's stored only in your browser and never sent to our servers.</p>
+          <div class="api-key-input-row">
+            <input type="password" id="gemini-api-key-input" placeholder="Paste your Gemini API key here" class="filter-input" autocomplete="off">
+            <button class="btn btn-primary" onclick="saveGeminiKey()"><i class="fas fa-check"></i> Save Key</button>
+          </div>
+          <small>Get a free key at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com</a></small>
+        </div>
+
+        <!-- PRODUCT ANALYSIS PANEL — Potentially: components/ProductAnalysisPanel.js -->
+        <div id="product-analysis-panel" class="product-analysis-panel" style="display:none;">
+          <div class="analysis-placeholder" id="analysis-placeholder">
+            <div class="analysis-placeholder-icon"><i class="fas fa-chart-bar"></i></div>
+            <h3>No product selected</h3>
+            <p>Click <strong>"Analyze with AI"</strong> on any product in the <a href="#" onclick="showPage('shop')">Shop</a> to get an instant deal report here.</p>
+            <div class="analysis-how-grid">
+              <div class="analysis-how-item"><i class="fas fa-tag"></i><span>Price vs Market</span></div>
+              <div class="analysis-how-item"><i class="fas fa-search-dollar"></i><span>Alternatives Found</span></div>
+              <div class="analysis-how-item"><i class="fas fa-route"></i><span>Pickup Routes</span></div>
+              <div class="analysis-how-item"><i class="fas fa-shield-alt"></i><span>Area Safety</span></div>
+              <div class="analysis-how-item"><i class="fas fa-shipping-fast"></i><span>Shipping ETA</span></div>
+              <div class="analysis-how-item"><i class="fas fa-star"></i><span>Deal Score</span></div>
+            </div>
+          </div>
+          <div id="analysis-result" class="analysis-result" style="display:none;">
+            <!-- Dynamically populated by analyzeProductWithAI() -->
+          </div>
+        </div>
+
+        <!-- Chat Container — Potentially: components/ChatWindow.js -->
+        <div id="chat-container" class="chat-container">
+          <div class="chat-toolbar">
+            <span class="chat-status" id="chat-status"><i class="fas fa-circle"></i> Gemini AI Connected</span>
+            <div class="chat-actions">
+              <button class="btn-icon" onclick="clearChat()" title="Clear chat" aria-label="Clear chat history"><i class="fas fa-trash-alt"></i></button>
+              <button class="btn-icon" onclick="changeGeminiKey()" title="Change API key" aria-label="Change API key"><i class="fas fa-key"></i></button>
+            </div>
+          </div>
+
+          <!-- Chat History — Potentially: components/ChatHistory.js -->
+          <div id="chat-history" class="chat-history" role="log" aria-live="polite" aria-label="Chat messages">
+            <!-- Initial bot message -->
+            <div class="chat-msg bot-msg">
+              <div class="chat-msg-avatar bot-avatar"><i class="fas fa-robot"></i></div>
+              <div class="chat-msg-bubble">
+                <p>Hey! I'm your Obtainium AI assistant, powered by Gemini.</p>
+                <p>I can help you:</p>
+                <ul>
+                  <li>Find the best deals on collectibles and electronics</li>
+                  <li>Identify if a price is fair or inflated</li>
+                  <li>Recommend items based on your interests</li>
+                  <li>Explain product conditions and specs</li>
+                </ul>
+                <p>What are you looking for today?</p>
+              </div>
+              <span class="chat-msg-time">Just now</span>
+            </div>
+          </div>
+
+          <!-- Suggested Prompts — Potentially: components/SuggestedPrompts.js -->
+          <div id="suggested-prompts" class="suggested-prompts">
+            <button class="prompt-chip" onclick="sendSuggestedPrompt(this)">Is $300 a fair price for AirPods Pro?</button>
+            <button class="prompt-chip" onclick="sendSuggestedPrompt(this)">What collectibles are trending right now?</button>
+            <button class="prompt-chip" onclick="sendSuggestedPrompt(this)">Help me find a birthday gift under $50</button>
+            <button class="prompt-chip" onclick="sendSuggestedPrompt(this)">How do I spot a scalped item?</button>
+            <button class="prompt-chip" onclick="sendSuggestedPrompt(this)">What should I look for when buying used electronics?</button>
+          </div>
+
+          <!-- Chat Input — Potentially: components/ChatInput.js -->
+          <div class="chat-input-area">
+            <div class="chat-input-wrap">
+              <textarea id="chat-input" class="chat-textarea" placeholder="Ask about prices, products, recommendations..." rows="1" maxlength="2000" aria-label="Chat message input"></textarea>
+              <div class="chat-input-actions">
+                <span class="char-count-chat" id="chat-char-count">2000</span>
+                <button id="send-btn" class="btn btn-primary send-btn" onclick="sendMessageToBot()" aria-label="Send message">
+                  <i class="fas fa-paper-plane"></i>
+                </button>
+              </div>
+            </div>
+            <small class="chat-disclaimer">AI responses are for informational purposes only. Always verify prices and listings independently.</small>
+          </div>
+        </div>
       </div>
     </section>
 
   </main>
 
-  <footer id="footer-root">
+  <!-- ================================================================
+       FOOTER
+       Potentially: components/Footer.js or footer.html partial
+  ================================================================ -->
+  <footer class="site-footer" role="contentinfo">
     <div class="container">
-      <p>&copy; 2026 Obtainum Anti-Scalp Marketplace</p>
+      <div class="footer-grid">
+        <div class="footer-brand-col">
+          <div class="footer-brand">
+            <i class="fas fa-gem"></i> Obtainium
+          </div>
+          <p class="footer-tagline">The Anti-Scalp Marketplace for Collectors and Enthusiasts.</p>
+          <div class="footer-social">
+            <a href="#" aria-label="Twitter" title="Twitter"><i class="fab fa-twitter"></i></a>
+            <a href="#" aria-label="Instagram" title="Instagram"><i class="fab fa-instagram"></i></a>
+            <a href="#" aria-label="Discord" title="Discord"><i class="fab fa-discord"></i></a>
+            <a href="#" aria-label="Reddit" title="Reddit"><i class="fab fa-reddit-alien"></i></a>
+            <a href="#" aria-label="YouTube" title="YouTube"><i class="fab fa-youtube"></i></a>
+          </div>
+        </div>
+        <div class="footer-links-col">
+          <h4>Marketplace</h4>
+          <ul>
+            <li><a href="#" onclick="showPage('shop')">Browse All</a></li>
+            <li><a href="#" onclick="filterAndGoShop('electronics')">Electronics</a></li>
+            <li><a href="#" onclick="filterAndGoShop('toys')">Collectibles</a></li>
+            <li><a href="#" onclick="filterAndGoShop('apparel')">Apparel</a></li>
+            <li><a href="#" onclick="showPage('sell')">Sell an Item</a></li>
+          </ul>
+        </div>
+        <div class="footer-links-col">
+          <h4>Community</h4>
+          <ul>
+            <li><a href="#" onclick="showPage('about')">About Us</a></li>
+            <li><a href="#">Blog</a></li>
+            <li><a href="#">Seller Resources</a></li>
+            <li><a href="#">Report Scalper</a></li>
+            <li><a href="#">Anti-Scalp Policy</a></li>
+          </ul>
+        </div>
+        <div class="footer-links-col">
+          <h4>Support</h4>
+          <ul>
+            <li><a href="#">Help Center</a></li>
+            <li><a href="#">Buyer Protection</a></li>
+            <li><a href="#">Contact Us</a></li>
+            <li><a href="#">Privacy Policy</a></li>
+            <li><a href="#">Terms of Service</a></li>
+          </ul>
+        </div>
+        <div class="footer-newsletter-col">
+          <h4>Stay Updated</h4>
+          <p>Get alerts for new listings in your favorite categories.</p>
+          <form class="newsletter-form" onsubmit="subscribeNewsletter(event)">
+            <input type="email" placeholder="your@email.com" required aria-label="Email for newsletter">
+            <button type="submit" class="btn btn-primary btn-sm">Subscribe</button>
+          </form>
+          <div class="app-badge-row">
+            <span class="app-badge"><i class="fab fa-apple"></i> App Store — Coming Soon</span>
+            <span class="app-badge"><i class="fab fa-google-play"></i> Google Play — Coming Soon</span>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; <span id="footer-year"></span> Obtainium Marketplace, Inc. All rights reserved.</p>
+        <p class="footer-disclaimer">Obtainium is not affiliated with any brand or manufacturer. All listed prices are user-submitted.</p>
+      </div>
     </div>
   </footer>
 
-  <script src="js/api.js"></script>
-  <script src="js/theme.js"></script>
-  <script src="js/nav.js"></script>
-  <script>
-    // PAGE ROUTER
-    function showPage(pageId) {
-      // Hide all pages
-      const pages = document.querySelectorAll('.page-view');
-      pages.forEach(p => p.classList.remove('active'));
-      
-      // Show requested page
-      const target = document.getElementById('page-' + pageId);
-      if(target) {
-        target.classList.add('active');
-        window.scrollTo(0,0);
-      }
-    }
-
-    // Initialize scripts that would normally run on window.load
-    window.addEventListener('DOMContentLoaded', () => {
-      // Check for deep links or default to home
-      showPage('home');
-    });
-  </script>
-
-  <script src="js/signup.js"></script>
-  <script src="js/login.js"></script>
-  <script src="js/profile.js"></script>
-  <script src="js/shop.js"></script>
-  <script src="js/listing.js"></script>
-  <script src="js/sell.js"></script>
-  <script src="js/cart.js"></script>
-  <script src="js/contact.js"></script>
-  <script src="js/assistant.js"></script>
+  <!-- Scripts -->
+  <!-- Potentially split into: supabase-client.js, state.js, auth.js, ui.js, theme.js, cart.js, products.js, filters.js, chat.js, animations.js, profile.js -->
+  <script src="script.js"></script>
 </body>
 </html>
