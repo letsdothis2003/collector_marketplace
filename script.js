@@ -28,28 +28,26 @@ document.addEventListener('DOMContentLoaded', () => {
      SECTION: supabase-client.js — Supabase Initialization
   ============================================================== */
 
+  const SUPABASE_URL = 'https://gotzmuobwuubsugnowxq.supabase.co';
+  const SUPABASE_API_KEY = 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs';
   let DB = null;
 
-  // Simple Supabase initialization
+  // Initialize Supabase
   try {
     if (typeof supabase !== 'undefined' && supabase?.createClient) {
-      DB = supabase.createClient(
-        'https://gotzmuobwuubsugnowxq.supabase.co',
-        'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs',
-        {
-          auth: {
-            persistSession: true,
-            autoRefreshToken: true,
-            detectSessionInUrl: true,
-            storageKey: 'obtainum-auth-token',
-            storage: window.localStorage,
-            flowType: 'pkce'
-          },
-          global: {
-            headers: { 'x-application-name': 'obtainum-engine' },
-          },
+      DB = supabase.createClient(SUPABASE_URL, SUPABASE_API_KEY, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+          storageKey: 'obtainum-auth-token',
+          storage: window.localStorage,
+          flowType: 'pkce'
+        },
+        global: {
+          headers: { 'x-application-name': 'obtainum-engine' }
         }
-      );
+      });
     }
   } catch (e) {
     console.warn('Supabase initialization failed. Running in demo mode.', e.message);
