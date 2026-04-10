@@ -49,16 +49,16 @@
           <option value="Other">Other</option>
         </select>
         <div style="display: flex; gap: 10px;">
-          <input type="number" id="itemPrice" placeholder="Price ($)" required>
-          <input type="number" id="itemMsrp" placeholder="MSRP ($)">
+          <input type="number" id="itemPrice" placeholder="Price ($)" step="0.01" required>
+          <input type="number" id="itemMsrp" placeholder="MSRP ($)" step="0.01" required>
         </div>
         <select id="itemCondition">
-          <option value="new">Brand New</option>
+          <option value="new">New</option>
           <option value="like-new">Like New</option>
           <option value="good">Good</option>
           <option value="fair">Fair</option>
         </select>
-        <textarea id="itemDescription" placeholder="Describe the condition, packaging, etc..." required></textarea>
+        <textarea id="itemDescription" placeholder="Item details (min 10 chars)..." required></textarea>
         <div class="modal-actions">
           <button type="submit" id="submitListing" class="btn-primary">Post Listing</button>
           <button type="button" id="closeModal">Cancel</button>
