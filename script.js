@@ -28,26 +28,28 @@ document.addEventListener('DOMContentLoaded', () => {
      SECTION: supabase-client.js — Supabase Initialization
   ============================================================== */
 
-  const SUPABASE_URL = 'https://gotzmuobwuubsugnowxq.supabase.co';
-  const SUPABASE_API_KEY = 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs';
   let DB = null;
 
-  // Initialize Supabase
+  // Simple Supabase initialization
   try {
     if (typeof supabase !== 'undefined' && supabase?.createClient) {
-      DB = supabase.createClient(SUPABASE_URL, SUPABASE_API_KEY, {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: true,
-          storageKey: 'obtainum-auth-token',
-          storage: window.localStorage,
-          flowType: 'pkce'
-        },
-        global: {
-          headers: { 'x-application-name': 'obtainum-engine' }
+      DB = supabase.createClient(
+        'REPLACE_URL',
+        'REPLACE_KEY',
+        {
+          auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+            storageKey: 'obtainum-auth-token',
+            storage: window.localStorage,
+            flowType: 'pkce'
+          },
+          global: {
+            headers: { 'x-application-name': 'obtainum-engine' },
+          },
         }
-      });
+      );
     }
   } catch (e) {
     console.warn('Supabase initialization failed. Running in demo mode.', e.message);
@@ -2188,6 +2190,64 @@ Return ONLY valid JSON (no markdown, no code fences) in this exact format:
      SECTION: features/sell.js — Payment Method Toggle Handlers
      Bug Fix: Corrected selectors to match HTML (name="payment_methods",
      class="payment-method-check") and correct wrap IDs
+     (cash-details-wrap / trade-details-wrap).
+  ============================================================== */
+
+  function initPaymentMethodToggles() {
+    const cashCheck  = document.querySelector('.payment-method-check[value="cash"]');
+    const tradeCheck = document.querySelector('.payment-method-check[value="trade"]');
+    const cashFields  = document.getElementById('cash-details-wrap');
+    const tradeFields = document.getElementById('trade-details-wrap');
+
+    function updateFields() {
+      if (cashFields)  cashFields.style.display = cashCheck?.checked  ? 'block' : 'none';
+      if (tradeFields) tradeFields.style.display = tradeCheck?.checked ? 'block' : 'none';
+    }
+
+    cashCheck?.addEventListener('change', updateFields);
+    tradeCheck?.addEventListener('change', updateFields);
+    updateFields();
+  }
+
+  initPaymentMethodToggles();
+
+
+  /* ==============================================================
+     SECTION: App Initialization
+  ============================================================== */
+  async function init() {
+    await checkAuthSession();
+
+    // Load Real Products
+    products = await fetchListings();
+    filteredItems = products.slice();
+
+    updateCartCount();
+    updateNavUI();
+    populateHomePage();
+    applyFilters();
+
+    // Check if storage bucket exists
+    if (DB) {
+      try {
+        const { data, error } = await DB.storage.listBuckets();
+        if (error) throw error;
+        const bucketExists = data.some(bucket => bucket.name === STORAGE_BUCKET);
+        if (!bucketExists) {
+          console.warn(`Storage bucket '${STORAGE_BUCKET}' not found. Please create it in Supabase Dashboard > Storage.`);
+          showToast('Storage setup needed', `Create '${STORAGE_BUCKET}' bucket in Supabase to upload images.`, 'warning', 8000);
+        }
+      } catch (e) {
+        console.warn('Could not check storage buckets:', e);
+      }
+    }
+
+    console.log(`OBTAINUM Live: ${products.length} listings loaded from DB.`);
+  }
+
+  init().catch(console.error);
+});
+
      (cash-details-wrap / trade-details-wrap).
   ============================================================== */
 
