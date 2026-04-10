@@ -29,21 +29,25 @@ document.addEventListener('DOMContentLoaded', () => {
      Replace the URL and ANON KEY below with your own project's values.
      Get them at: https://supabase.com/dashboard → Project → Settings → API
   ============================================================== */
-const SUPABASE_URL  = 'https://gotzmuobwuubsugnowxq.supabase.co';
-const SUPABASE_ANON = 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs';
+  const SUPABASE_CONFIG = {
+    url: 'https://gotzmuobwuubsugnowxq.supabase.co',
+    anonKey: 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs',
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storageKey: 'obtainum-auth-token',
+      storage: window.localStorage
+    }
+  };
+
   let DB = null;
 
   try {
     // Initializing Supabase with session persistence for a 4-hour window.
     // Note: Ensure JWT Expiry is set to 14400 in Supabase Auth Settings.
-    DB = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-        storageKey: 'obtainum-auth-token',
-        storage: window.localStorage
-      }
+    DB = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey, {
+      auth: SUPABASE_CONFIG.auth
     });
   } catch (e) {
     console.warn('Supabase init failed. Running in demo mode.', e);
@@ -2156,6 +2160,21 @@ Return ONLY valid JSON (no markdown, no code fences) in this exact format:
     updateNavUI();
     populateHomePage();
     applyFilters();
+
+    // Check if storage bucket exists
+    if (DB) {
+      try {
+        const { data, error } = await DB.storage.listBuckets();
+        if (error) throw error;
+        const bucketExists = data.some(bucket => bucket.name === STORAGE_BUCKET);
+        if (!bucketExists) {
+          console.warn(`Storage bucket '${STORAGE_BUCKET}' not found. Please create it in Supabase Dashboard > Storage.`);
+          showToast('Storage setup needed', `Create '${STORAGE_BUCKET}' bucket in Supabase to upload images.`, 'warning', 8000);
+        }
+      } catch (e) {
+        console.warn('Could not check storage buckets:', e);
+      }
+    }
 
     console.log(`OBTAINUM Live: ${products.length} listings loaded from DB.`);
   }
