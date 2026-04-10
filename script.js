@@ -34,7 +34,17 @@ const SUPABASE_ANON = 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs';
   let DB = null;
 
   try {
-    DB = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+    // Initializing Supabase with session persistence for a 4-hour window.
+    // Note: Ensure JWT Expiry is set to 14400 in Supabase Auth Settings.
+    DB = supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storageKey: 'obtainum-auth-token',
+        storage: window.localStorage
+      }
+    });
   } catch (e) {
     console.warn('Supabase init failed. Running in demo mode.', e);
   }
@@ -54,127 +64,32 @@ const SUPABASE_ANON = 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs';
   let currentUser    = null;
   let userLocation   = localStorage.getItem('OBTAINUM_user_location') || ''; // user's city for route/shipping calc
   let lastAnalyzedProduct = null; // last product sent to AI analysis tab
+  const STORAGE_BUCKET = 'listing-images'; // Ensure this bucket exists in Supabase Storage
 
 
   /* ==============================================================
-     SECTION: api/products.js — Mock Product Data
-     In production: replace with Supabase queries.
-     e.g. const { data } = await DB.from('listings').select('*');
+  /* ==============================================================
+     SECTION: api/products.js — Real Data Fetching
   ============================================================== */
-  const MOCK_PRODUCTS = [
-    {
-      id: 1, name: 'Nintendo Switch OLED – White Edition', category: 'electronics',
-      price: 299.99, msrp: 349.99, condition: 'like-new', seller: 'GameGuru99', seller_rating: 4.8,
-      location: 'Austin, TX', description: 'Purchased new last year, used lightly for about 3 months. Comes with original box, dock, all cables, and two Joy-Cons. No scratches on screen.',
-      images: [], type: 'buy-now', shipping: 'free', tags: ['nintendo', 'gaming', 'console'], is_fair: true,
-      created_at: '2026-04-01T10:00:00Z', views: 342, likes: 28
-    },
-    {
-      id: 2, name: 'Funko Pop! Exclusive: Iron Man Mark L Metallic', category: 'toys',
-      price: 45.00, msrp: 15.00, condition: 'new', seller: 'CollectorJane', seller_rating: 4.9,
-      location: 'New York, NY', description: 'SDCC 2024 exclusive Funko Pop! Still in original box, never displayed. Comes with protector case.',
-      images: [], type: 'offers', shipping: 'paid', tags: ['funko', 'marvel', 'sdcc', 'exclusive'], is_fair: false,
-      created_at: '2026-04-03T14:30:00Z', views: 1204, likes: 87
-    },
-    {
-      id: 3, name: 'Bose QuietComfort 45 – Noise Cancelling Headphones', category: 'electronics',
-      price: 189.99, msrp: 329.00, condition: 'good', seller: 'AudioPhile_TX', seller_rating: 4.7,
-      location: 'Seattle, WA', description: 'Used for about 6 months for remote work. Works perfectly. Slight scuff on the headband. Includes case and cables.',
-      images: [], type: 'buy-now', shipping: 'free', tags: ['bose', 'headphones', 'noise-cancelling'], is_fair: true,
-      created_at: '2026-04-05T09:15:00Z', views: 521, likes: 41
-    },
-    {
-      id: 4, name: 'Supreme Box Logo Hoodie – FW23 Black L', category: 'apparel',
-      price: 350.00, msrp: 168.00, condition: 'new', seller: 'StreetWearKing', seller_rating: 4.5,
-      location: 'Los Angeles, CA', description: 'Brand new with tags. Purchased during FW23 drop. Size Large. Authentic with receipt available.',
-      images: [], type: 'buy-now', shipping: 'paid', tags: ['supreme', 'hoodie', 'streetwear'], is_fair: false,
-      created_at: '2026-04-02T16:45:00Z', views: 2100, likes: 154
-    },
-    {
-      id: 5, name: 'Pokémon Scarlet & Violet Booster Box (36 Packs)', category: 'toys',
-      price: 110.00, msrp: 143.64, condition: 'new', seller: 'PokeTrader', seller_rating: 5.0,
-      location: 'Chicago, IL', description: 'Sealed booster box from Scarlet & Violet base set. Ships in protective box for safety.',
-      images: [], type: 'buy-now', shipping: 'free', tags: ['pokemon', 'tcg', 'cards', 'sealed'], is_fair: true,
-      created_at: '2026-04-06T08:00:00Z', views: 890, likes: 63
-    },
-    {
-      id: 6, name: 'Sony WH-1000XM5 Wireless Headphones – Black', category: 'electronics',
-      price: 249.99, msrp: 399.99, condition: 'like-new', seller: 'TechResell', seller_rating: 4.6,
-      location: 'Miami, FL', description: 'Like new, used for 2 months. Comes with all accessories and original box. Minor cosmetic marks on headband only.',
-      images: [], type: 'buy-now', shipping: 'free', tags: ['sony', 'headphones', 'wireless'], is_fair: true,
-      created_at: '2026-04-04T11:30:00Z', views: 678, likes: 49
-    },
-    {
-      id: 7, name: 'LEGO Technic Bugatti Chiron #42083 – Retired', category: 'toys',
-      price: 380.00, msrp: 349.99, condition: 'new', seller: 'BrickMaster', seller_rating: 4.9,
-      location: 'Denver, CO', description: 'Sealed, retired set. Includes original box and all parts. This set is no longer in production and is a rare find.',
-      images: [], type: 'buy-now', shipping: 'paid', tags: ['lego', 'technic', 'bugatti', 'retired'], is_fair: true,
-      created_at: '2026-04-07T13:00:00Z', views: 1432, likes: 112
-    },
-    {
-      id: 8, name: 'Vintage Levi\'s 501 Jeans – 32x30 – Distressed', category: 'apparel',
-      price: 75.00, msrp: 98.00, condition: 'good', seller: 'ThriftKing', seller_rating: 4.8,
-      location: 'Portland, OR', description: 'Authentic vintage 501s from the early 90s. Natural distressing, no holes. Size 32x30.',
-      images: [], type: 'offers', shipping: 'free', tags: ['levis', 'vintage', 'denim', 'jeans'], is_fair: true,
-      created_at: '2026-04-08T10:00:00Z', views: 304, likes: 31
-    },
-    {
-      id: 9, name: 'Apple iPad Pro 12.9" M2 – 256GB WiFi + Cellular', category: 'electronics',
-      price: 899.99, msrp: 1299.00, condition: 'like-new', seller: 'AppleReseller', seller_rating: 4.7,
-      location: 'San Francisco, CA', description: 'Used for 4 months. Immaculate condition. Comes with original box, USB-C cable. No Apple Pencil or keyboard included.',
-      images: [], type: 'buy-now', shipping: 'free', tags: ['apple', 'ipad', 'tablet', 'm2'], is_fair: true,
-      created_at: '2026-04-09T14:00:00Z', views: 756, likes: 58
-    },
-    {
-      id: 10, name: 'NBA Topps Chrome Refractor – LeBron James RC PSA 9', category: 'sports',
-      price: 4500.00, msrp: 2.99, condition: 'new', seller: 'CardShark', seller_rating: 4.9,
-      location: 'Houston, TX', description: 'Graded PSA 9 LeBron James rookie card. 2003-04 Topps Chrome Refractor. Authenticated and graded. Comes in protective slab.',
-      images: [], type: 'offers', shipping: 'paid', tags: ['nba', 'topps', 'lebron', 'rookie', 'psa'], is_fair: true,
-      created_at: '2026-04-05T17:00:00Z', views: 3200, likes: 241
-    },
-    {
-      id: 11, name: 'The Legend of Zelda: Tears of the Kingdom – Collector\'s Edition', category: 'electronics',
-      price: 110.00, msrp: 129.99, condition: 'new', seller: 'ZeldaFan', seller_rating: 4.8,
-      location: 'Nashville, TN', description: 'Sealed collector\'s edition. Includes steelbook, artbook, and digital DLC. For Nintendo Switch.',
-      images: [], type: 'buy-now', shipping: 'free', tags: ['zelda', 'nintendo', 'switch', 'collector'], is_fair: true,
-      created_at: '2026-04-08T09:00:00Z', views: 612, likes: 55
-    },
-    {
-      id: 12, name: 'Patagonia Better Sweater Fleece Jacket – Navy M', category: 'apparel',
-      price: 85.00, msrp: 139.00, condition: 'good', seller: 'OutdoorGear', seller_rating: 4.6,
-      location: 'Boulder, CO', description: 'Classic Patagonia Better Sweater, size Medium. Light pilling on sleeves, otherwise great condition. Very warm.',
-      images: [], type: 'buy-now', shipping: 'free', tags: ['patagonia', 'fleece', 'jacket', 'outdoors'], is_fair: true,
-      created_at: '2026-04-06T15:00:00Z', views: 289, likes: 24
-    },
-    {
-      id: 13, name: 'IKEA KALLAX Shelving Unit 4x4 – White', category: 'home',
-      price: 90.00, msrp: 199.00, condition: 'good', seller: 'HomeDecor', seller_rating: 4.5,
-      location: 'Atlanta, GA', description: 'KALLAX 4x4 in white. Some scuff marks, one backing corner slightly bent but fully functional. Pickup only.',
-      images: [], type: 'buy-now', shipping: 'local', tags: ['ikea', 'shelving', 'storage', 'kallax'], is_fair: true,
-      created_at: '2026-04-07T12:00:00Z', views: 183, likes: 17
-    },
-    {
-      id: 14, name: 'Magic: The Gathering Collector Booster Box – MH3', category: 'toys',
-      price: 225.00, msrp: 264.00, condition: 'new', seller: 'MTGTrader', seller_rating: 4.9,
-      location: 'Phoenix, AZ', description: 'Sealed MTG Modern Horizons 3 Collector Booster Box. Best chance for serialized cards and full art cards.',
-      images: [], type: 'buy-now', shipping: 'free', tags: ['mtg', 'magic', 'collector', 'sealed'], is_fair: true,
-      created_at: '2026-04-09T11:00:00Z', views: 978, likes: 72
-    },
-    {
-      id: 15, name: 'Canon EOS R6 Mark II Body Only (Low Shutter Count)', category: 'electronics',
-      price: 1999.00, msrp: 2499.00, condition: 'like-new', seller: 'PhotoPro', seller_rating: 4.8,
-      location: 'Boston, MA', description: 'Only 1,800 shutter actuations. Comes with battery, charger, and body cap. No scratches on sensor or body. Great for stills and video.',
-      images: [], type: 'buy-now', shipping: 'paid', tags: ['canon', 'camera', 'mirrorless', 'r6'], is_fair: true,
-      created_at: '2026-04-04T10:00:00Z', views: 1120, likes: 89
-    },
-    {
-      id: 16, name: 'Star Wars The Mandalorian – LEGO UCS 75331 Razor Crest', category: 'toys',
-      price: 480.00, msrp: 499.99, condition: 'new', seller: 'LEGOuniverse', seller_rating: 4.9,
-      location: 'Columbus, OH', description: 'Sealed, purchased from LEGO store at launch. 6,187 pieces. Includes exclusive Grogu minifigure.',
-      images: [], type: 'buy-now', shipping: 'paid', tags: ['lego', 'star-wars', 'mandalorian', 'ucs'], is_fair: true,
-      created_at: '2026-04-03T09:00:00Z', views: 1876, likes: 138
-    },
-  ];
+  async function fetchListings() {
+    if (!DB) return [];
+    const { data, error } = await DB
+      .from('listings')
+      .select('*, profiles(username, rating)');
+    
+    if (error) {
+      console.error('Error fetching listings:', error);
+      return [];
+    }
+
+    // Map database fields to the format expected by the UI
+    return data.map(item => ({
+      ...item,
+      images: normalizeImages(item.images),
+      seller: item.profiles?.username || 'Unknown Seller',
+      seller_rating: parseFloat(item.profiles?.rating || 5.0)
+    }));
+  }
 
 
   /* ==============================================================
@@ -204,6 +119,31 @@ const SUPABASE_ANON = 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs';
   // Format currency
   function formatPrice(n) {
     return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function normalizeImages(images) {
+    if (!images) return [];
+    if (Array.isArray(images)) {
+      return images.map((img) => {
+        if (typeof img === 'string') return img;
+        if (img?.url) return img.url;
+        return '';
+      }).filter(Boolean);
+    }
+    if (typeof images === 'string') {
+      try {
+        const parsed = JSON.parse(images);
+        if (Array.isArray(parsed)) {
+          return parsed.map((img) => typeof img === 'string' ? img : img?.url || '').filter(Boolean);
+        }
+      } catch (_) {
+        return [images];
+      }
+    }
+    if (typeof images === 'object' && images.url) {
+      return [images.url];
+    }
+    return [];
   }
 
   // Relative time
@@ -318,13 +258,26 @@ const SUPABASE_ANON = 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs';
     if (error) {
       errEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${error.message}`;
       errEl.style.display = 'flex';
-    } else {
-      currentUser = data.user;
-      updateNavUI();
-      showPage('home');
-      showToast('Welcome back!', `Logged in as ${currentUser.email}`, 'success');
     }
+    // Note: Session handling is centralized in onAuthStateChange
   });
+
+  // Handle Auth Changes (Persistent Login)
+  if (DB) {
+    DB.auth.onAuthStateChange((event, session) => {
+      currentUser = session?.user || null;
+      updateNavUI();
+      if (event === 'SIGNED_IN') {
+        console.log('User signed in:', session.user.email);
+        showPage('home');
+        showToast('Welcome!', `Logged in as ${currentUser.email}`, 'success');
+      } else if (event === 'SIGNED_OUT') {
+        console.log('User signed out');
+        currentUser = null;
+        updateNavUI();
+      }
+    });
+  }
 
   // REGISTER
   const registerForm = document.getElementById('register-form');
@@ -389,11 +342,13 @@ const SUPABASE_ANON = 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs';
 
   // LOGOUT
   window.logout = async function () {
-    if (DB) await DB.auth.signOut();
-    currentUser = null;
-    updateNavUI();
-    showPage('home');
-    showToast('Logged out', 'See you next time!', 'info');
+    if (DB) {
+      await DB.auth.signOut();
+      currentUser = null;
+      updateNavUI();
+      showPage('home');
+      showToast('Logged out', 'See you next time!', 'info');
+    }
   };
 
   // GOOGLE OAUTH
@@ -457,12 +412,14 @@ const SUPABASE_ANON = 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs';
   // Check session on load
   async function checkAuthSession() {
     if (!DB) return;
-    const { data: { user } } = await DB.auth.getUser();
-    if (user) { currentUser = user; updateNavUI(); }
-    DB.auth.onAuthStateChange((_event, session) => {
+    try {
+      const { data: { session }, error } = await DB.auth.getSession();
+      if (error) throw error;
       currentUser = session?.user || null;
       updateNavUI();
-    });
+    } catch (err) {
+      console.error('Session check failed:', err);
+    }
   }
 
   // Toggle password visibility
@@ -685,11 +642,14 @@ const SUPABASE_ANON = 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs';
       'new': 'New', 'like-new': 'Like New', 'good': 'Good', 'fair': 'Fair', 'poor': 'For Parts'
     }[product.condition] || product.condition;
 
+    const imageUrls = normalizeImages(product.images);
+    const firstImage = imageUrls[0] || null;
+
     return `
       <div class="product-card" role="listitem" onclick="openProductModal(${product.id})" tabindex="0" onkeydown="if(event.key==='Enter')openProductModal(${product.id})">
         <div class="product-card-img">
-          ${product.images && product.images.length > 0
-            ? `<img src="${product.images[0]}" alt="${product.name}" loading="lazy">`
+          ${firstImage
+            ? `<img src="${firstImage}" alt="${product.name}" loading="lazy">`
             : `<i class="fas ${getCategoryIcon(product.category)}"></i>`}
           <div class="product-card-badges">${fairBadge}</div>
           <button class="wishlist-btn ${isWished ? 'active' : ''}" data-id="${product.id}"
@@ -713,7 +673,7 @@ const SUPABASE_ANON = 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs';
             ${(product.payment_methods || []).includes('trade')  ? `<span class="pay-badge pay-badge-trade"><i class="fas fa-exchange-alt"></i> Trade</span>` : ''}
             ${(product.payment_methods || []).includes('online') ? `<span class="pay-badge pay-badge-online"><i class="fas fa-credit-card"></i> Online</span>` : ''}
           </div>
-          <div class="product-price-row">
+          <div class="product-price-row" style="margin-top:auto;">
             <span class="product-price">${formatPrice(product.price)}</span>
             ${product.msrp ? `<span class="product-msrp">MSRP ${formatPrice(product.msrp)}</span>` : ''}
             ${discountPct !== null && discountPct > 0 ? `<span class="product-discount">-${discountPct}%</span>` : ''}
@@ -758,6 +718,8 @@ const SUPABASE_ANON = 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs';
 
     const modal   = document.getElementById('product-modal');
     const content = document.getElementById('modal-product-content');
+    const imageUrls = normalizeImages(product.images);
+    const firstImage = imageUrls[0] || null;
 
     const discountPct = product.msrp && product.price < product.msrp
       ? Math.round((1 - product.price / product.msrp) * 100)
@@ -769,8 +731,8 @@ const SUPABASE_ANON = 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs';
 
     content.innerHTML = `
       <div class="modal-img-col">
-        ${product.images && product.images.length > 0
-          ? `<img src="${product.images[0]}" alt="${product.name}">`
+        ${firstImage
+          ? `<img src="${firstImage}" alt="${product.name}">`
           : `<i class="fas ${getCategoryIcon(product.category)}"></i>`}
       </div>
       <div class="modal-info-col">
@@ -1378,8 +1340,14 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
   function handleImageFiles(files) {
     const maxFiles = 8;
     const maxSize  = 5 * 1024 * 1024; // 5MB
+    
+    // Filter out duplicates and invalid files
     [...files].forEach((file) => {
-      if (uploadedFiles.length >= maxFiles) {
+      const isDuplicate = uploadedFiles.some(f => f && f.name === file.name && f.size === file.size);
+      if (isDuplicate) return;
+
+      const currentActiveCount = uploadedFiles.filter(f => f !== null).length;
+      if (currentActiveCount >= maxFiles) {
         showToast('Max 8 photos', 'Remove some to add more.', 'warning');
         return;
       }
@@ -1422,66 +1390,125 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
   if (sellForm) {
     sellForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (!currentUser && DB) {
+      if (!currentUser) {
         showToast('Login required', 'Please log in to list an item.', 'warning');
         showPage('login');
         return;
       }
 
+      if (!DB) {
+        showToast('Supabase not configured', 'Listing upload requires Supabase.', 'error');
+        return;
+      }
+
       const btn = document.getElementById('sell-submit-btn');
+      const originalBtnText = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Publishing...';
 
-      const newListing = {
-        id:          Date.now(),
-        name:        document.getElementById('sell-item-name').value.trim(),
-        category:    document.getElementById('sell-item-category').value,
-        description: document.getElementById('sell-item-description').value.trim(),
-        condition:   document.getElementById('sell-item-condition').value,
-        location:    document.getElementById('sell-item-location').value.trim(),
-        price:       parseFloat(document.getElementById('sell-item-price').value),
-        msrp:        parseFloat(document.getElementById('sell-item-msrp').value) || null,
-        type:        document.getElementById('sell-item-type').value,
-        shipping:    document.getElementById('sell-item-shipping').value,
-        tags:        document.getElementById('sell-item-tags').value.split(',').map(t => t.trim()).filter(Boolean),
-        seller:      currentUser?.user_metadata?.username || currentUser?.email?.split('@')[0] || 'Anonymous',
-        seller_rating: 5.0,
-        images:      [],
-        is_fair:     true,
-        created_at:  new Date().toISOString(),
-        views:       0,
-        likes:       0,
-        payment_methods: Array.from(document.querySelectorAll('input[name="payment-method"]:checked')).map(el => el.value),
-        meetup_spot:  document.getElementById('sell-meetup-spot')?.value.trim() || '',
-        meetup_hours: document.getElementById('sell-meetup-hours')?.value.trim() || '',
-        trade_for:    document.getElementById('sell-trade-for')?.value.trim() || ''
-      };
+      try {
+        const nameInput       = document.getElementById('sell-item-name');
+        const categoryInput   = document.getElementById('sell-item-category');
+        const descInput       = document.getElementById('sell-item-description');
+        const conditionInput  = document.getElementById('sell-item-condition');
+        const locationInput   = document.getElementById('sell-item-location');
+        const priceInput      = document.getElementById('sell-item-price');
+        const msrpInput       = document.getElementById('sell-item-msrp');
+        const typeInput       = document.getElementById('sell-item-type');
+        const shippingInput   = document.getElementById('sell-item-shipping');
+        const tagsInput       = document.getElementById('sell-item-tags');
 
-      // Compute is_fair
-      if (newListing.msrp) {
-        newListing.is_fair = newListing.price <= newListing.msrp * 1.1;
+        const name = nameInput?.value.trim() || '';
+        const category = categoryInput?.value || 'other';
+        const description = descInput?.value.trim() || '';
+        const condition = conditionInput?.value || 'good';
+        const location = locationInput?.value.trim() || '';
+        const price = parseFloat(priceInput?.value || '0');
+        const msrpValue = parseFloat(msrpInput?.value || '0');
+        const msrp = Number.isFinite(msrpValue) && msrpValue > 0 ? msrpValue : null;
+        const rawType = typeInput?.value || 'buy-now';
+        const rawShipping = shippingInput?.value || 'paid';
+        const tags = tagsInput?.value.split(',').map(t => t.trim()).filter(Boolean) || [];
+        const activeFiles = uploadedFiles.filter(file => file !== null);
+
+        if (!name) throw new Error('Item name is required.');
+        if (!category || category === '') throw new Error('Select a category.');
+        if (!description) throw new Error('Item description is required.');
+        if (!condition || condition === '') throw new Error('Select a condition.');
+        if (!price || Number.isNaN(price) || price <= 0) throw new Error('Enter a valid asking price.');
+
+        const listingType = ['buy-now', 'offers'].includes(rawType) ? rawType : 'offers';
+        const shipping = ['free', 'paid', 'local'].includes(rawShipping) ? rawShipping : 'paid';
+        const is_fair = msrp ? price <= msrp * 1.1 : true;
+
+        const imageUrls = [];
+        for (const file of activeFiles) {
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${currentUser.id}/${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+
+          const { error: uploadError } = await DB.storage
+            .from(STORAGE_BUCKET)
+            .upload(fileName, file);
+
+          if (uploadError) throw uploadError;
+
+          const { data: urlData } = DB.storage
+            .from(STORAGE_BUCKET)
+            .getPublicUrl(fileName);
+
+          imageUrls.push(urlData.publicUrl);
+        }
+
+        const listingData = {
+          seller_id: currentUser.id,
+          name,
+          category,
+          description,
+          condition,
+          location,
+          price,
+          msrp,
+          type: listingType,
+          shipping,
+          tags,
+          images: imageUrls,
+          is_fair
+        };
+
+        const { data: newListing, error: dbError } = await DB
+          .from('listings')
+          .insert([listingData])
+          .select('*, profiles(username, rating)')
+          .single();
+
+        if (dbError) throw dbError;
+
+        const formattedListing = {
+          ...newListing,
+          seller: newListing.profiles?.username || 'You',
+          seller_rating: parseFloat(newListing.profiles?.rating || 5.0)
+        };
+
+        products.unshift(formattedListing);
+        filteredItems = products.slice();
+
+        showToast('Listing published!', `"${formattedListing.name}" is now live.`, 'success', 5000);
+        showPage('shop');
+        renderCurrentPage();
+        updateResultsCount(products.length);
+
+        sellForm.reset();
+        uploadedFiles = [];
+        if (imagePreviewRow) imagePreviewRow.innerHTML = '';
+        if (fairnessEl) fairnessEl.style.display = 'none';
+
+      } catch (err) {
+        console.error('Publishing error:', err);
+        showToast('Failed to publish', err.message || 'Please check your form and try again.', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalBtnText;
       }
-
-      // TODO: In production, upload images to Supabase Storage and save listing to DB
-      // const { data, error } = await DB.from('listings').insert([newListing]);
-
-      // For now: add to local products array
-      products.unshift(newListing);
-      filteredItems = products.slice();
-
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fas fa-paper-plane"></i> Publish Listing';
-      sellForm.reset();
-      uploadedFiles = [];
-      if (imagePreviewRow) imagePreviewRow.innerHTML = '';
-      if (fairnessEl) fairnessEl.style.display = 'none';
-      if (nameCount)  nameCount.textContent = '0';
-      if (descCount)  descCount.textContent = '0';
-
-      showToast('Listing published!', `"${newListing.name}" is now live on the marketplace.`, 'success', 5000);
-      showPage('shop');
-      renderProductGrid(products.slice(0, ITEMS_PER_PAGE), 'product-grid');
-      updateResultsCount(products.length);
     });
   }
 
@@ -2119,55 +2146,18 @@ Return ONLY valid JSON (no markdown, no code fences) in this exact format:
      SECTION: App Initialization
   ============================================================== */
   async function init() {
-    // Assign mock payment_methods to products for demo variety
-    const payVariants = [
-      ['cash'],
-      ['cash', 'trade'],
-      ['cash', 'online'],
-      ['cash'],
-      ['cash', 'trade'],
-      ['cash'],
-      ['cash', 'online'],
-      ['trade'],
-      ['cash', 'trade', 'online'],
-      ['cash'],
-      ['cash'],
-      ['trade'],
-      ['cash'],
-      ['cash', 'online'],
-      ['cash'],
-      ['cash', 'trade']
-    ];
-    const tradeItems = [
-      '', 'Similar LEGO sets or Star Wars memorabilia', '', '', 'Other rare Pokémon sealed product',
-      '', '', 'Other vintage Levi\'s or denim jackets', '', '', '', 'Other graded NBA rookie cards',
-      '', '', '', 'Other vintage gaming gear'
-    ];
-    MOCK_PRODUCTS.forEach((p, i) => {
-      if (!p.payment_methods) {
-        p.payment_methods = payVariants[i % payVariants.length];
-        p.meetup_spot  = p.payment_methods.includes('cash') ? 'Public library or police station lobby' : '';
-        p.meetup_hours = p.payment_methods.includes('cash') ? 'Weekdays 5pm–8pm, weekends 10am–4pm' : '';
-        p.trade_for    = tradeItems[i % tradeItems.length];
-      }
-    });
-
-    // Load products (mock data; swap for Supabase query in production)
-    products     = MOCK_PRODUCTS;
+    await checkAuthSession();
+    
+    // Load Real Products
+    products = await fetchListings();
     filteredItems = products.slice();
 
-    // Auth session
-    await checkAuthSession();
-
-    // Initial UI updates
     updateCartCount();
     updateNavUI();
     populateHomePage();
-
-    // Initial shop filter state
     applyFilters();
 
-    console.log(`OBTAINUM loaded: ${products.length} listings`);
+    console.log(`OBTAINUM Live: ${products.length} listings loaded from DB.`);
   }
 
   init().catch(console.error);
