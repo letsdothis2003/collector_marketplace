@@ -34,8 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
   try {
     if (typeof supabase !== 'undefined' && supabase?.createClient) {
       DB = supabase.createClient(
-        'REPLACE_URL',
-        'REPLACE_KEY',
+        'https://gotzmuobwuubsugnowxq.supabase.co',
+        'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs',
         {
           auth: {
             persistSession: true,
