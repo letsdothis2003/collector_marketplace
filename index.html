@@ -4,17 +4,34 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="OBTAINUM: The Anti-Scalp Collector Marketplace. Buy and sell collectibles, electronics, apparel, and more — at fair prices.">
+  <meta name="keywords" content="collectibles, marketplace, anti-scalp, fair pricing, electronics, apparel, sports, books, home, vehicles">
+  <meta name="author" content="OBTAINUM Team">
+  <meta name="robots" content="index, follow">
   <meta property="og:title" content="OBTAINUM | The Anti-Scalp Marketplace">
   <meta property="og:description" content="Buy and sell collectibles without the scalpers.">
-  <title>OBTAINUM | The Anti-Scalp Marketplace</title>
+  <meta property="og:image" content="https://your-domain.com/og-image.png">
+  <meta property="og:url" content="https://your-domain.com">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="msapplication-TileColor" content="#2563eb">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="OBTAINUM">
 
-  <!-- External CDNs -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <!-- Favicon -->
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
+
+  <!-- Preload critical resources -->
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" as="style">
+  <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style">
+  <link rel="preload" href="style.css" as="style">
+
+  <!-- External CDNs with integrity for security -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" integrity="sha384-..." crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js" integrity="sha512-..." crossorigin="anonymous"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha512-..." crossorigin="anonymous">
 
   <!-- Stylesheet -->
   <!-- Potentially split into: variables.css, global.css, nav.css, hero.css, product.css, shop.css, form.css, cart.css, profile.css, chat.css, modal.css, footer.css, responsive.css -->
@@ -573,8 +590,7 @@
                   <label for="sell-item-type">Listing Type <span class="required">*</span></label>
                   <select id="sell-item-type" required>
                     <option value="buy-now">Buy Now</option>
-                    <option value="auction">Auction</option>
-                    <option value="offers">Offers Welcome</option>
+                    <option value="offers">Offers / Auction</option>
                   </select>
                 </div>
                 <div class="form-group">
@@ -583,7 +599,6 @@
                     <option value="paid">Buyer Pays Shipping</option>
                     <option value="free">Free Shipping</option>
                     <option value="local">Local Pickup Only</option>
-                    <option value="negotiable">Negotiable</option>
                   </select>
                 </div>
               </div>
@@ -1384,6 +1399,16 @@
       </div>
     </div>
   </footer>
+
+  <!-- ================================================================
+       NOSCRIPT FALLBACK
+  ================================================================ -->
+  <noscript>
+    <div style="text-align:center;padding:50px;background:#f8f9fa;color:#333;">
+      <h2>JavaScript Required</h2>
+      <p>This website requires JavaScript to function properly. Please enable JavaScript in your browser settings and reload the page.</p>
+    </div>
+  </noscript>
 
   <!-- Scripts -->
   <!-- Potentially split into: supabase-client.js, state.js, auth.js, ui.js, theme.js, cart.js, products.js, filters.js, chat.js, animations.js, profile.js -->
