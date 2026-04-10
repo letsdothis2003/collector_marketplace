@@ -69,7 +69,13 @@ document.addEventListener('DOMContentLoaded', () => {
           throw new Error("Missing Credentials");
         }
 
-        instance = supabase.createClient(
+        const supabaseClient = window.supabase || window.Supabase;
+        if (!supabaseClient) {
+          console.error('Supabase client library not loaded. Check the CDN script tag in index.html.');
+          throw new Error('Supabase library missing');
+        }
+
+        instance = supabaseClient.createClient(
           SUPABASE_CONFIG.url,
           SUPABASE_CONFIG.anonKey,
           SUPABASE_CONFIG.options
@@ -2285,3 +2291,4 @@ Return ONLY valid JSON (no markdown, no code fences) in this exact format:
 
   init().catch(console.error);
 });
+
