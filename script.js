@@ -341,14 +341,6 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    if (!DB) {
-      // Demo mode
-      showPage('login');
-      showToast('Registration simulated', 'In demo mode — check your Supabase config.', 'warning');
-      setButtonLoading(btn, false);
-      return;
-    }
-
     const { data, error } = await DB.auth.signUp({
       email, password,
       options: { data: { username, first_name: firstName, last_name: lastName } }
