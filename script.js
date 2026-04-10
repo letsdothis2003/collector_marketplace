@@ -69,7 +69,14 @@ document.addEventListener('DOMContentLoaded', () => {
           throw new Error("Missing Credentials");
         }
 
-        instance = supabase.createClient(
+        const supabaseClient = window.supabase || window.Supabase || window?.supabase;
+        if (!supabaseClient) {
+          console.error('Supabase client library not loaded. Check the CDN script tag in index.html.');
+          console.error('window.supabase:', window.supabase, 'window.Supabase:', window.Supabase);
+          throw new Error('Supabase library missing');
+        }
+
+        instance = supabaseClient.createClient(
           SUPABASE_CONFIG.url,
           SUPABASE_CONFIG.anonKey,
           SUPABASE_CONFIG.options
@@ -109,22 +116,25 @@ document.addEventListener('DOMContentLoaded', () => {
   ============================================================== */
   async function fetchListings() {
     if (!DB) return [];
-    const { data, error } = await DB
+    let { data, error } = await DB
       .from('listings')
-      .select('*, profiles!fk_listings_seller_profiles(username, rating)');
+      .select('*, profiles(username, rating)');
 
     if (error) {
-      console.error('Error fetching listings:', error);
-      return [];
+      console.warn('Primary listings fetch failed, retrying without profile join:', error.message || error);
+      const fallback = await DB.from('listings').select('*');
+      if (fallback.error) {
+        console.error('Fallback listings fetch failed:', fallback.error);
+        return [];
+      }
+      data = fallback.data || [];
     }
 
-    // Map database fields to the format expected by the UI
-    // DB columns: view_count, favorite_count (not views/likes)
-    return data.map(item => ({
+    return (data || []).map(item => ({
       ...item,
       images: normalizeImages(item.images),
-      seller: item.profiles?.username || 'Unknown Seller',
-      seller_rating: parseFloat(item.profiles?.rating || 5.0),
+      seller: item.profiles?.username || item.seller || 'Unknown Seller',
+      seller_rating: parseFloat(item.profiles?.rating || item.rating || 5.0),
       views: item.view_count || 0,
       likes: item.favorite_count || 0
     }));
@@ -297,8 +307,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (error) {
       errEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${error.message}`;
       errEl.style.display = 'flex';
+      return;
     }
-    // Note: Session handling is centralized in onAuthStateChange
+
+    if (data?.user) {
+      currentUser = data.user;
+      await ensureProfileExists(currentUser);
+      updateNavUI();
+      showPage('home');
+      showToast('Logged in!', `Welcome back, ${currentUser.email}`, 'success');
+      return;
+    }
+
+    // Note: Session handling is also centralized in onAuthStateChange
   });
 
   // Handle Auth Changes (Persistent Login)
@@ -1631,8 +1652,9 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
     const firstName = currentUser.user_metadata?.first_name || '';
     const fullName  = firstName ? `${firstName} ${currentUser.user_metadata?.last_name || ''}`.trim() : username;
     const joinDate  = new Date(currentUser.created_at || Date.now()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    const sellerId  = currentUser.id;
 
-    const userListings = products.filter(p => p.seller === username);
+    const userListings = products.filter(p => p.seller_id === sellerId || p.seller_profile_id === sellerId);
 
     document.getElementById('profile-content').innerHTML = `
       <div class="profile-header">
@@ -1679,11 +1701,11 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
     document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
     btn.classList.add('active');
     const content = document.getElementById('profile-tab-content');
-    const username = currentUser?.user_metadata?.username || currentUser?.email?.split('@')[0];
+    const sellerId = currentUser?.id;
 
     switch (tab) {
       case 'listings':
-        content.innerHTML = renderProfileListings(products.filter(p => p.seller === username));
+        content.innerHTML = renderProfileListings(products.filter(p => p.seller_id === sellerId || p.seller_profile_id === sellerId));
         break;
       case 'purchases':
         content.innerHTML = `<div style="text-align:center;padding:60px 0;color:var(--text-muted);">
