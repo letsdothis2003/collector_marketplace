@@ -1,5 +1,5 @@
 /* ================================================================
-   OBTAINIUM MARKETPLACE — script.js
+   OBTAINUM MARKETPLACE — script.js
    Potentially split into these separate files:
    - supabase-client.js          (Supabase initialization)
    - state.js                    (global app state)
@@ -45,14 +45,14 @@ document.addEventListener('DOMContentLoaded', () => {
   ============================================================== */
   let products       = [];   // All loaded product listings
   let filteredItems  = [];   // Currently filtered view
-  let cart           = JSON.parse(localStorage.getItem('obtainium_cart') || '[]');
-  let wishlist       = JSON.parse(localStorage.getItem('obtainium_wishlist') || '[]');
+  let cart           = JSON.parse(localStorage.getItem('OBTAINUM_cart') || '[]');
+  let wishlist       = JSON.parse(localStorage.getItem('OBTAINUM_wishlist') || '[]');
   let currentPage    = 1;
   const ITEMS_PER_PAGE = 12;
   let currentView    = 'grid'; // 'grid' | 'list'
   let activeCategory = 'all';
   let currentUser    = null;
-  let userLocation   = localStorage.getItem('obtainium_user_location') || ''; // user's city for route/shipping calc
+  let userLocation   = localStorage.getItem('OBTAINUM_user_location') || ''; // user's city for route/shipping calc
   let lastAnalyzedProduct = null; // last product sent to AI analysis tab
 
 
@@ -268,7 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const themeIcon = document.getElementById('theme-icon');
 
   // Load saved theme
-  const savedTheme = localStorage.getItem('obtainium_theme') || 'light';
+  const savedTheme = localStorage.getItem('OBTAINUM_theme') || 'light';
   document.documentElement.setAttribute('data-theme', savedTheme);
   updateThemeIcon(savedTheme);
 
@@ -276,7 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const current = document.documentElement.getAttribute('data-theme');
     const next = current === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('obtainium_theme', next);
+    localStorage.setItem('OBTAINUM_theme', next);
     updateThemeIcon(next);
     showToast(next === 'dark' ? 'Dark mode on' : 'Light mode on', '', 'info', 2000);
   });
@@ -530,7 +530,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   function saveCart() {
-    localStorage.setItem('obtainium_cart', JSON.stringify(cart));
+    localStorage.setItem('OBTAINUM_cart', JSON.stringify(cart));
   }
 
   function updateCartCount() {
@@ -633,7 +633,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   window.applyPromo = function () {
     const code = document.getElementById('promo-code').value.trim().toUpperCase();
-    if (code === 'OBTAINIUM10') {
+    if (code === 'OBTAINUM10') {
       showToast('Promo applied!', '10% discount — not yet implemented in demo.', 'success');
     } else {
       showToast('Invalid promo code', '', 'error');
@@ -655,7 +655,7 @@ document.addEventListener('DOMContentLoaded', () => {
       wishlist.push(productId);
       showToast('Added to wishlist', '', 'success', 2000);
     }
-    localStorage.setItem('obtainium_wishlist', JSON.stringify(wishlist));
+    localStorage.setItem('OBTAINUM_wishlist', JSON.stringify(wishlist));
     // Update all heart buttons with this product id
     document.querySelectorAll(`.wishlist-btn[data-id="${productId}"]`).forEach(btn => {
       btn.classList.toggle('active', wishlist.includes(productId));
@@ -1124,7 +1124,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
   // Check if key saved
-  let geminiKey = localStorage.getItem('obtainium_gemini_key') || '';
+  let geminiKey = localStorage.getItem('OBTAINUM_gemini_key') || '';
 
   function checkGeminiKeySetup() {
     const setupCard   = document.getElementById('gemini-key-setup');
@@ -1143,7 +1143,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const key = input.value.trim();
     if (!key) { showToast('Please enter a key', '', 'warning'); return; }
     geminiKey = key;
-    localStorage.setItem('obtainium_gemini_key', geminiKey);
+    localStorage.setItem('OBTAINUM_gemini_key', geminiKey);
     checkGeminiKeySetup();
     showToast('Gemini key saved!', 'AI Assistant is ready.', 'success');
     input.value = '';
@@ -1161,7 +1161,7 @@ document.addEventListener('DOMContentLoaded', () => {
     history.innerHTML = `
       <div class="chat-msg bot-msg">
         <div class="chat-msg-avatar bot-avatar"><i class="fas fa-robot"></i></div>
-        <div class="chat-msg-bubble"><p>Chat cleared! Ask me anything about the Obtainium marketplace.</p></div>
+        <div class="chat-msg-bubble"><p>Chat cleared! Ask me anything about the OBTAINUM marketplace.</p></div>
         <span class="chat-msg-time">Just now</span>
       </div>`;
     chatMessages = [];
@@ -1217,8 +1217,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       // Build context-aware system prompt
-      const systemContext = `You are the Obtainium AI Shopping Assistant, an expert on collectibles, electronics, apparel, and fair marketplace pricing.
-You help users find good deals, identify scalping, and navigate the Obtainium marketplace.
+      const systemContext = `You are the OBTAINUM AI Shopping Assistant, an expert on collectibles, electronics, apparel, and fair marketplace pricing.
+You help users find good deals, identify scalping, and navigate the OBTAINUM marketplace.
 Current marketplace stats: ${products.length} listings, categories: electronics, toys & collectibles, apparel, sports, books, home, vehicles.
 Always be helpful, concise, and honest. If a price seems unfair (above MSRP), say so. Give specific, actionable advice.
 Format responses with markdown-like plain text. Keep responses under 300 words.`;
@@ -1863,7 +1863,7 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
     const userLoc    = userLocation || 'Not specified';
 
     const prompt = `
-You are an anti-scalp collector marketplace assistant for Obtainium. Analyze this product listing and return a structured JSON object with your analysis.
+You are an anti-scalp collector marketplace assistant for OBTAINUM. Analyze this product listing and return a structured JSON object with your analysis.
 
 LISTING DETAILS:
 - Product: ${product.name}
@@ -2167,7 +2167,7 @@ Return ONLY valid JSON (no markdown, no code fences) in this exact format:
     // Initial shop filter state
     applyFilters();
 
-    console.log(`Obtainium loaded: ${products.length} listings`);
+    console.log(`OBTAINUM loaded: ${products.length} listings`);
   }
 
   init().catch(console.error);
