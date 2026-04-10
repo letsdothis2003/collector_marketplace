@@ -26,72 +26,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ==============================================================
      SECTION: supabase-client.js — Supabase Initialization
-     Replace the URL and ANON KEY below with your own project's values.
-     Get them at: https://supabase.com/dashboard → Project → Settings → API
   ============================================================== */
 
-  /**
-   * DATABASE ARCHITECT OPTIMIZATION:
-   * 1. Singleton Pattern: Prevents multiple client instances.
-   * 2. Immutable Config: Protects sensitive keys from runtime modification.
-   * 3. Atomic Initialization: Uses a getter to ensure DB is ready before use.
-   */
-  const SUPABASE_CONFIG = Object.freeze({
-    url: 'https://gotzmuobwuubsugnowxq.supabase.co',
-    anonKey: 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs',
-    options: {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-        storageKey: 'obtainum-auth-token',
-        storage: window.localStorage,
-        flowType: 'pkce'
-      },
-      global: {
-        headers: { 'x-application-name': 'obtainum-engine' },
-      },
-    }
-  });
+  let DB = null;
 
-  let instance = null;
-
-  const DatabaseProvider = {
-    /**
-     * Returns the existing client or initializes a new one.
-     * Use this instead of the global DB variable.
-     */
-    getClient() {
-      if (instance) return instance;
-
-      try {
-        if (!SUPABASE_CONFIG.url || !SUPABASE_CONFIG.anonKey) {
-          throw new Error("Missing Credentials");
+  // Simple Supabase initialization
+  try {
+    if (typeof supabase !== 'undefined' && supabase?.createClient) {
+      DB = supabase.createClient(
+        'https://gotzmuobwuubsugnowxq.supabase.co',
+        'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs',
+        {
+          auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+            storageKey: 'obtainum-auth-token',
+            storage: window.localStorage,
+            flowType: 'pkce'
+          },
+          global: {
+            headers: { 'x-application-name': 'obtainum-engine' },
+          },
         }
-
-        const supabaseClient = window.supabase || window.Supabase || window?.supabase;
-        if (!supabaseClient) {
-          console.error('Supabase client library not loaded. Check the CDN script tag in index.html.');
-          console.error('window.supabase:', window.supabase, 'window.Supabase:', window.Supabase);
-          throw new Error('Supabase library missing');
-        }
-
-        instance = supabaseClient.createClient(
-          SUPABASE_CONFIG.url,
-          SUPABASE_CONFIG.anonKey,
-          SUPABASE_CONFIG.options
-        );
-
-        return instance;
-      } catch (e) {
-        console.warn('⚡ [DB-CORE] Running in Demo Mode:', e.message);
-        return null;
-      }
+      );
     }
-  };
-
-  // Usage across your application modules:
-  const DB = DatabaseProvider.getClient();
+  } catch (e) {
+    console.warn('Supabase initialization failed. Running in demo mode.', e.message);
+    DB = null;
+  }
 
 
   /* ==============================================================
