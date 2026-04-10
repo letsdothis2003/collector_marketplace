@@ -29,8 +29,8 @@ document.addEventListener('DOMContentLoaded', () => {
      Replace the URL and ANON KEY below with your own project's values.
      Get them at: https://supabase.com/dashboard → Project → Settings → API
   ============================================================== */
-const SUPABASE_URL  = 'REPLACE_URL';
-const SUPABASE_ANON = 'REPLACE_KEY';
+const SUPABASE_URL  = 'https://gotzmuobwuubsugnowxq.supabase.co';
+const SUPABASE_ANON = 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs';
   let DB = null;
 
   try {
