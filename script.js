@@ -29,29 +29,62 @@ document.addEventListener('DOMContentLoaded', () => {
      Replace the URL and ANON KEY below with your own project's values.
      Get them at: https://supabase.com/dashboard → Project → Settings → API
   ============================================================== */
-  const SUPABASE_CONFIG = {
+
+  /**
+   * DATABASE ARCHITECT OPTIMIZATION:
+   * 1. Singleton Pattern: Prevents multiple client instances.
+   * 2. Immutable Config: Protects sensitive keys from runtime modification.
+   * 3. Atomic Initialization: Uses a getter to ensure DB is ready before use.
+   */
+  const SUPABASE_CONFIG = Object.freeze({
     url: 'https://gotzmuobwuubsugnowxq.supabase.co',
     anonKey: 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs',
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-      storageKey: 'obtainum-auth-token',
-      storage: window.localStorage
+    options: {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storageKey: 'obtainum-auth-token',
+        storage: window.localStorage,
+        flowType: 'pkce'
+      },
+      global: {
+        headers: { 'x-application-name': 'obtainum-engine' },
+      },
+    }
+  });
+
+  let instance = null;
+
+  const DatabaseProvider = {
+    /**
+     * Returns the existing client or initializes a new one.
+     * Use this instead of the global DB variable.
+     */
+    getClient() {
+      if (instance) return instance;
+
+      try {
+        if (!SUPABASE_CONFIG.url || !SUPABASE_CONFIG.anonKey) {
+          throw new Error("Missing Credentials");
+        }
+
+        instance = supabase.createClient(
+          SUPABASE_CONFIG.url,
+          SUPABASE_CONFIG.anonKey,
+          SUPABASE_CONFIG.options
+        );
+
+        return instance;
+      } catch (e) {
+        console.warn('⚡ [DB-CORE] Running in Demo Mode:', e.message);
+        return null;
+      }
     }
   };
 
-  let DB = null;
-
-  try {
-    // Initializing Supabase with session persistence for a 4-hour window.
-    // Note: Ensure JWT Expiry is set to 14400 in Supabase Auth Settings.
-    DB = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey, {
-      auth: SUPABASE_CONFIG.auth
-    });
-  } catch (e) {
-    console.warn('Supabase init failed. Running in demo mode.', e);
-  }
+  // Usage across your application modules:
+  const DB = DatabaseProvider.getClient();
 
 
   /* ==============================================================
@@ -72,26 +105,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   /* ==============================================================
-  /* ==============================================================
      SECTION: api/products.js — Real Data Fetching
   ============================================================== */
   async function fetchListings() {
     if (!DB) return [];
     const { data, error } = await DB
       .from('listings')
-      .select('*, profiles(username, rating)');
-    
+      .select('*, profiles!fk_listings_seller_profiles(username, rating)');
+
     if (error) {
       console.error('Error fetching listings:', error);
       return [];
     }
 
     // Map database fields to the format expected by the UI
+    // DB columns: view_count, favorite_count (not views/likes)
     return data.map(item => ({
       ...item,
       images: normalizeImages(item.images),
       seller: item.profiles?.username || 'Unknown Seller',
-      seller_rating: parseFloat(item.profiles?.rating || 5.0)
+      seller_rating: parseFloat(item.profiles?.rating || 5.0),
+      views: item.view_count || 0,
+      likes: item.favorite_count || 0
     }));
   }
 
@@ -268,13 +303,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Handle Auth Changes (Persistent Login)
   if (DB) {
-    DB.auth.onAuthStateChange((event, session) => {
+    DB.auth.onAuthStateChange(async (event, session) => {
       currentUser = session?.user || null;
-      updateNavUI();
-      if (event === 'SIGNED_IN') {
-        console.log('User signed in:', session.user.email);
-        showPage('home');
-        showToast('Welcome!', `Logged in as ${currentUser.email}`, 'success');
+      if (currentUser) {
+        await ensureProfileExists(currentUser);
+        updateNavUI();
+        if (event === 'SIGNED_IN') {
+          console.log('User signed in:', currentUser.email);
+          showPage('home');
+          showToast('Welcome!', `Logged in as ${currentUser.email}`, 'success');
+        }
       } else if (event === 'SIGNED_OUT') {
         console.log('User signed out');
         currentUser = null;
@@ -339,6 +377,7 @@ document.addEventListener('DOMContentLoaded', () => {
       errEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${error.message}`;
       errEl.style.display = 'flex';
     } else {
+      if (data?.user) await ensureProfileExists(data.user);
       showPage('login');
       showToast('Account created!', 'Check your email to confirm your account.', 'success', 6000);
     }
@@ -413,6 +452,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  async function ensureProfileExists(user) {
+    if (!DB || !user?.id) return;
+
+    const username = user.user_metadata?.username || user.email?.split('@')[0] || `user_${user.id.slice(0, 8)}`;
+    const profileRow = {
+      id: user.id,
+      username,
+      email: user.email,
+      rating: 5.00,
+      bio: '',
+      location: '',
+      avatar_url: '',
+      phone: '',
+      website: '',
+      social_links: {},
+      preferences: { notifications: true, email_updates: true, theme: localStorage.getItem('OBTAINUM_theme') || 'light' },
+      is_verified: Boolean(user.email_confirmed_at),
+      updated_at: new Date().toISOString()
+    };
+
+    const { error } = await DB.from('profiles').upsert(profileRow);
+    if (error) {
+      console.error('Profile sync failed:', error);
+    }
+  }
+
   // Check session on load
   async function checkAuthSession() {
     if (!DB) return;
@@ -420,6 +485,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const { data: { session }, error } = await DB.auth.getSession();
       if (error) throw error;
       currentUser = session?.user || null;
+      if (currentUser) await ensureProfileExists(currentUser);
       updateNavUI();
     } catch (err) {
       console.error('Session check failed:', err);
@@ -527,12 +593,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     cart.forEach((item) => {
+      const imageUrls = normalizeImages(item.images);
+      const firstImage = imageUrls[0] || null;
+
       const el = document.createElement('div');
       el.className = 'cart-item';
       el.innerHTML = `
         <div class="cart-item-img">
-          ${item.images && item.images.length > 0
-            ? `<img src="${item.images[0]}" alt="${item.name}" loading="lazy">`
+          ${firstImage
+            ? `<img src="${firstImage}" alt="${item.name}" loading="lazy" decoding="async">`
             : `<i class="fas ${getCategoryIcon(item.category)}"></i>`}
         </div>
         <div class="cart-item-info">
@@ -653,7 +722,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <div class="product-card" role="listitem" onclick="openProductModal(${product.id})" tabindex="0" onkeydown="if(event.key==='Enter')openProductModal(${product.id})">
         <div class="product-card-img">
           ${firstImage
-            ? `<img src="${firstImage}" alt="${product.name}" loading="lazy">`
+            ? `<img src="${firstImage}" alt="${product.name}" loading="lazy" decoding="async">`
             : `<i class="fas ${getCategoryIcon(product.category)}"></i>`}
           <div class="product-card-badges">${fairBadge}</div>
           <button class="wishlist-btn ${isWished ? 'active' : ''}" data-id="${product.id}"
@@ -733,10 +802,14 @@ document.addEventListener('DOMContentLoaded', () => {
       'new': 'New', 'like-new': 'Like New', 'good': 'Good', 'fair': 'Fair', 'poor': 'For Parts'
     }[product.condition] || product.condition;
 
+    // Use view_count and favorite_count from DB (aliased to views/likes in fetchListings)
+    const viewCount = product.views || product.view_count || 0;
+    const likeCount = product.likes || product.favorite_count || 0;
+
     content.innerHTML = `
       <div class="modal-img-col">
         ${firstImage
-          ? `<img src="${firstImage}" alt="${product.name}">`
+          ? `<img src="${firstImage}" alt="${product.name}" decoding="async">`
           : `<i class="fas ${getCategoryIcon(product.category)}"></i>`}
       </div>
       <div class="modal-info-col">
@@ -764,8 +837,8 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div class="modal-desc">${product.description}</div>
         <div style="font-size:0.82rem;color:var(--text-muted);display:flex;gap:16px;flex-wrap:wrap;">
-          <span><i class="fas fa-eye"></i> ${product.views} views</span>
-          <span><i class="fas fa-heart"></i> ${product.likes} saves</span>
+          <span><i class="fas fa-eye"></i> ${viewCount} views</span>
+          <span><i class="fas fa-heart"></i> ${likeCount} saves</span>
           <span><i class="fas fa-clock"></i> Listed ${timeAgo(product.created_at)}</span>
           <span><i class="fas fa-shipping-fast"></i> ${product.shipping === 'free' ? 'Free shipping' : product.shipping === 'local' ? 'Local pickup only' : 'Paid shipping'}</span>
         </div>
@@ -1344,7 +1417,7 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
   function handleImageFiles(files) {
     const maxFiles = 8;
     const maxSize  = 5 * 1024 * 1024; // 5MB
-    
+
     // Filter out duplicates and invalid files
     [...files].forEach((file) => {
       const isDuplicate = uploadedFiles.some(f => f && f.name === file.name && f.size === file.size);
@@ -1435,6 +1508,10 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
         const tags = tagsInput?.value.split(',').map(t => t.trim()).filter(Boolean) || [];
         const activeFiles = uploadedFiles.filter(file => file !== null);
 
+        // Collect selected payment methods from checkboxes (name="payment_methods")
+        const payment_methods = [...document.querySelectorAll('.payment-method-check:checked')]
+          .map(cb => cb.value);
+
         if (!name) throw new Error('Item name is required.');
         if (!category || category === '') throw new Error('Select a category.');
         if (!description) throw new Error('Item description is required.');
@@ -1465,6 +1542,7 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
 
         const listingData = {
           seller_id: currentUser.id,
+          seller_profile_id: currentUser.id,
           name,
           category,
           description,
@@ -1474,6 +1552,7 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
           msrp,
           type: listingType,
           shipping,
+          payment_methods,
           tags,
           images: imageUrls,
           is_fair
@@ -1482,7 +1561,7 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
         const { data: newListing, error: dbError } = await DB
           .from('listings')
           .insert([listingData])
-          .select('*, profiles(username, rating)')
+          .select('*, profiles!fk_listings_seller_profiles(username, rating)')
           .single();
 
         if (dbError) throw dbError;
@@ -1490,7 +1569,9 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
         const formattedListing = {
           ...newListing,
           seller: newListing.profiles?.username || 'You',
-          seller_rating: parseFloat(newListing.profiles?.rating || 5.0)
+          seller_rating: parseFloat(newListing.profiles?.rating || 5.0),
+          views: newListing.view_count || 0,
+          likes: newListing.favorite_count || 0
         };
 
         products.unshift(formattedListing);
@@ -1638,7 +1719,7 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
               <textarea placeholder="Tell buyers about yourself..." rows="3"></textarea>
             </div>
             <div style="display:flex;gap:12px;margin-top:8px;">
-              <button class="btn btn-primary" onclick="showToast('Settings saved','',success,2000)">Save Changes</button>
+              <button class="btn btn-primary" onclick="showToast('Settings saved','','success',2000)">Save Changes</button>
               <button class="btn btn-danger" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</button>
             </div>
           </div>`;
@@ -1757,9 +1838,10 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
     });
   }
 
-  // Animate cards in on home page
+  // Animate cards in on home page — requires GSAP ScrollTrigger plugin (loaded in index.html)
   function animateHomeCards() {
-    if (typeof gsap === 'undefined') return;
+    if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+    gsap.registerPlugin(ScrollTrigger);
     gsap.from('.category-card', {
       y: 30, opacity: 0, duration: 0.5, stagger: 0.06, ease: 'power2.out',
       scrollTrigger: { trigger: '.category-grid', start: 'top 85%' }
@@ -1799,6 +1881,7 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
 
     // Animate counters
     animateCounters();
+    animateHomeCards();
   }
 
 
@@ -1851,12 +1934,15 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
     if (!product) return;
 
     lastAnalyzedProduct = product;
+    window.lastAnalyzedProduct = product;
     closeProductModal();
-    showPage('ai');
 
-    // Switch to analysis tab
+    // Bug Fix: page id is 'assistant', not 'ai'
+    showPage('assistant');
+
+    // Bug Fix: tab id is 'analyze', not 'analysis'
     setTimeout(() => {
-      switchAITab('analysis');
+      switchAITab('analyze');
       runProductAnalysis(product);
     }, 100);
   };
@@ -2125,13 +2211,16 @@ Return ONLY valid JSON (no markdown, no code fences) in this exact format:
 
   /* ==============================================================
      SECTION: features/sell.js — Payment Method Toggle Handlers
+     Bug Fix: Corrected selectors to match HTML (name="payment_methods",
+     class="payment-method-check") and correct wrap IDs
+     (cash-details-wrap / trade-details-wrap).
   ============================================================== */
 
   function initPaymentMethodToggles() {
-    const cashCheck  = document.querySelector('input[name="payment-method"][value="cash"]');
-    const tradeCheck = document.querySelector('input[name="payment-method"][value="trade"]');
-    const cashFields  = document.getElementById('sell-cash-fields');
-    const tradeFields = document.getElementById('sell-trade-fields');
+    const cashCheck  = document.querySelector('.payment-method-check[value="cash"]');
+    const tradeCheck = document.querySelector('.payment-method-check[value="trade"]');
+    const cashFields  = document.getElementById('cash-details-wrap');
+    const tradeFields = document.getElementById('trade-details-wrap');
 
     function updateFields() {
       if (cashFields)  cashFields.style.display = cashCheck?.checked  ? 'block' : 'none';
@@ -2151,7 +2240,7 @@ Return ONLY valid JSON (no markdown, no code fences) in this exact format:
   ============================================================== */
   async function init() {
     await checkAuthSession();
-    
+
     // Load Real Products
     products = await fetchListings();
     filteredItems = products.slice();
@@ -2180,5 +2269,4 @@ Return ONLY valid JSON (no markdown, no code fences) in this exact format:
   }
 
   init().catch(console.error);
-
-}); // end DOMContentLoaded
+});
