@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OBTAINUM | Collector Marketplace</title>
+  <title>OBTAINUM | Marketplace</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -11,8 +11,8 @@
   <nav class="navbar">
     <div class="logo">OBTAINUM</div>
     <div class="nav-actions">
-      <input type="text" id="searchInput" placeholder="Search collectibles...">
-      <button id="authBtn">Login</button>
+      <input type="text" id="searchInput" placeholder="Search items...">
+      <button id="authBtn" class="btn-primary" style="background:transparent; color:var(--text); border:1px solid var(--border)">Login</button>
       <button id="openSellModal" class="btn-primary">Sell Item</button>
     </div>
   </nav>
@@ -20,20 +20,16 @@
   <div class="app-layout">
     <aside class="sidebar">
       <h3>Filters</h3>
-      <div class="filter-group">
-        <label>Category</label>
-        <select id="categoryFilter">
-          <option value="all">All Items</option>
-          <option value="Transformers">Transformers</option>
-          <option value="Marvel">Marvel</option>
-          <option value="Electronics">Electronics</option>
-        </select>
-      </div>
+      <select id="categoryFilter" style="width:100%; padding:8px; border-radius:8px;">
+        <option value="all">All Categories</option>
+        <option value="Transformers">Transformers</option>
+        <option value="Marvel">Marvel</option>
+        <option value="Electronics">Electronics</option>
+      </select>
     </aside>
 
     <main class="content">
-      <div id="productGrid" class="grid">
-        </div>
+      <div id="productGrid" class="grid"></div>
     </main>
   </div>
 
@@ -41,26 +37,19 @@
     <div class="modal-content">
       <h2>List New Item</h2>
       <form id="sellForm">
-        <input type="text" id="itemTitle" placeholder="Item Name (e.g. SS-38 Optimus)" required>
+        <input type="text" id="itemTitle" placeholder="Item Name" required>
         <select id="itemCategory">
           <option value="Transformers">Transformers</option>
           <option value="Marvel">Marvel</option>
           <option value="Electronics">Electronics</option>
-          <option value="Other">Other</option>
         </select>
-        <div style="display: flex; gap: 10px;">
+        <div style="display:flex; gap:10px;">
           <input type="number" id="itemPrice" placeholder="Price ($)" step="0.01" required>
           <input type="number" id="itemMsrp" placeholder="MSRP ($)" step="0.01" required>
         </div>
-        <select id="itemCondition">
-          <option value="new">New</option>
-          <option value="like-new">Like New</option>
-          <option value="good">Good</option>
-          <option value="fair">Fair</option>
-        </select>
-        <textarea id="itemDescription" placeholder="Item details (min 10 chars)..." required></textarea>
+        <textarea id="itemDescription" placeholder="Condition and details..." required></textarea>
         <div class="modal-actions">
-          <button type="submit" id="submitListing" class="btn-primary">Post Listing</button>
+          <button type="submit" id="submitListing" class="btn-primary" style="flex:2">Post Listing</button>
           <button type="button" id="closeModal">Cancel</button>
         </div>
       </form>
