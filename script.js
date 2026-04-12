@@ -258,21 +258,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const email    = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
 
-    const { data, error } = await DB.auth.signInWithPassword({ email, password });
-    setButtonLoading(btn, false);
-    if (error) {
-      errEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${error.message}`;
-      errEl.style.display = 'flex';
-      return;
+    if (!DB) {
+      throw new Error('Database not configured. Please check your Supabase settings.');
     }
 
-    if (data?.user) {
-      currentUser = data.user;
-      await ensureProfileExists(currentUser);
-      updateNavUI();
-      showPage('home');
-      showToast('Logged in!', `Welcome back, ${currentUser.email}`, 'success');
-      return;
+    try {
+      const { data, error } = await DB.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+
+      if (data?.user) {
+        currentUser = data.user;
+        await ensureProfileExists(currentUser);
+        updateNavUI();
+        showPage('home');
+        showToast('Logged in!', `Welcome back, ${currentUser.email}`, 'success');
+        return;
+      }
+    } catch (err) {
+      errEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${err.message}`;
+      errEl.style.display = 'flex';
+    } finally {
+      setButtonLoading(btn, false);
     }
 
     // Note: Session handling is also centralized in onAuthStateChange
@@ -336,19 +342,26 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const { data, error } = await DB.auth.signUp({
-      email, password,
-      options: { data: { username, full_name: `${firstName} ${lastName}`.trim(), first_name: firstName, last_name: lastName } }
-    });
+    if (!DB) {
+      throw new Error('Database not configured. Please check your Supabase settings.');
+    }
 
-    setButtonLoading(btn, false);
-    if (error) {
-      errEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${error.message}`;
-      errEl.style.display = 'flex';
-    } else {
+    try {
+      const { data, error } = await DB.auth.signUp({
+        email, password,
+        options: { data: { username, full_name: `${firstName} ${lastName}`.trim(), first_name: firstName, last_name: lastName } }
+      });
+
+      if (error) throw error;
+
       if (data?.user) await ensureProfileExists(data.user);
       showPage('login');
       showToast('Account created!', 'Check your email to confirm your account.', 'success', 6000);
+    } catch (err) {
+      errEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${err.message}`;
+      errEl.style.display = 'flex';
+    } finally {
+      setButtonLoading(btn, false);
     }
   });
 
@@ -365,11 +378,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // GOOGLE OAUTH
   window.loginWithGoogle = async function () {
-    const { error } = await DB.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.href }
-    });
-    if (error) showToast('OAuth Error', error.message, 'error');
+    if (!DB) {
+      showToast('Database not configured', 'Please check your Supabase settings.', 'error');
+      return;
+    }
+    try {
+      const { error } = await DB.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.href }
+      });
+      if (error) throw error;
+    } catch (err) {
+      showToast('OAuth Error', err.message, 'error');
+    }
   };
 
   // FORGOT PASSWORD
@@ -378,13 +399,20 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     const email = document.getElementById('forgot-email').value.trim();
     const msgEl = document.getElementById('forgot-msg');
-    const { error } = await DB.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
-    if (error) {
-      msgEl.textContent = error.message;
+    if (!DB) {
+      msgEl.textContent = 'Database not configured. Please check your Supabase settings.';
       msgEl.className = 'form-error';
-    } else {
+      msgEl.style.display = 'block';
+      return;
+    }
+    try {
+      const { error } = await DB.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+      if (error) throw error;
       msgEl.textContent = 'Reset link sent! Check your email.';
       msgEl.className = 'form-success';
+    } catch (err) {
+      msgEl.textContent = err.message;
+      msgEl.className = 'form-error';
     }
     msgEl.style.display = 'block';
   });
