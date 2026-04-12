@@ -1224,36 +1224,42 @@ async function loadSimilarItems(listing) {
 /* ============================================================
    SECTION: RENDER ENGINE — Card creation, skeleton, etc.
    ============================================================ */
-
 function createListingCard(listing) {
   const card = document.createElement('div');
   card.className = 'listing-card animate-fade-up';
   card.onclick = () => openListing(listing.id);
 
   const isWished = State.wishlistIds.has(listing.id);
+  const isOwner = State.user && State.user.id === listing.seller_id;
   const img = listing.images && listing.images.length > 0
-    ? `<img src="${listing.images[0]}" alt="${escHtml(listing.name)}" />`
-    : `<div class="card-no-image">${categoryIcon(listing.category)}</div>`;
+    ? `<img src=\"${listing.images[0]}\" alt=\"${escHtml(listing.name)}\" />`
+    : `<div class=\"card-no-image\">${categoryIcon(listing.category)}</div>`;
 
   card.innerHTML = `
-    <div class="card-image-wrap">
+    <div class=\"card-image-wrap\">
       ${img}
-      ${listing.is_fair ? '<span class="card-badge fair">AI FAIR</span>' : ''}
-      ${listing.is_featured ? '<span class="card-badge featured">★</span>' : ''}
-      <button class="wishlist-btn ${isWished ? 'active' : ''}" onclick="toggleWishlist(event, '${listing.id}')">
+      ${listing.is_fair ? '<span class=\"card-badge fair\">AI FAIR</span>' : ''}
+      ${listing.is_featured ? '<span class=\"card-badge featured\">★</span>' : ''}
+      <button class=\"wishlist-btn ${isWished ? 'active' : ''}\" onclick=\"toggleWishlist(event, '${listing.id}')\">
         ${isWished ? '♥' : '♡'}
       </button>
+      ${isOwner ? `
+        <div class=\"card-owner-actions\">
+          <button class=\"card-action-btn edit-btn\" onclick=\"openEditListing(event, '${listing.id}')\" title=\"Edit\">✎</button>
+          <button class=\"card-action-btn delete-btn\" onclick=\"deleteListing(event, '${listing.id}')\" title=\"Delete\">✕</button>
+        </div>
+      ` : ''}
     </div>
-    <div class="card-body">
-      <div class="card-title">${escHtml(listing.name)}</div>
-      <div class="card-price">
+    <div class=\"card-body\">
+      <div class=\"card-title\">${escHtml(listing.name)}</div>
+      <div class=\"card-price\">
         $${parseFloat(listing.price).toFixed(2)}
         ${listing.msrp && listing.msrp > listing.price
-          ? `<span class="card-msrp">$${parseFloat(listing.msrp).toFixed(2)}</span>`
+          ? `<span class=\"card-msrp\">$${parseFloat(listing.msrp).toFixed(2)}</span>`
           : ''}
       </div>
-      <div class="card-meta">
-        <span class="card-condition">${listing.condition || 'N/A'}</span>
+      <div class=\"card-meta\">
+        <span class=\"card-condition\">${listing.condition || 'N/A'}</span>
         ${listing.location ? `<span>📍 ${escHtml(listing.location)}</span>` : ''}
       </div>
     </div>
