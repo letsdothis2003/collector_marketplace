@@ -7,22 +7,25 @@
    ============================================================ */
 
 // --- SECTION: DATABASE CONFIG ---
-// IMPORTANT: Replace these with your actual Supabase credentials
 const SUPABASE_URL = "https://gotzmuobwuubsugnowxq.supabase.co";
-const SUPABASE_PUBLIC_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";  
+const SUPABASE_URL_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
+
 // db is declared with let so it stays accessible even if createClient throws
+// (const would leave db in temporal dead zone on failure)
 let db;
 try {
-  db = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLIC_KEY);
-  console.log('[OBTAINUM] Supabase client initialized successfully');
+  db = supabase.createClient(SUPABASE_URL, SUPABASE_URL_KEY);
 } catch (e) {
   console.error('[OBTAINUM] Supabase init failed — check your URL and key:', e);
 }
 
 /* ============================================================
    SECTION: STATE MANAGEMENT — Global app state
+   All constants and state hoisted to top so inline onclick
+   handlers never hit a temporal dead zone on deferred modules
    ============================================================ */
 
+// Pages list used by router — must be declared before navigate() is called
 const PAGES = ['shop', 'detail', 'create', 'profile', 'wishlist'];
 
 const CATEGORIES = [
@@ -39,12 +42,6 @@ const CONDITION_LABELS = {
   'poor': '✦ Poor'
 };
 
-// Valid values for database constraints
-const VALID_CONDITIONS = ['new', 'like-new', 'good', 'fair', 'poor'];
-const VALID_TYPES = ['buy-now', 'offers', 'auction'];
-const VALID_SHIPPING = ['free', 'paid', 'local', 'pickup'];
-const VALID_PAYMENT_METHODS = ['cash', 'card', 'paypal', 'venmo', 'zelle', 'crypto', 'trade'];
-
 const State = {
   user: null,
   profile: null,
@@ -59,6 +56,7 @@ const State = {
   priceMax: null,
   sortBy: 'newest',
   selectedListing: null,
+  editingListingId: null,
   imageFiles: [],
   isOnline: navigator.onLine
 };
@@ -91,11 +89,18 @@ function toggleTheme() {
 function navigate(page) {
   if (!PAGES.includes(page)) page = 'shop';
 
+  // Auth guard for protected pages
+  if ((page === 'create' || page === 'profile') && !State.user) {
+    // Show notice inside the page but still navigate
+  }
+
+  // Deactivate all pages
   PAGES.forEach(p => {
     const el = document.getElementById('page-' + p);
     if (el) el.classList.remove('active');
   });
 
+  // Activate target page
   const target = document.getElementById('page-' + page);
   if (target) {
     target.classList.add('active');
@@ -105,6 +110,7 @@ function navigate(page) {
   State.currentPage = page;
   updateNavActive(page);
 
+  // Load page-specific data
   if (page === 'shop') loadListings();
   if (page === 'profile') loadProfile();
   if (page === 'wishlist') loadWishlist();
@@ -123,12 +129,13 @@ function updateNavActive(page) {
 
 async function initAuth() {
   if (!db) return;
-  
+  // Restore session
   const { data: { session } } = await db.auth.getSession();
   if (session?.user) {
     await onAuthChange(session.user);
   }
 
+  // Listen for auth state changes
   db.auth.onAuthStateChange(async (_event, session) => {
     if (session?.user) {
       await onAuthChange(session.user);
@@ -141,21 +148,24 @@ async function initAuth() {
 async function onAuthChange(user) {
   State.user = user;
 
+  // Fetch profile — create one if it doesn't exist
   let { data: profile, error: profileError } = await db
     .from('profiles')
     .select('*')
     .eq('id', user.id)
     .single();
 
-  if (profileError && profileError.code !== 'PGRST116') {
-    console.error("[OBTAINUM] Error fetching profile:", profileError);
+  // PGRST116 is the PostgREST code for "exactly one row was requested, but 0 were found"
+  if (profileError && profileError.code !== 'PGRST116') { 
+      console.error("Error fetching profile:", profileError);
   }
 
   if (!profile) {
+    // This is a new user, so create a profile.
     const newUsername = (user.user_metadata?.username || user.user_metadata?.name || user.email.split('@')[0])
       .replace(/[^a-zA-Z0-9_]/g, '_')
       .slice(0, 30);
-
+    
     const finalUsername = newUsername.length >= 3 ? newUsername : `${newUsername}_usr`;
 
     const newProfileData = {
@@ -175,8 +185,10 @@ async function onAuthChange(user) {
       console.error('[OBTAINUM] Could not create profile:', createErr.message);
     } else {
       profile = created;
+      // Show a welcome toast only for brand new users (created within the last 5s)
+      // This covers both email signup and OAuth sign-in.
       if (new Date(user.created_at) > new Date(Date.now() - 5000)) {
-        showToast(`Welcome, ${finalUsername}! Your profile is ready.`, 'success');
+           showToast(`Welcome, ${finalUsername}! Your profile is ready.`, 'success');
       }
     }
   }
@@ -201,6 +213,7 @@ function updateAuthUI() {
   if (State.user) {
     btnWrap.classList.add('hidden');
     avatarWrap.classList.remove('hidden');
+    // Set avatar initials
     const name = State.profile?.username || State.user.email || '?';
     if (State.profile?.avatar_url) {
       avatar.innerHTML = `<img src="${State.profile.avatar_url}" alt="${name}" />`;
@@ -265,17 +278,22 @@ async function handleRegister(e) {
     if (error) throw error;
 
     if (data.session) {
+      // If email confirmation is disabled, user is immediately signed in.
+      // onAuthChange will handle profile creation and welcome toast.
       closeModal('auth-modal');
     } else {
+      // Email confirmation required — swap form for a confirmation panel
       document.getElementById('register-form-wrap').innerHTML = `
-        <div class="empty-state" style="padding:20px;">
-          <div class="empty-icon">✉️</div>
-          <div class="empty-title">CHECK YOUR EMAIL</div>
-          <div class="empty-sub">We sent a confirmation link to<br/><strong>${email}</strong></div>
-          <p style="margin-top:16px; font-size:0.85rem; color:var(--text-muted);">
-            Click it to activate your OBTAINUM account,<br/>then come back and log in.
-          </p>
-          <button class="btn btn-outline" style="margin-top:20px;" onclick="switchAuthTab('login')">GOT IT</button>
+        <div class="auth-confirm-panel">
+          <div class="confirm-icon">✉️</div>
+          <div class="confirm-title">CHECK YOUR EMAIL</div>
+          <div class="confirm-msg">
+            We sent a confirmation link to<br>
+            <strong>${email}</strong><br><br>
+            Click it to activate your OBTAINUM account,
+            then come back and log in.
+          </div>
+          <button class="btn btn-outline w-full" onclick="closeModal('auth-modal')">GOT IT</button>
         </div>
       `;
     }
@@ -283,6 +301,7 @@ async function handleRegister(e) {
     errEl.textContent = err.message || 'Registration failed.';
     errEl.classList.add('show');
   } finally {
+    // Only reset button if the form still exists (not replaced by confirm panel)
     const btn2 = document.getElementById('register-btn');
     if (btn2) setLoading(btn2, false, 'CREATE ACCOUNT');
   }
@@ -315,31 +334,40 @@ function switchAuthTab(tab) {
     regForm.classList.remove('hidden');
     loginForm.classList.add('hidden');
 
+    // If the confirmation panel replaced the form, restore the form
     const wrap = document.getElementById('register-form-wrap');
     if (wrap && !document.getElementById('register-btn')) {
       wrap.innerHTML = `
-        <form class="auth-form" onsubmit="handleRegister(event)">
-          <button type="button" class="btn btn-outline w-full" onclick="signInWithGoogle()">
-            CONTINUE WITH GOOGLE
-          </button>
-          <div class="auth-divider"><span>OR</span></div>
+        <button type="button" class="btn-google" onclick="signInWithGoogle()">
+          <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          </svg>
+          CONTINUE WITH GOOGLE
+        </button>
+        <div class="auth-divider">OR</div>
+        <form onsubmit="handleRegister(event)" style="display:contents;">
+          <div class="auth-error" id="register-error"></div>
           <div class="form-group">
             <label class="form-label" for="reg-username">Username</label>
-            <input class="form-input" id="reg-username" type="text" required minlength="3" maxlength="30" />
+            <input class="form-input" id="reg-username" type="text" placeholder="your_handle" required minlength="3" maxlength="30"
+              pattern="[a-zA-Z0-9_]+" title="Letters, numbers and underscores only" />
           </div>
           <div class="form-group">
             <label class="form-label" for="reg-email">Email</label>
-            <input class="form-input" id="reg-email" type="email" required />
+            <input class="form-input" id="reg-email" type="email" placeholder="your@email.com" required autocomplete="email" />
           </div>
           <div class="form-group">
             <label class="form-label" for="reg-pass">Password</label>
-            <input class="form-input" id="reg-pass" type="password" required minlength="6" />
+            <input class="form-input" id="reg-pass" type="password" placeholder="Min 8 characters" required minlength="8" autocomplete="new-password" />
           </div>
-          <div id="register-error" class="auth-error"></div>
-          <button type="submit" class="btn btn-primary btn-lg w-full" id="register-btn">CREATE ACCOUNT</button>
-          <p style="text-align:center; font-size:0.82rem; color:var(--text-muted); margin-top:12px;">
-            Already a member? <a href="#" onclick="switchAuthTab('login'); return false;">Login</a>
-          </p>
+          <button type="submit" class="btn btn-primary w-full" id="register-btn">CREATE ACCOUNT</button>
+          <div style="font-size:0.8rem;text-align:center;color:var(--text-muted);">
+            Already a member?
+            <a href="#" onclick="switchAuthTab('login'); return false;" style="color:var(--neon);">Login</a>
+          </div>
         </form>
       `;
     }
@@ -376,7 +404,7 @@ async function loadListings() {
     applyFilters();
     hideErrorBanner();
   } catch (err) {
-    console.error('[OBTAINUM] Error loading listings:', err);
+    console.error('Error loading listings:', err);
     showErrorBanner();
     renderListings([]);
   }
@@ -385,6 +413,7 @@ async function loadListings() {
 function applyFilters() {
   let results = [...State.listings];
 
+  // Search filter
   const q = (State.searchQuery || '').toLowerCase();
   if (q.length >= 2) {
     results = results.filter(l =>
@@ -395,19 +424,23 @@ function applyFilters() {
     );
   }
 
+  // Category filter
   if (State.activeCategory !== 'all') {
     results = results.filter(l => l.category === State.activeCategory);
   }
 
+  // Condition filter
   if (State.activeCondition !== 'all') {
     results = results.filter(l => l.condition === State.activeCondition);
   }
 
+  // Price filters
   const minP = parseFloat(document.getElementById('price-min')?.value || '');
   const maxP = parseFloat(document.getElementById('price-max')?.value || '');
   if (!isNaN(minP)) results = results.filter(l => l.price >= minP);
   if (!isNaN(maxP)) results = results.filter(l => l.price <= maxP);
 
+  // Quality filters
   if (document.getElementById('fair-only')?.checked) {
     results = results.filter(l => l.is_fair);
   }
@@ -415,6 +448,7 @@ function applyFilters() {
     results = results.filter(l => l.is_featured);
   }
 
+  // Sort
   const sort = document.getElementById('sort-select')?.value || 'newest';
   if (sort === 'price-asc') results.sort((a, b) => a.price - b.price);
   else if (sort === 'price-desc') results.sort((a, b) => b.price - a.price);
@@ -433,6 +467,7 @@ function fuzzyMatch(query, text) {
   if (!text) return false;
   const t = text.toLowerCase();
   if (t.includes(query)) return true;
+  // Simple char-based fuzzy: allow 1 substitution
   for (let i = 0; i <= t.length - query.length; i++) {
     let mismatches = 0;
     for (let j = 0; j < query.length; j++) {
@@ -530,7 +565,7 @@ async function loadWishlist() {
       if (listings.length === 0) {
         container.innerHTML = `
           <div class="empty-state">
-            <div class="empty-icon">♡</div>
+            <div class="empty-icon">&#9825;</div>
             <div class="empty-title">YOUR WISHLIST IS EMPTY</div>
             <div class="empty-sub">Heart items in the marketplace to save them here.</div>
           </div>
@@ -543,7 +578,7 @@ async function loadWishlist() {
       }
     }
   } catch (err) {
-    console.error('[OBTAINUM] Error loading wishlist:', err);
+    console.error('Error loading wishlist:', err);
   }
 }
 
@@ -551,9 +586,16 @@ async function toggleWishlist(e, listingId) {
   e.stopPropagation();
   if (!State.user) { openAuthModal(); return; }
 
+  const listing = State.listings.find(l => l.id === listingId) || State.selectedListing;
+  if (listing && listing.seller_id === State.user.id) {
+    showToast("You can't add your own listing to your wishlist.", 'info');
+    return;
+  }
+
   const btn = e.currentTarget;
   const isWished = State.wishlistIds.has(listingId);
 
+  // Optimistic UI
   btn.classList.toggle('active', !isWished);
   if (isWished) {
     State.wishlistIds.delete(listingId);
@@ -575,6 +617,7 @@ async function toggleWishlist(e, listingId) {
       showToast('Added to wishlist!', 'success');
     }
   } catch (err) {
+    // Revert optimistic update
     btn.classList.toggle('active', isWished);
     if (isWished) State.wishlistIds.add(listingId);
     else State.wishlistIds.delete(listingId);
@@ -589,12 +632,49 @@ async function toggleWishlist(e, listingId) {
 function initCreatePage() {
   const notice = document.getElementById('create-auth-notice');
   const form = document.getElementById('create-form');
+  const title = document.getElementById('create-page-title');
+  const submitBtn = document.getElementById('create-submit');
+
   if (!State.user) {
     if (notice) notice.classList.remove('hidden');
     if (form) form.classList.add('hidden');
+    return;
+  }
+
+  if (notice) notice.classList.add('hidden');
+  if (form) form.classList.remove('hidden');
+
+  form.reset();
+  State.imageFiles = [];
+  document.getElementById('image-preview-grid').innerHTML = '';
+
+  if (State.editingListingId) {
+    title.textContent = 'EDIT LISTING';
+    submitBtn.textContent = 'SAVE CHANGES';
+    const listing = State.listings.find(l => l.id === State.editingListingId);
+    if (listing) {
+      // Pre-fill form
+      document.getElementById('c-name').value = listing.name;
+      document.getElementById('c-category').value = listing.category;
+      document.getElementById('c-desc').value = listing.description;
+      document.getElementById('c-price').value = listing.price;
+      document.getElementById('c-msrp').value = listing.msrp || '';
+      document.getElementById('c-condition').value = listing.condition;
+      document.getElementById('c-type').value = listing.type;
+      document.getElementById('c-shipping').value = listing.shipping;
+      document.getElementById('c-location').value = listing.location || '';
+      document.getElementById('c-tags').value = (listing.tags || []).join(', ');
+
+      // Note: We don't pre-fill images as it's complex. Users re-upload.
+    } else {
+      // Couldn't find listing to edit, switch to create mode
+      State.editingListingId = null;
+      title.textContent = 'CREATE LISTING';
+      submitBtn.textContent = 'PUBLISH LISTING';
+    }
   } else {
-    if (notice) notice.classList.add('hidden');
-    if (form) form.classList.remove('hidden');
+    title.textContent = 'CREATE LISTING';
+    submitBtn.textContent = 'PUBLISH LISTING';
   }
 }
 
@@ -649,13 +729,12 @@ async function uploadImages(userId) {
   for (const file of State.imageFiles) {
     const ext = file.name.split('.').pop();
     const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    
     const { error } = await db.storage
       .from('listing-images')
       .upload(path, file, { cacheControl: '3600', upsert: false });
 
     if (error) {
-      console.error('[OBTAINUM] Error uploading image:', error);
+        console.error('Error uploading image:', error);
     } else {
       const { data: { publicUrl } } = db.storage
         .from('listing-images')
@@ -666,29 +745,24 @@ async function uploadImages(userId) {
   return urls;
 }
 
-/**
- * FIXED: submitListing function with proper schema alignment
- * Key fixes:
- * 1. Added explicit is_sold: false to satisfy RLS policy
- * 2. Added payment_methods array (required by schema)
- * 3. Added comprehensive client-side validation matching SQL constraints
- * 4. Improved error handling with specific error codes
- */
 async function submitListing(e) {
   e.preventDefault();
-  
   if (!State.user) {
     openAuthModal();
     return;
   }
 
+  const isEditing = !!State.editingListingId;
+  const btnText = isEditing ? 'SAVING CHANGES...' : 'PUBLISHING...';
+  const successText = isEditing ? 'Listing updated successfully!' : 'Listing published successfully!';
+
   const errEl = document.getElementById('create-error');
   const btn = document.getElementById('create-submit');
   errEl.classList.remove('show');
-  setLoading(btn, true, 'PUBLISHING...');
+  setLoading(btn, true, btnText);
 
   try {
-    // 1. Upload images first
+    // 1. Upload images
     let imageUrls = [];
     if (State.imageFiles.length > 0) {
       imageUrls = await uploadImages(State.user.id);
@@ -697,134 +771,82 @@ async function submitListing(e) {
       }
     }
 
-    // 2. Gather form values
-    const name = document.getElementById('c-name').value.trim();
-    const category = document.getElementById('c-category').value;
-    const description = document.getElementById('c-desc').value.trim();
-    const priceStr = document.getElementById('c-price').value;
-    const msrpStr = document.getElementById('c-msrp').value;
-    const condition = document.getElementById('c-condition').value;
-    const type = document.getElementById('c-type').value;
-    const shipping = document.getElementById('c-shipping').value;
-    const location = document.getElementById('c-location').value.trim() || null;
+    // 2. Gather and prepare data
+    const price = parseFloat(document.getElementById('c-price').value);
+    const msrp = parseFloat(document.getElementById('c-msrp').value) || null;
     const tagsRaw = document.getElementById('c-tags').value;
-    
-    // Parse numeric values
-    const price = parseFloat(priceStr);
-    const msrp = msrpStr ? parseFloat(msrpStr) : null;
-    const tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean).slice(0, 10);
+    const isFair = msrp ? price <= msrp * 1.2 : false; // AI determines fair price
 
-    // 3. Client-side validation matching SQL CHECK constraints
-    if (!name || name.length < 1) {
-      throw new Error("Item name is required.");
-    }
-    if (name.length > 100) {
-      throw new Error("Item name cannot exceed 100 characters.");
-    }
-    if (!category) {
-      throw new Error("Please select a category.");
-    }
-    if (!description || description.length < 10) {
-      throw new Error("Description must be at least 10 characters.");
-    }
-    if (description.length > 2000) {
-      throw new Error("Description cannot exceed 2000 characters.");
-    }
-    if (isNaN(price) || price < 0) {
-      throw new Error("Please enter a valid price (0 or greater).");
-    }
-    if (msrp !== null && (isNaN(msrp) || msrp < 0)) {
-      throw new Error("MSRP must be a valid number (0 or greater).");
-    }
-    if (!condition) {
-      throw new Error("Please select a condition.");
-    }
-    if (!VALID_CONDITIONS.includes(condition)) {
-      throw new Error(`Invalid condition. Must be one of: ${VALID_CONDITIONS.join(', ')}`);
-    }
-    if (!VALID_TYPES.includes(type)) {
-      throw new Error(`Invalid listing type. Must be one of: ${VALID_TYPES.join(', ')}`);
-    }
-    if (!VALID_SHIPPING.includes(shipping)) {
-      throw new Error(`Invalid shipping option. Must be one of: ${VALID_SHIPPING.join(', ')}`);
-    }
-
-    // 4. Determine fair price (AI logic)
-    const isFair = msrp ? price <= msrp * 1.2 : true;
-
-    // 5. Build listing data object - MUST match SQL schema exactly
     const listingData = {
       seller_id: State.user.id,
-      name: name,
-      category: category,
-      // subcategory is optional, not included
-      description: description,
-      condition: condition,
-      location: location,
+      name: document.getElementById('c-name').value.trim(),
+      category: document.getElementById('c-category').value,
+      description: document.getElementById('c-desc').value.trim(),
       price: price,
       msrp: msrp,
-      type: type,
-      shipping: shipping,
-      payment_methods: ['cash'], // Default payment method - matches schema default
-      tags: tags,
-      images: imageUrls,
+      condition: document.getElementById('c-condition').value,
+      type: document.getElementById('c-type').value,
+      shipping: document.getElementById('c-shipping').value,
+      location: document.getElementById('c-location').value.trim() || null,
+      tags: tagsRaw.split(',').map(t => t.trim()).filter(Boolean).slice(0, 10),
       is_fair: isFair,
-      is_sold: false // CRITICAL: Explicitly set to satisfy RLS INSERT policy
-      // These fields use database defaults: is_featured, view_count, favorite_count, expires_at, created_at, updated_at
     };
-
-    console.log('[OBTAINUM] Submitting listing data:', listingData);
-
-    // 6. Insert into Supabase
-    const { data: newListing, error } = await db
-      .from('listings')
-      .insert(listingData)
-      .select('*, profiles:seller_id(*)')
-      .single();
-
-    if (error) {
-      console.error('[OBTAINUM] Supabase insert error:', error);
-      
-      // Provide user-friendly error messages based on error codes
-      if (error.code === '23503') {
-        // Foreign key violation - profile doesn't exist
-        throw new Error("Your profile was not found. Please try logging out and back in.");
-      }
-      if (error.code === '23514') {
-        // Check constraint violation
-        throw new Error("Invalid data: " + (error.message || "Please check all fields meet the requirements."));
-      }
-      if (error.code === '42501') {
-        // RLS policy violation
-        throw new Error("Permission denied. Please ensure you're logged in and try again.");
-      }
-      if (error.code === '23505') {
-        // Unique constraint violation
-        throw new Error("A listing with this information already exists.");
-      }
-      // Generic error
-      throw new Error(error.message || 'Failed to create listing. Please check the console for details.');
+    
+    // Only update images if new ones were uploaded
+    if (imageUrls.length > 0) {
+        listingData.images = imageUrls;
     }
 
-    // 7. Success! Update local state and UI
-    if (newListing) {
-      State.listings.unshift(newListing);
+    // 3. Validate required fields before sending to the database
+    if (!listingData.name || !listingData.category || !listingData.description || !listingData.price) {
+      throw new Error("Please fill out all required fields: Name, Category, Description, and Price.");
     }
 
-    // Reset form
+    // 4. Insert or Update Supabase
+    let savedListing;
+    if (isEditing) {
+      const { data, error } = await db
+        .from('listings')
+        .update(listingData)
+        .eq('id', State.editingListingId)
+        .select('*, profiles:seller_id(*)')
+        .single();
+      if (error) throw error;
+      savedListing = data;
+    } else {
+      const { data, error } = await db
+        .from('listings')
+        .insert(listingData)
+        .select('*, profiles:seller_id(*)')
+        .single();
+      if (error) throw error;
+      savedListing = data;
+    }
+
+    // 5. Update local state and UI
+    if (savedListing) {
+        if (isEditing) {
+            const index = State.listings.findIndex(l => l.id === State.editingListingId);
+            if (index !== -1) State.listings[index] = savedListing;
+        } else {
+            State.listings.unshift(savedListing);
+        }
+    }
+    
     e.target.reset();
     State.imageFiles = [];
     document.getElementById('image-preview-grid').innerHTML = '';
+    State.editingListingId = null; // Clear editing state
 
-    showToast('Listing published successfully!', 'success');
+    showToast(successText, 'success');
     navigate('shop');
 
   } catch (err) {
-    console.error('[OBTAINUM] Error publishing listing:', err);
+    console.error('Error publishing listing:', err);
     errEl.textContent = err.message || 'An unknown error occurred. Please check the console for details.';
     errEl.classList.add('show');
   } finally {
-    setLoading(btn, false, 'PUBLISH LISTING');
+    setLoading(btn, false, isEditing ? 'SAVE CHANGES' : 'PUBLISH LISTING');
   }
 }
 
@@ -839,6 +861,7 @@ async function loadProfile() {
     return;
   }
 
+  // Refresh profile data
   const { data: profile } = await db
     .from('profiles')
     .select('*')
@@ -846,6 +869,7 @@ async function loadProfile() {
     .single();
   State.profile = profile;
 
+  // Render profile banner
   const avatarEl = document.getElementById('profile-avatar-lg');
   const usernameEl = document.getElementById('profile-username');
   const emailEl = document.getElementById('profile-email');
@@ -863,12 +887,14 @@ async function loadProfile() {
   if (emailEl) emailEl.textContent = State.user.email;
   if (bioEl) bioEl.textContent = profile?.bio || '';
 
+  // Pre-fill settings
   if (document.getElementById('s-username')) {
     document.getElementById('s-username').value = profile?.username || '';
     document.getElementById('s-bio').value = profile?.bio || '';
     document.getElementById('s-location').value = profile?.location || '';
   }
 
+  // Load user's listings
   await loadProfileListings();
 }
 
@@ -885,6 +911,7 @@ async function loadProfileListings() {
   const active = allListings.filter(l => !l.is_sold);
   const sold = allListings.filter(l => l.is_sold);
 
+  // Stats
   const totalViews = allListings.reduce((s, l) => s + (l.view_count || 0), 0);
   const totalFavs = allListings.reduce((s, l) => s + (l.favorite_count || 0), 0);
 
@@ -895,15 +922,17 @@ async function loadProfileListings() {
   if (statViews) animateNumber(statViews, totalViews);
   if (statFavs) animateNumber(statFavs, totalFavs);
 
+  // Render active listings
   const grid = document.getElementById('profile-listings-grid');
   if (grid) {
     if (active.length === 0) {
       grid.innerHTML = `
         <div class="empty-state">
-          <div class="empty-icon">🛒</div>
+          <div class="empty-icon">&#128722;</div>
           <div class="empty-title">NO LISTINGS YET</div>
           <div class="empty-sub">Start selling by creating your first listing.</div>
-          <button class="btn btn-primary" style="margin-top:16px;" onclick="navigate('create')">+ CREATE LISTING</button>
+          <br/>
+          <button class="btn btn-primary" onclick="navigate('create')" style="margin-top:12px;">+ CREATE LISTING</button>
         </div>
       `;
     } else {
@@ -913,12 +942,13 @@ async function loadProfileListings() {
     }
   }
 
+  // Render sold listings
   const soldGrid = document.getElementById('profile-sold-grid');
   if (soldGrid) {
     if (sold.length === 0) {
       soldGrid.innerHTML = `
         <div class="empty-state">
-          <div class="empty-icon">✓</div>
+          <div class="empty-icon">&#10003;</div>
           <div class="empty-title">NO SOLD ITEMS</div>
         </div>
       `;
@@ -973,9 +1003,10 @@ async function openListing(listingId) {
   navigate('detail');
 
   const content = document.getElementById('detail-content');
-  if (content) content.innerHTML = '<div class="loading-overlay"><div class="spinner spinner-lg"></div></div>';
+  if (content) content.innerHTML = '<div class="empty-state"><div class="spinner spinner-lg"></div></div>';
 
   try {
+    // Fetch listing + seller profile
     const { data: listing, error } = await db
       .from('listings')
       .select('*, profiles:seller_id(username, avatar_url, rating, location, bio)')
@@ -985,6 +1016,7 @@ async function openListing(listingId) {
     if (error) throw error;
     State.selectedListing = listing;
 
+    // Increment view count (fire and forget)
     db.from('listings')
       .update({ view_count: (listing.view_count || 0) + 1 })
       .eq('id', listingId)
@@ -993,10 +1025,10 @@ async function openListing(listingId) {
     renderDetail(listing);
     loadSimilarItems(listing);
   } catch (err) {
-    console.error('[OBTAINUM] Detail error:', err);
+    console.error('Detail error:', err);
     if (content) content.innerHTML = `
       <div class="empty-state">
-        <div class="empty-icon">⚠</div>
+        <div class="empty-icon">&#9888;</div>
         <div class="empty-title">LISTING NOT FOUND</div>
         <div class="empty-sub">This item may have been removed or sold.</div>
       </div>
@@ -1009,6 +1041,7 @@ function renderDetail(listing) {
   if (!content) return;
 
   const seller = listing.profiles || {};
+  const isOwner = State.user && State.user.id === listing.seller_id;
   const isWished = State.wishlistIds.has(listing.id);
   const savings = listing.msrp && listing.price < listing.msrp
     ? Math.round((1 - listing.price / listing.msrp) * 100)
@@ -1019,97 +1052,118 @@ function renderDetail(listing) {
     : `<div class="card-no-image">${categoryIcon(listing.category)}</div>`;
 
   const thumbsHtml = listing.images && listing.images.length > 1
-    ? `
-      <div class="image-thumbs">
+    ? `<div class="image-thumbs">
         ${listing.images.map((img, i) => `
           <div class="image-thumb ${i === 0 ? 'active' : ''}" onclick="switchDetailImage('${img}', this)">
             <img src="${img}" alt="Thumb ${i + 1}" />
           </div>
         `).join('')}
-      </div>
-    `
+      </div>`
     : '';
 
+  let actionsHtml;
+  if (isOwner) {
+    actionsHtml = `
+      <button class="btn btn-outline" onclick="editListing('${listing.id}')">&#9998; EDIT LISTING</button>
+      <button class="btn btn-danger" onclick="deleteListing('${listing.id}')">&#10005; DELETE LISTING</button>
+    `;
+  } else {
+      actionsHtml = `
+        ${listing.type === 'buy-now' ? '<button class="btn btn-primary btn-lg">BUY NOW</button>' : ''}
+        ${listing.type === 'offers' ? '<button class="btn btn-primary btn-lg">MAKE AN OFFER</button>' : ''}
+        ${listing.type === 'auction' ? '<button class="btn btn-primary btn-lg">PLACE BID</button>' : ''}
+        <button class="btn btn-outline" onclick="toggleWishlist(event, '${listing.id}')" id="detail-wish-btn">
+          ${isWished ? '&#9829; REMOVE FROM WISHLIST' : '&#9825; ADD TO WISHLIST'}
+        </button>
+    `;
+  }
+
   content.innerHTML = `
-    <div class="detail-grid">
-      <div class="detail-images">
-        <div class="main-image-wrap">
-          ${imagesHtml}
-        </div>
-        ${thumbsHtml}
+    <!-- Images -->
+    <div class="detail-images animate-fade">
+      <div class="main-image-wrap">${imagesHtml}</div>
+      ${thumbsHtml}
+    </div>
+
+    <!-- Info Panel -->
+    <div class="detail-info">
+      <h1 class="detail-title">${escHtml(listing.name)}</h1>
+
+      <div class="detail-price-row">
+        <span class="detail-price">$${parseFloat(listing.price).toFixed(2)}</span>
+        ${listing.msrp ? `<span class="detail-msrp">$${parseFloat(listing.msrp).toFixed(2)} MSRP</span>` : ''}
+        ${savings ? `<span class="detail-savings">${savings}% BELOW MSRP</span>` : ''}
       </div>
-      <div class="detail-info">
-        <h1 class="detail-title">${escHtml(listing.name)}</h1>
-        <div class="detail-price-row">
-          <span class="detail-price">$${parseFloat(listing.price).toFixed(2)}</span>
-          ${listing.msrp ? `<span class="detail-msrp">$${parseFloat(listing.msrp).toFixed(2)} MSRP</span>` : ''}
-          ${savings ? `<span class="detail-savings">${savings}% BELOW MSRP</span>` : ''}
+
+      <div class="detail-badges">
+        <span class="badge badge-condition">${CONDITION_LABELS[listing.condition] || listing.condition}</span>
+        <span class="badge badge-type">${listing.type.replace('-', ' ').toUpperCase()}</span>
+        <span class="badge badge-shipping">&#9992; ${listing.shipping.toUpperCase()}</span>
+        ${listing.is_fair ? '<span class="badge" style="border-color:var(--neon);color:var(--neon);">&#10003; AI FAIR PRICE</span>' : ''}
+        ${listing.is_featured ? '<span class="badge" style="border-color:var(--warning);color:var(--warning);">&#9733; FEATURED</span>' : ''}
+      </div>
+
+      <div class="detail-description">${escHtml(listing.description)}</div>
+
+      <div class="detail-meta-grid">
+        <div class="detail-meta-item">
+          <div class="detail-meta-label">Category</div>
+          <div class="detail-meta-value">${escHtml(listing.category)}</div>
         </div>
-        <div class="detail-badges">
-          <span class="badge badge-condition">${CONDITION_LABELS[listing.condition] || listing.condition}</span>
-          <span class="badge badge-type">${listing.type.replace('-', ' ').toUpperCase()}</span>
-          <span class="badge badge-shipping">✈ ${listing.shipping.toUpperCase()}</span>
-          ${listing.is_fair ? '<span class="badge badge-condition">✓ AI FAIR PRICE</span>' : ''}
-          ${listing.is_featured ? '<span class="badge" style="border-color:var(--warning);color:var(--warning);">★ FEATURED</span>' : ''}
+        ${listing.location ? `
+        <div class="detail-meta-item">
+          <div class="detail-meta-label">Location</div>
+          <div class="detail-meta-value">&#128205; ${escHtml(listing.location)}</div>
+        </div>` : ''}
+        <div class="detail-meta-item">
+          <div class="detail-meta-label">Views</div>
+          <div class="detail-meta-value">&#128065; ${(listing.view_count || 0) + 1}</div>
         </div>
-        <div class="detail-description">${escHtml(listing.description)}</div>
-        <div class="detail-meta-grid">
-          <div class="detail-meta-item">
-            <div class="detail-meta-label">Category</div>
-            <div class="detail-meta-value">${escHtml(listing.category)}</div>
-          </div>
-          ${listing.location ? `
-            <div class="detail-meta-item">
-              <div class="detail-meta-label">Location</div>
-              <div class="detail-meta-value">📍 ${escHtml(listing.location)}</div>
-            </div>
-          ` : ''}
-          <div class="detail-meta-item">
-            <div class="detail-meta-label">Views</div>
-            <div class="detail-meta-value">👁 ${(listing.view_count || 0) + 1}</div>
-          </div>
-          <div class="detail-meta-item">
-            <div class="detail-meta-label">Favorites</div>
-            <div class="detail-meta-value">♡ ${listing.favorite_count || 0}</div>
-          </div>
-          ${listing.payment_methods?.length ? `
-            <div class="detail-meta-item" style="grid-column: 1 / -1;">
-              <div class="detail-meta-label">Payment Methods</div>
-              <div class="detail-meta-value">${listing.payment_methods.join(', ')}</div>
-            </div>
-          ` : ''}
+        <div class="detail-meta-item">
+          <div class="detail-meta-label">Favorites</div>
+          <div class="detail-meta-value">&#9825; ${listing.favorite_count || 0}</div>
         </div>
-        <div class="seller-card">
-          <div class="seller-avatar">
-            ${seller.avatar_url
-              ? `<img src="${seller.avatar_url}" alt="${escHtml(seller.username || '')}" />`
-              : (seller.username || '?').charAt(0).toUpperCase()
-            }
-          </div>
-          <div>
-            <div class="seller-name">${escHtml(seller.username || 'PUBLICymous')}</div>
-            ${seller.location ? `<div class="seller-location">📍 ${escHtml(seller.location)}</div>` : ''}
-            ${seller.rating ? `<div class="seller-rating">${'★'.repeat(Math.round(seller.rating))} ${parseFloat(seller.rating).toFixed(1)}</div>` : ''}
-          </div>
+        ${listing.payment_methods?.length ? `
+        <div class="detail-meta-item" style="grid-column:1/-1;">
+          <div class="detail-meta-label">Payment Methods</div>
+          <div class="detail-meta-value">${listing.payment_methods.join(', ')}</div>
+        </div>` : ''}
+      </div>
+
+      <!-- Seller Info -->
+      <div class="seller-card">
+        <div class="seller-avatar">
+          ${seller.avatar_url
+            ? `<img src="${seller.avatar_url}" alt="${escHtml(seller.username || '')}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" />`
+            : (seller.username || '?').charAt(0).toUpperCase()
+          }
         </div>
-        <div class="detail-actions">
-          ${listing.type === 'buy-now' ? '<button class="btn btn-primary btn-lg">BUY NOW</button>' : ''}
-          ${listing.type === 'offers' ? '<button class="btn btn-primary btn-lg">MAKE AN OFFER</button>' : ''}
-          ${listing.type === 'auction' ? '<button class="btn btn-primary btn-lg">PLACE BID</button>' : ''}
-          <button class="btn btn-outline ${isWished ? 'active' : ''}" onclick="toggleWishlist(event, '${listing.id}')">
-            ${isWished ? '♥ REMOVE FROM WISHLIST' : '♡ ADD TO WISHLIST'}
-          </button>
+        <div>
+          <div class="seller-name">${escHtml(seller.username || 'Anonymous')}</div>
+          ${seller.location ? `<div class="seller-location">&#128205; ${escHtml(seller.location)}</div>` : ''}
+          ${seller.rating ? `<div class="seller-rating">${'&#9733;'.repeat(Math.round(seller.rating))} ${parseFloat(seller.rating).toFixed(1)}</div>` : ''}
         </div>
-        <div class="ai-panel">
-          <div class="ai-label"><span class="ai-dot"></span> AI PRICE & MARKET ANALYSIS</div>
-          <div class="ai-insights" id="ai-insights">
-            <div class="ai-insight"><span class="ai-bullet">◆</span>Analyzing market data...</div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="detail-actions">${actionsHtml}</div>
+
+      <!-- AI Insights -->
+      <div class="ai-panel">
+        <div class="ai-label">
+          <span class="ai-dot"></span>
+          AI PRICE &amp; MARKET ANALYSIS
+        </div>
+        <div class="ai-insights" id="ai-insights">
+          <div style="display:flex;align-items:center;gap:10px;color:var(--text-muted);font-size:0.85rem;">
+            <div class="spinner"></div> Analyzing market data...
           </div>
         </div>
       </div>
     </div>
   `;
 
+  // Generate AI insights after render
   setTimeout(() => generateAIInsights(listing), 600);
 }
 
@@ -1128,6 +1182,7 @@ function switchDetailImage(src, thumbEl) {
   if (thumbEl) thumbEl.classList.add('active');
 }
 
+// Simulate AI analysis based on listing data (no external AI key required)
 function generateAIInsights(listing) {
   const panel = document.getElementById('ai-insights');
   if (!panel) return;
@@ -1136,14 +1191,16 @@ function generateAIInsights(listing) {
   const price = parseFloat(listing.price);
   const msrp = parseFloat(listing.msrp) || null;
 
+  // Price fairness
   if (listing.is_fair) {
-    insights.push({ type: 'positive', text: `AI Fair Price: Our model has determined this listing is priced fairly, within a reasonable margin of its MSRP ($${msrp?.toFixed(2) || 'N/A'}).` });
+      insights.push({ type: 'positive', text: `AI Fair Price: Our model has determined this listing is priced fairly, within a reasonable margin of its MSRP ($${msrp.toFixed(2)}).` });
   } else if (msrp && price > msrp * 1.5) {
     insights.push({ type: 'warning', text: `Price Alert: This item is priced ${Math.round((price/msrp - 1)*100)}% above MSRP. Consider checking other retailers before purchasing.` });
   } else if (!msrp) {
     insights.push({ type: 'neutral', text: `Price Verification: No MSRP was provided. Research similar items on retail sites to verify fair market value before buying.` });
   }
 
+  // Condition assessment
   const conditionMap = {
     'new': 'Item is listed as New — expect full functionality and original packaging. Request proof photos before committing.',
     'like-new': 'Like-New condition suggests minimal use. Ideal for collectors who value near-mint items.',
@@ -1155,12 +1212,14 @@ function generateAIInsights(listing) {
     insights.push({ type: 'info', text: `Condition Assessment: ${conditionMap[listing.condition]}` });
   }
 
+  // Market value estimate
   if (msrp) {
     const low = (msrp * 0.7).toFixed(2);
     const high = (msrp * 1.3).toFixed(2);
     insights.push({ type: 'info', text: `Estimated Market Range: Similar items in ${listing.condition} condition typically sell for $${low} – $${high} based on MSRP ratios.` });
   }
 
+  // Risk analysis
   const risks = [];
   if (!listing.images || listing.images.length === 0) risks.push('no photos provided');
   if (!listing.location) risks.push('no location specified');
@@ -1172,17 +1231,18 @@ function generateAIInsights(listing) {
     insights.push({ type: 'positive', text: 'Risk Analysis: This listing looks well-documented with images and verified seller details. Low risk profile.' });
   }
 
+  // Recommendation
   const rec = listing.is_fair
     ? 'AI Recommendation: This listing is marked as a Fair Price by our model. This appears to be a trustworthy deal worth considering.'
     : 'Recommendation: Research comparable sold listings on other platforms to benchmark this price before purchasing.';
   insights.push({ type: 'info', text: rec });
 
-  const iconMap = { positive: '●', warning: '△', info: '◆', neutral: '■' };
+  const iconMap = { positive: '&#9679;', warning: '&#9651;', info: '&#9670;', neutral: '&#9632;' };
   const colorMap = { positive: 'var(--neon)', warning: 'var(--warning)', info: 'var(--blue)', neutral: 'var(--text-muted)' };
 
   panel.innerHTML = insights.map((ins, i) => `
-    <div class="ai-insight" style="animation-delay: ${i * 0.1}s;">
-      <span class="ai-bullet" style="color:${colorMap[ins.type]};">${iconMap[ins.type]}</span>
+    <div class="ai-insight animate-fade-up" style="animation-delay:${i * 0.1}s;">
+      <span class="ai-bullet" style="color:${colorMap[ins.type]}">${iconMap[ins.type]}</span>
       <span>${ins.text}</span>
     </div>
   `).join('');
@@ -1191,7 +1251,7 @@ function generateAIInsights(listing) {
 async function loadSimilarItems(listing) {
   const scroll = document.getElementById('similar-scroll');
   if (!scroll) return;
-  scroll.innerHTML = '<div class="spinner"></div> Loading...';
+  scroll.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;padding:20px;">Loading...</div>';
 
   try {
     const { data } = await db
@@ -1221,47 +1281,93 @@ async function loadSimilarItems(listing) {
   }
 }
 
+async function editListing(listingId) {
+  State.editingListingId = listingId;
+  navigate('create');
+}
+
+async function deleteListing(listingId) {
+  if (!confirm('Are you sure you want to permanently delete this listing?')) return;
+
+  try {
+    const { error } = await db.from('listings').delete().eq('id', listingId);
+    if (error) throw error;
+
+    // Remove from local state
+    State.listings = State.listings.filter(l => l.id !== listingId);
+    applyFilters();
+    
+    showToast('Listing deleted successfully.', 'success');
+    
+    // If on detail page, navigate back to shop
+    if (State.currentPage === 'detail') {
+      navigate('shop');
+    }
+  } catch (err) {
+    console.error("Error deleting listing:", err);
+    showToast('Failed to delete listing: ' + err.message, 'error');
+  }
+}
+
 /* ============================================================
    SECTION: RENDER ENGINE — Card creation, skeleton, etc.
    ============================================================ */
+
 function createListingCard(listing) {
   const card = document.createElement('div');
   card.className = 'listing-card animate-fade-up';
-  card.onclick = () => openListing(listing.id);
+  card.onclick = (e) => {
+    // Prevent navigation if an action button was clicked
+    if (e.target.closest('.owner-btn, .wishlist-btn')) return;
+    openListing(listing.id);
+  };
 
   const isWished = State.wishlistIds.has(listing.id);
   const isOwner = State.user && State.user.id === listing.seller_id;
   const img = listing.images && listing.images.length > 0
-    ? `<img src=\"${listing.images[0]}\" alt=\"${escHtml(listing.name)}\" />`
-    : `<div class=\"card-no-image\">${categoryIcon(listing.category)}</div>`;
+    ? `<img src="${listing.images[0]}" alt="${escHtml(listing.name)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\'card-no-image\'>${categoryIcon(listing.category)}</div>'" />`
+    : `<div class="card-no-image">${categoryIcon(listing.category)}</div>`;
+
+  let wishlistBtn = '';
+  if (State.user && !isOwner) {
+    wishlistBtn = `
+      <button class="wishlist-btn ${isWished ? 'active' : ''}"
+        onclick="toggleWishlist(event, '${listing.id}')"
+        title="${isWished ? 'Remove from wishlist' : 'Add to wishlist'}"
+      >${isWished ? '&#9829;' : '&#9825;'}</button>
+    `;
+  }
+  
+  let ownerActions = '';
+  if (isOwner) {
+      ownerActions = `
+        <div class="card-owner-actions">
+            <button class="owner-btn edit" onclick="editListing('${listing.id}')">EDIT</button>
+            <button class="owner-btn delete" onclick="deleteListing('${listing.id}')">DELETE</button>
+        </div>
+      `;
+  }
 
   card.innerHTML = `
-    <div class=\"card-image-wrap\">
+    <div class="card-image-wrap">
       ${img}
-      ${listing.is_fair ? '<span class=\"card-badge fair\">AI FAIR</span>' : ''}
-      ${listing.is_featured ? '<span class=\"card-badge featured\">★</span>' : ''}
-      <button class=\"wishlist-btn ${isWished ? 'active' : ''}\" onclick=\"toggleWishlist(event, '${listing.id}')\">
-        ${isWished ? '♥' : '♡'}
-      </button>
-      ${isOwner ? `
-        <div class=\"card-owner-actions\">
-          <button class=\"card-action-btn edit-btn\" onclick=\"openEditListing(event, '${listing.id}')\" title=\"Edit\">✎</button>
-          <button class=\"card-action-btn delete-btn\" onclick=\"deleteListing(event, '${listing.id}')\" title=\"Delete\">✕</button>
-        </div>
-      ` : ''}
+      ${listing.is_fair ? '<span class="card-badge fair">AI FAIR</span>' : ''}
+      ${listing.is_featured ? '<span class="card-badge featured" style="left:auto;right:40px;">&#9733;</span>' : ''}
+      ${wishlistBtn}
     </div>
-    <div class=\"card-body\">
-      <div class=\"card-title\">${escHtml(listing.name)}</div>
-      <div class=\"card-price\">
-        $${parseFloat(listing.price).toFixed(2)}
+    <div class="card-body">
+      <div class="card-title" title="${escHtml(listing.name)}">${escHtml(listing.name)}</div>
+      <div>
+        <span class="card-price">$${parseFloat(listing.price).toFixed(2)}</span>
         ${listing.msrp && listing.msrp > listing.price
-          ? `<span class=\"card-msrp\">$${parseFloat(listing.msrp).toFixed(2)}</span>`
+          ? `<span class="card-msrp">$${parseFloat(listing.msrp).toFixed(2)}</span>`
           : ''}
       </div>
-      <div class=\"card-meta\">
-        <span class=\"card-condition\">${listing.condition || 'N/A'}</span>
-        ${listing.location ? `<span>📍 ${escHtml(listing.location)}</span>` : ''}
+      <div class="card-meta">
+        <span class="card-condition">${listing.condition || 'N/A'}</span>
+        ${listing.location ? `<span>&#128205; ${escHtml(listing.location)}</span>` : ''}
       </div>
+       ${ownerActions}
     </div>
   `;
 
@@ -1272,23 +1378,28 @@ function renderListings(listings) {
   const grid = document.getElementById('listings-grid');
   if (!grid) return;
 
-  if (listings.length === 0) {
-    grid.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">🔍</div>
-        <div class="empty-title">NO LISTINGS FOUND</div>
-        <div class="empty-sub">
-          ${State.listings && State.listings.length === 0
+if (listings.length === 0) {
+  grid.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">&#128269;</div>
+      <div class="empty-title">NO LISTINGS FOUND</div>
+      <div class="empty-sub">
+        ${
+          State.listings && State.listings.length === 0
             ? 'Be the first to list something for sale!'
-            : 'Try adjusting your search or filters.'}
-        </div>
-        ${State.user
-          ? `<button class="btn btn-primary" style="margin-top:16px;" onclick="navigate('create')">+ LIST AN ITEM</button>`
-          : ''}
+            : 'Try adjusting your search or filters.'
+        }
       </div>
-    `;
-    return;
-  }
+
+      ${
+        State.user
+          ? `<br/><button class="btn btn-primary" onclick="navigate('create')" style="margin-top:12px;">+ LIST AN ITEM</button>`
+          : ''
+      }
+    </div>
+  `;
+  return;
+}
 
   grid.innerHTML = '';
   grid.classList.add('stagger');
@@ -1300,23 +1411,23 @@ function showSkeletons() {
   const grid = document.getElementById('listings-grid');
   if (!grid) return;
   grid.innerHTML = Array(8).fill(0).map(() =>
-    `<div class="skeleton skeleton-card"></div>`
+    `<div class="skeleton-card skeleton"></div>`
   ).join('');
 }
 
 function categoryIcon(cat) {
   const icons = {
-    'Collectibles': '🏆',
-    'Electronics': '🔋',
-    'Clothing & Accessories': '👔',
-    'Toys & Figures': '⚓',
-    'Sports & Outdoors': '⚽',
-    'Books & Media': '📚',
-    'Home & Garden': '🏠',
-    'Tools & Equipment': '🔨',
-    'Other': '🛒'
+    'Collectibles': '&#127942;',
+    'Electronics': '&#128267;',
+    'Clothing & Accessories': '&#128084;',
+    'Toys & Figures': '&#9875;',
+    'Sports & Outdoors': '&#9917;',
+    'Books & Media': '&#128218;',
+    'Home & Garden': '&#127968;',
+    'Tools & Equipment': '&#128296;',
+    'Other': '&#128722;'
   };
-  return icons[cat] || '🛒';
+  return icons[cat] || '&#128722;';
 }
 
 /* ============================================================
@@ -1338,13 +1449,14 @@ function animateNumber(el, target) {
   function step(timestamp) {
     const elapsed = timestamp - start;
     const progress = Math.min(elapsed / duration, 1);
-    const eased = 1 - Math.pow(1 - progress, 3);
+    const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
     el.textContent = Math.round(startVal + (target - startVal) * eased);
     if (progress < 1) requestAnimationFrame(step);
   }
   requestAnimationFrame(step);
 }
 
+// Mobile sidebar animation
 function toggleMobileSidebar() {
   const sidebar = document.getElementById('sidebar');
   if (sidebar) sidebar.classList.toggle('mobile-open');
@@ -1381,7 +1493,7 @@ function escHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/'/g, '&#039;');
 }
 
 /* ============================================================
@@ -1392,7 +1504,7 @@ function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
   if (!container) return;
 
-  const icons = { success: '✓', error: '⚠', info: 'ⓘ', warning: '△' };
+  const icons = { success: '&#10003;', error: '&#9888;', info: '&#9432;' };
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
   toast.innerHTML = `
@@ -1425,12 +1537,15 @@ function hideErrorBanner() {
    ============================================================ */
 
 function setupEventListeners() {
+  // Theme toggle
   document.getElementById('theme-toggle')?.addEventListener('click', toggleTheme);
 
+  // Hamburger
   document.getElementById('hamburger')?.addEventListener('click', () => {
     document.getElementById('mobile-nav')?.classList.toggle('open');
   });
 
+  // Search input (debounced)
   let searchTimer;
   document.getElementById('search-input')?.addEventListener('input', (e) => {
     clearTimeout(searchTimer);
@@ -1441,17 +1556,20 @@ function setupEventListeners() {
     }, 320);
   });
 
+  // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
       document.getElementById('mobile-nav')?.classList.remove('open');
     }
+    // Ctrl/Cmd + K to focus search
     if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
       e.preventDefault();
       document.getElementById('search-input')?.focus();
     }
   });
 
+  // Online/offline monitoring
   window.addEventListener('online', () => {
     State.isOnline = true;
     hideErrorBanner();
@@ -1465,6 +1583,7 @@ function setupEventListeners() {
     showToast('You are offline. Some features may not work.', 'error');
   });
 
+  // Mobile filter toggle visibility on resize
   const mobileFilterToggle = document.getElementById('mobile-filter-toggle');
   const updateFilterBtnVisibility = () => {
     if (mobileFilterToggle) {
@@ -1474,6 +1593,7 @@ function setupEventListeners() {
   window.addEventListener('resize', updateFilterBtnVisibility);
   updateFilterBtnVisibility();
 
+  // Click outside mobile nav to close
   document.addEventListener('click', (e) => {
     const mobileNav = document.getElementById('mobile-nav');
     const hamburger = document.getElementById('hamburger');
@@ -1486,10 +1606,11 @@ function setupEventListeners() {
 }
 
 /* ============================================================
-   SECTION: OPEN EDIT PROFILE
+   SECTION: OPEN EDIT PROFILE (stub — extend as needed)
    ============================================================ */
 
 function openEditProfile() {
+  // Switch to settings tab
   const settingsTab = document.querySelector('.profile-tab[data-ptab="settings"]');
   if (settingsTab) {
     settingsTab.click();
@@ -1502,16 +1623,25 @@ function openEditProfile() {
    ============================================================ */
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // 1. Apply saved theme
   initTheme();
+
+  // 2. Set up all event listeners
   setupEventListeners();
+
+  // 3. Restore auth session
   await initAuth();
+
+  // 4. Start on shop page
   navigate('shop');
 
+  // 5. Animate logo on load
   const logo = document.querySelector('.logo');
   if (logo) {
     logo.style.animation = 'neonPulse 3.5s ease-in-out infinite';
   }
 
+  // 6. Connectivity check
   if (!navigator.onLine) {
     showErrorBanner();
   }
