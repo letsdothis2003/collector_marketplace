@@ -1,1334 +1,1746 @@
-//* ============================================================
-   OBTAINUM MARKETPLACE — script.js
-   Vanilla JS, no frameworks. Connects to Supabase.
-   Sections: CONFIG | STATE | THEME | ROUTER | AUTH |
-             LISTINGS | WISHLIST | CREATE | PROFILE |
-             DETAIL + AI | RENDER | ANIMATIONS | EVENTS | INIT
+/* ============================================================
+   OBTAINUM MARKETPLACE — style.css
+   Techno-cyberpunk marketplace theme with neon green accents
    ============================================================ */
 
-// --- SECTION: DATABASE CONFIG ---
-const SUPABASE_URL = "https://gotzmuobwuubsugnowxq.supabase.co";
-const SUPABASE_URL_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
+/* ============================================================
+   SECTION: FONTS & ROOT VARIABLES
+   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
 
-// db is declared with let so it stays accessible even if createClient throws
-// (const would leave db in temporal dead zone on failure)
-let db;
-try {
-  db = supabase.createClient(SUPABASE_URL, SUPABASE_URL_KEY);
-} catch (e) {
-  console.error('[OBTAINUM] Supabase init failed — check your URL and key:', e);
+:root {
+  --neon: #00ff41;
+  --neon-dim: #00cc33;
+  --neon-glow: rgba(0, 255, 65, 0.4);
+  --neon-glow-strong: rgba(0, 255, 65, 0.8);
+  --danger: #ff2d55;
+  --warning: #ffd60a;
+  --blue: #0af5ff;
+
+  /* Dark mode (default) */
+  --bg: #0a0a0f;
+  --bg-2: #0f0f1a;
+  --bg-3: #141428;
+  --bg-card: #0d0d1f;
+  --bg-card-hover: #131330;
+  --border: rgba(0, 255, 65, 0.15);
+  --border-bright: rgba(0, 255, 65, 0.5);
+  --text: #e8ffe0;
+  --text-muted: #6b7a6e;
+  --text-secondary: #9ab09e;
+  --header-h: 64px;
+  --radius: 8px;
+  --radius-lg: 16px;
+  --transition: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  --shadow-neon: 0 0 16px rgba(0, 255, 65, 0.25), 0 4px 24px rgba(0,0,0,0.6);
+  --shadow-card: 0 2px 16px rgba(0,0,0,0.5);
+}
+
+body.light-mode {
+  --bg: #f0f4f0;
+  --bg-2: #e4ece4;
+  --bg-3: #d8e4d8;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f5fbf5;
+  --border: rgba(0, 180, 60, 0.2);
+  --border-bright: rgba(0, 180, 60, 0.6);
+  --text: #0d1a0d;
+  --text-muted: #5a7a5a;
+  --text-secondary: #3a6a3a;
+  --shadow-neon: 0 0 12px rgba(0, 180, 60, 0.2), 0 4px 16px rgba(0,0,0,0.1);
+  --shadow-card: 0 2px 12px rgba(0,0,0,0.12);
+  --neon: #00aa2a;
+  --neon-dim: #008820;
+  --neon-glow: rgba(0, 170, 42, 0.3);
 }
 
 /* ============================================================
-   SECTION: STATE MANAGEMENT — Global app state
-   All constants and state hoisted to top so inline onclick
-   handlers never hit a temporal dead zone on deferred modules
+   SECTION: RESET & BASE
    ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-// Pages list used by router — must be declared before navigate() is called
-const PAGES = ['shop', 'detail', 'create', 'profile', 'wishlist'];
+html { scroll-behavior: smooth; }
 
-const CATEGORIES = [
-  'Collectibles', 'Electronics', 'Clothing & Accessories',
-  'Toys & Figures', 'Sports & Outdoors', 'Books & Media',
-  'Home & Garden', 'Tools & Equipment', 'Other'
-];
+body {
+  font-family: 'Inter', 'Rajdhani', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  transition: background var(--transition), color var(--transition);
+}
 
-const CONDITION_LABELS = {
-  'new': '✦ New',
-  'like-new': '✦ Like New',
-  'good': '✦ Good',
-  'fair': '✦ Fair',
-  'poor': '✦ Poor'
-};
-
-const State = {
-  user: null,
-  profile: null,
-  currentPage: 'shop',
-  listings: [],
-  filteredListings: [],
-  wishlistIds: new Set(),
-  activeCategory: 'all',
-  activeCondition: 'all',
-  searchQuery: '',
-  priceMin: null,
-  priceMax: null,
-  sortBy: 'newest',
-  selectedListing: null,
-  imageFiles: [],
-  isOnline: navigator.onLine
-};
+a { color: var(--neon); text-decoration: none; transition: opacity var(--transition); }
+a:hover { opacity: 0.8; }
+button { cursor: pointer; font-family: inherit; border: none; outline: none; }
+input, textarea, select { font-family: inherit; }
+img { max-width: 100%; display: block; }
+ul { list-style: none; }
 
 /* ============================================================
-   SECTION: THEME TOGGLE — Dark / Light mode
+   SECTION: SCROLLBAR
    ============================================================ */
-
-function initTheme() {
-  const saved = localStorage.getItem('obtainum-theme') || 'dark';
-  applyTheme(saved);
-}
-
-function applyTheme(mode) {
-  document.body.classList.toggle('light-mode', mode === 'light');
-  localStorage.setItem('obtainum-theme', mode);
-  const label = document.getElementById('theme-label');
-  if (label) label.textContent = mode === 'dark' ? 'DARK' : 'LIGHT';
-}
-
-function toggleTheme() {
-  const isLight = document.body.classList.contains('light-mode');
-  applyTheme(isLight ? 'dark' : 'light');
-}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-2); }
+::-webkit-scrollbar-thumb { background: var(--neon-dim); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--neon); }
 
 /* ============================================================
-   SECTION: ROUTER / NAVIGATION — Single-page navigation
+   SECTION: ANIMATIONS & KEYFRAMES
    ============================================================ */
-
-function navigate(page) {
-  if (!PAGES.includes(page)) page = 'shop';
-
-  // Auth guard for protected pages
-  if ((page === 'create' || page === 'profile') && !State.user) {
-    // Show notice inside the page but still navigate
-  }
-
-  // Deactivate all pages
-  PAGES.forEach(p => {
-    const el = document.getElementById('page-' + p);
-    if (el) el.classList.remove('active');
-  });
-
-  // Activate target page
-  const target = document.getElementById('page-' + page);
-  if (target) {
-    target.classList.add('active');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  State.currentPage = page;
-  updateNavActive(page);
-
-  // Load page-specific data
-  if (page === 'shop') loadListings();
-  if (page === 'profile') loadProfile();
-  if (page === 'wishlist') loadWishlist();
-  if (page === 'create') initCreatePage();
+@keyframes neonPulse {
+  0%, 100% { text-shadow: 0 0 8px var(--neon-glow), 0 0 20px var(--neon-glow), 0 0 40px var(--neon-glow); }
+  50% { text-shadow: 0 0 16px var(--neon-glow-strong), 0 0 32px var(--neon-glow-strong), 0 0 64px var(--neon-glow-strong); }
 }
 
-function updateNavActive(page) {
-  document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-  const el = document.getElementById('nav-' + page);
-  if (el) el.classList.add('active');
+@keyframes borderPulse {
+  0%, 100% { border-color: rgba(0, 255, 65, 0.2); }
+  50% { border-color: rgba(0, 255, 65, 0.6); }
+}
+
+@keyframes scanline {
+  0% { top: -2px; }
+  100% { top: 100%; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-40px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes popIn {
+  0% { opacity: 0; transform: scale(0.85); }
+  70% { transform: scale(1.03); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes glitchX {
+  0%, 100% { clip-path: inset(0 0 90% 0); transform: translate(-4px, 0); }
+  25% { clip-path: inset(40% 0 40% 0); transform: translate(4px, 0); }
+  50% { clip-path: inset(80% 0 0% 0); transform: translate(-2px, 0); }
+  75% { clip-path: inset(20% 0 60% 0); transform: translate(2px, 0); }
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(100%); }
 }
 
 /* ============================================================
-   SECTION: AUTH MODULE — Login, Register, Session, Sign Out
+   SECTION: UTILITY CLASSES
    ============================================================ */
+.hidden { display: none !important; }
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.gap-4 { gap: 16px; }
+.w-full { width: 100%; }
+.animate-fade-up { animation: fadeInUp 0.45s ease both; }
+.animate-fade { animation: fadeIn 0.35s ease both; }
+.animate-pop { animation: popIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both; }
 
-async function initAuth() {
-  if (!db) return;
-  // Restore session
-  const { data: { session } } = await db.auth.getSession();
-  if (session?.user) {
-    await onAuthChange(session.user);
-  }
+/* Stagger children */
+.stagger > *:nth-child(1) { animation-delay: 0.05s; }
+.stagger > *:nth-child(2) { animation-delay: 0.10s; }
+.stagger > *:nth-child(3) { animation-delay: 0.15s; }
+.stagger > *:nth-child(4) { animation-delay: 0.20s; }
+.stagger > *:nth-child(5) { animation-delay: 0.25s; }
+.stagger > *:nth-child(6) { animation-delay: 0.30s; }
+.stagger > *:nth-child(7) { animation-delay: 0.35s; }
+.stagger > *:nth-child(8) { animation-delay: 0.40s; }
+.stagger > *:nth-child(n+9) { animation-delay: 0.45s; }
 
-  // Listen for auth state changes
-  db.auth.onAuthStateChange(async (_event, session) => {
-    if (session?.user) {
-      await onAuthChange(session.user);
-    } else {
-      onSignOut();
-    }
-  });
+/* ============================================================
+   SECTION: BUTTONS
+   ============================================================ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: var(--radius);
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.05em;
+  transition: all var(--transition);
+  position: relative;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
-async function onAuthChange(user) {
-  State.user = user;
-  // Fetch profile
-  const { data: profile } = await db
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single();
-  State.profile = profile;
-  updateAuthUI();
-  await loadWishlistIds();
+.btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: white;
+  opacity: 0;
+  transition: opacity var(--transition);
+  pointer-events: none;
+}
+.btn:hover::after { opacity: 0.06; }
+.btn:active { transform: scale(0.97); }
+
+.btn-primary {
+  background: var(--neon);
+  color: #001a07;
+  font-weight: 700;
+  box-shadow: 0 0 16px var(--neon-glow);
+}
+.btn-primary:hover { box-shadow: 0 0 28px var(--neon-glow-strong); }
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--neon);
+  color: var(--neon);
+  box-shadow: inset 0 0 0 0 var(--neon);
+}
+.btn-outline:hover {
+  background: rgba(0, 255, 65, 0.08);
+  box-shadow: 0 0 12px var(--neon-glow);
 }
 
-function onSignOut() {
-  State.user = null;
-  State.profile = null;
-  State.wishlistIds.clear();
-  updateAuthUI();
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover { border-color: var(--border-bright); color: var(--text); }
+
+.btn-danger {
+  background: var(--danger);
+  color: white;
 }
 
-function updateAuthUI() {
-  const btnWrap = document.getElementById('auth-btn-wrap');
-  const avatarWrap = document.getElementById('user-avatar-wrap');
-  const avatar = document.getElementById('header-avatar');
+.btn-sm { padding: 6px 14px; font-size: 0.82rem; }
+.btn-lg { padding: 13px 28px; font-size: 1.05rem; }
+.btn-icon { padding: 10px; width: 40px; height: 40px; border-radius: 50%; }
 
-  if (State.user) {
-    btnWrap.classList.add('hidden');
-    avatarWrap.classList.remove('hidden');
-    // Set avatar initials
-    const name = State.profile?.username || State.user.email || '?';
-    if (State.profile?.avatar_url) {
-      avatar.innerHTML = `<img src="${State.profile.avatar_url}" alt="${name}" />`;
-    } else {
-      avatar.textContent = name.charAt(0).toUpperCase();
-    }
-  } else {
-    btnWrap.classList.remove('hidden');
-    avatarWrap.classList.add('hidden');
-  }
+/* ============================================================
+   SECTION: FORM ELEMENTS
+   ============================================================ */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-async function handleLogin(e) {
-  e.preventDefault();
-  const email = document.getElementById('login-email').value.trim();
-  const pass = document.getElementById('login-pass').value;
-  const errEl = document.getElementById('login-error');
-  const btn = document.getElementById('login-btn');
-
-  setLoading(btn, true, 'LOGGING IN...');
-  errEl.classList.remove('show');
-
-  try {
-    const { error } = await db.auth.signInWithPassword({ email, password: pass });
-    if (error) throw error;
-    closeModal('auth-modal');
-    showToast('Welcome back to OBTAINUM!', 'success');
-  } catch (err) {
-    errEl.textContent = err.message || 'Login failed. Check your credentials.';
-    errEl.classList.add('show');
-  } finally {
-    setLoading(btn, false, 'LOGIN TO OBTAINUM');
-  }
+.form-label {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
-async function handleRegister(e) {
-  e.preventDefault();
-  const username = document.getElementById('reg-username').value.trim();
-  const email = document.getElementById('reg-email').value.trim();
-  const pass = document.getElementById('reg-pass').value;
-  const errEl = document.getElementById('register-error');
-  const btn = document.getElementById('register-btn');
+.form-input {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 10px 14px;
+  font-size: 0.95rem;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  width: 100%;
+}
+.form-input:focus {
+  outline: none;
+  border-color: var(--neon);
+  box-shadow: 0 0 0 3px var(--neon-glow);
+}
+.form-input::placeholder { color: var(--text-muted); }
 
-  setLoading(btn, true, 'CREATING ACCOUNT...');
-  errEl.classList.remove('show');
+select.form-input { cursor: pointer; }
+textarea.form-input { resize: vertical; min-height: 100px; }
 
-  try {
-    const { error } = await db.auth.signUp({
-      email,
-      password: pass,
-      options: { data: { username } }
-    });
-    if (error) throw error;
-    closeModal('auth-modal');
-    showToast('Account created! Welcome to OBTAINUM.', 'success');
-  } catch (err) {
-    errEl.textContent = err.message || 'Registration failed.';
-    errEl.classList.add('show');
-  } finally {
-    setLoading(btn, false, 'CREATE ACCOUNT');
-  }
+/* ============================================================
+   SECTION: HEADER / NAVIGATION
+   ============================================================ */
+#header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: var(--header-h);
+  background: rgba(10, 10, 15, 0.92);
+  backdrop-filter: blur(16px) saturate(1.5);
+  border-bottom: 1px solid var(--border);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 16px;
+  transition: background var(--transition);
+}
+body.light-mode #header {
+  background: rgba(240, 244, 240, 0.92);
 }
 
-async function signOut() {
-  await db.auth.signOut();
-  navigate('shop');
-  showToast('Signed out successfully.', 'info');
+.logo {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  font-size: 1.45rem;
+  letter-spacing: 0.12em;
+  color: var(--neon);
+  text-transform: uppercase;
+  animation: neonPulse 3.5s ease-in-out infinite;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  flex-shrink: 0;
 }
 
-function openAuthModal() {
-  document.getElementById('auth-modal').classList.add('open');
+.header-search {
+  flex: 1;
+  max-width: 560px;
+  position: relative;
 }
 
-function switchAuthTab(tab) {
-  const loginTab = document.getElementById('tab-login');
-  const regTab = document.getElementById('tab-register');
-  const loginForm = document.getElementById('auth-login');
-  const regForm = document.getElementById('auth-register');
+.header-search input {
+  width: 100%;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 40px;
+  padding: 9px 16px 9px 44px;
+  color: var(--text);
+  font-size: 0.92rem;
+  transition: all var(--transition);
+}
+.header-search input:focus {
+  outline: none;
+  border-color: var(--neon);
+  box-shadow: 0 0 0 3px var(--neon-glow);
+}
+.header-search input::placeholder { color: var(--text-muted); }
 
-  if (tab === 'login') {
-    loginTab.classList.add('active');
-    regTab.classList.remove('active');
-    loginForm.classList.remove('hidden');
-    regForm.classList.add('hidden');
-  } else {
-    regTab.classList.add('active');
-    loginTab.classList.remove('active');
-    regForm.classList.remove('hidden');
-    loginForm.classList.add('hidden');
-  }
+.search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+  font-size: 1rem;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* Theme toggle */
+.theme-toggle {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  width: 52px;
+  height: 28px;
+  position: relative;
+  cursor: pointer;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+.theme-toggle::before {
+  content: '';
+  position: absolute;
+  width: 20px; height: 20px;
+  background: var(--neon);
+  border-radius: 50%;
+  top: 3px; left: 4px;
+  transition: transform var(--transition), background var(--transition);
+  box-shadow: 0 0 8px var(--neon-glow);
+}
+body.light-mode .theme-toggle::before {
+  transform: translateX(24px);
+}
+.theme-toggle-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  text-align: center;
+  font-family: 'Rajdhani', sans-serif;
+  letter-spacing: 0.05em;
+}
+
+.header-avatar {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--bg-3);
+  border: 2px solid var(--neon);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--neon);
+  cursor: pointer;
+  transition: box-shadow var(--transition);
+  font-family: 'Orbitron', sans-serif;
+  position: relative;
+  overflow: hidden;
+}
+.header-avatar:hover { box-shadow: 0 0 16px var(--neon-glow-strong); }
+.header-avatar img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+/* Nav menu */
+.nav-menu {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nav-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 600;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.nav-btn:hover { color: var(--neon); background: rgba(0,255,65,0.06); }
+.nav-btn.active { color: var(--neon); }
+
+/* Mobile hamburger */
+.hamburger {
+  display: none;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 38px; height: 38px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: border-color var(--transition);
+}
+.hamburger span {
+  display: block;
+  width: 18px; height: 2px;
+  background: var(--text);
+  border-radius: 1px;
+  transition: all var(--transition);
+}
+.hamburger:hover { border-color: var(--neon); }
+.hamburger:hover span { background: var(--neon); }
+
+/* Mobile nav drawer */
+.mobile-nav {
+  display: none;
+  position: fixed;
+  top: var(--header-h);
+  left: 0; right: 0;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 999;
+  animation: slideInLeft 0.25s ease both;
+}
+.mobile-nav.open { display: flex; }
+.mobile-nav .nav-btn { justify-content: flex-start; }
+
+/* ============================================================
+   SECTION: LAYOUT / PAGE WRAPPER
+   ============================================================ */
+#app {
+  padding-top: var(--header-h);
+  min-height: 100vh;
+}
+
+.page {
+  display: none;
+  min-height: calc(100vh - var(--header-h));
+}
+.page.active {
+  display: block;
+  animation: fadeIn 0.3s ease both;
+}
+
+.container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 20px;
 }
 
 /* ============================================================
-   SECTION: LISTINGS MODULE — Fetch, Filter, Search, Sort
+   SECTION: SHOP PAGE (main marketplace grid)
    ============================================================ */
-
-async function loadListings() {
-  if (!db) { renderListings([]); return; }
-  try {
-    showSkeletons();
-
-    let query = db
-      .from('listings')
-      .select(`
-        *,
-        profiles:seller_id (
-          username,
-          avatar_url,
-          rating,
-          location
-        )
-      `)
-      .eq('is_sold', false)
-      .order('created_at', { ascending: false });
-
-    const { data, error } = await query;
-    if (error) throw error;
-
-    State.listings = data || [];
-    applyFilters();
-    hideErrorBanner();
-  } catch (err) {
-    console.error('Error loading listings:', err);
-    showErrorBanner();
-    renderListings([]);
-  }
+#page-shop {
+  display: none;
+}
+#page-shop.active {
+  display: block;
 }
 
-function applyFilters() {
-  let results = [...State.listings];
-
-  // Search filter
-  const q = (State.searchQuery || '').toLowerCase();
-  if (q.length >= 2) {
-    results = results.filter(l =>
-      fuzzyMatch(q, l.name) ||
-      fuzzyMatch(q, l.description) ||
-      fuzzyMatch(q, l.category) ||
-      (l.tags && l.tags.some(t => fuzzyMatch(q, t)))
-    );
-  }
-
-  // Category filter
-  if (State.activeCategory !== 'all') {
-    results = results.filter(l => l.category === State.activeCategory);
-  }
-
-  // Condition filter
-  if (State.activeCondition !== 'all') {
-    results = results.filter(l => l.condition === State.activeCondition);
-  }
-
-  // Price filters
-  const minP = parseFloat(document.getElementById('price-min')?.value || '');
-  const maxP = parseFloat(document.getElementById('price-max')?.value || '');
-  if (!isNaN(minP)) results = results.filter(l => l.price >= minP);
-  if (!isNaN(maxP)) results = results.filter(l => l.price <= maxP);
-
-  // Quality filters
-  if (document.getElementById('fair-only')?.checked) {
-    results = results.filter(l => l.is_fair);
-  }
-  if (document.getElementById('featured-only')?.checked) {
-    results = results.filter(l => l.is_featured);
-  }
-
-  // Sort
-  const sort = document.getElementById('sort-select')?.value || 'newest';
-  if (sort === 'price-asc') results.sort((a, b) => a.price - b.price);
-  else if (sort === 'price-desc') results.sort((a, b) => b.price - a.price);
-  else if (sort === 'popular') results.sort((a, b) => (b.view_count || 0) - (a.view_count || 0));
-  else results.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-  State.filteredListings = results;
-
-  const countEl = document.getElementById('results-count');
-  if (countEl) countEl.textContent = results.length;
-
-  renderListings(results);
+/* Shop layout */
+.shop-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 0;
+  min-height: calc(100vh - var(--header-h));
 }
 
-function fuzzyMatch(query, text) {
-  if (!text) return false;
-  const t = text.toLowerCase();
-  if (t.includes(query)) return true;
-  // Simple char-based fuzzy: allow 1 substitution
-  for (let i = 0; i <= t.length - query.length; i++) {
-    let mismatches = 0;
-    for (let j = 0; j < query.length; j++) {
-      if (t[i + j] !== query[j]) mismatches++;
-      if (mismatches > 1) break;
-    }
-    if (mismatches <= 1) return true;
-  }
-  return false;
+/* Sidebar filters */
+.sidebar {
+  background: var(--bg-2);
+  border-right: 1px solid var(--border);
+  padding: 24px 20px;
+  position: sticky;
+  top: var(--header-h);
+  height: calc(100vh - var(--header-h));
+  overflow-y: auto;
+  animation: slideInLeft 0.4s ease both;
 }
 
-function selectCategory(btn, cat) {
-  document.querySelectorAll('#category-chips .chip').forEach(c => c.classList.remove('active'));
-  btn.classList.add('active');
-  State.activeCategory = cat;
-  applyFilters();
+.sidebar-title {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 16px;
 }
 
-function selectCondition(btn, cond) {
-  document.querySelectorAll('#condition-chips .chip').forEach(c => c.classList.remove('active'));
-  btn.classList.add('active');
-  State.activeCondition = cond;
-  applyFilters();
+.filter-section {
+  margin-bottom: 28px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.filter-section:last-child { border-bottom: none; }
+
+.filter-title {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 0.88rem;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-function onPriceSlider(slider) {
-  document.getElementById('price-slider-val').textContent = '$' + slider.value;
-  document.getElementById('price-max').value = slider.value;
-  applyFilters();
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
-function resetFilters() {
-  State.activeCategory = 'all';
-  State.activeCondition = 'all';
-  State.searchQuery = '';
+.chip {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 5px 12px;
+  font-size: 0.78rem;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+  letter-spacing: 0.03em;
+}
+.chip:hover { border-color: var(--neon); color: var(--neon); }
+.chip.active {
+  background: rgba(0,255,65,0.12);
+  border-color: var(--neon);
+  color: var(--neon);
+  box-shadow: 0 0 8px var(--neon-glow);
+}
 
-  document.getElementById('search-input').value = '';
-  document.getElementById('price-min').value = '';
-  document.getElementById('price-max').value = '';
-  document.getElementById('price-slider').value = 2000;
-  document.getElementById('price-slider-val').textContent = '$2000';
-  document.getElementById('fair-only').checked = false;
-  document.getElementById('featured-only').checked = false;
-  document.getElementById('sort-select').value = 'newest';
+.price-range {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.price-range input {
+  flex: 1;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 7px 10px;
+  color: var(--text);
+  font-size: 0.85rem;
+  transition: border-color var(--transition);
+  width: 100%;
+}
+.price-range input:focus { outline: none; border-color: var(--neon); }
+.price-range span { color: var(--text-muted); font-size: 0.85rem; flex-shrink: 0; }
 
-  document.querySelectorAll('.chip[data-cat]').forEach(c =>
-    c.classList.toggle('active', c.dataset.cat === 'all'));
-  document.querySelectorAll('.chip[data-cond]').forEach(c =>
-    c.classList.toggle('active', c.dataset.cond === 'all'));
-  applyFilters();
-  showToast('Filters reset.', 'info');
+.source-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.source-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 6px 0;
+}
+.source-item input[type="checkbox"] {
+  width: 16px; height: 16px;
+  accent-color: var(--neon);
+  cursor: pointer;
+}
+.source-item label {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 500;
+}
+
+/* Range slider */
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--neon);
+  cursor: pointer;
+}
+
+/* Main content area */
+.shop-main {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.shop-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.results-info {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 500;
+}
+.results-count { color: var(--neon); font-weight: 700; }
+
+.sort-select {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color var(--transition);
+}
+.sort-select:focus { outline: none; border-color: var(--neon); }
+.sort-select option { background: var(--bg-2); }
+
+/* Listing grid */
+.listings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
 }
 
 /* ============================================================
-   SECTION: WISHLIST MODULE — Load, Add, Remove
+   SECTION: LISTING CARDS
    ============================================================ */
-
-async function loadWishlistIds() {
-  if (!State.user) return;
-  const { data } = await db
-    .from('wishlists')
-    .select('listing_id')
-    .eq('user_id', State.user.id);
-  State.wishlistIds = new Set((data || []).map(w => w.listing_id));
+.listing-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform var(--transition), border-color var(--transition), box-shadow var(--transition);
+  position: relative;
+  animation: fadeInUp 0.4s ease both;
+}
+.listing-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--border-bright);
+  box-shadow: var(--shadow-neon);
 }
 
-async function loadWishlist() {
-  const container = document.getElementById('wishlist-grid');
-  const notice = document.getElementById('wishlist-auth-notice');
+.card-image-wrap {
+  aspect-ratio: 1;
+  background: var(--bg-3);
+  position: relative;
+  overflow: hidden;
+}
+.card-image-wrap img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+.listing-card:hover .card-image-wrap img { transform: scale(1.06); }
 
-  if (!State.user) {
-    if (notice) notice.classList.remove('hidden');
-    if (container) container.innerHTML = '';
-    return;
-  }
-
-  if (notice) notice.classList.add('hidden');
-
-  try {
-    const { data, error } = await db
-      .from('wishlists')
-      .select(`
-        listing_id,
-        listings:listing_id (
-          *,
-          profiles:seller_id ( username, avatar_url, rating, location )
-        )
-      `)
-      .eq('user_id', State.user.id);
-
-    if (error) throw error;
-
-    const listings = (data || []).map(w => w.listings).filter(Boolean);
-    if (container) {
-      if (listings.length === 0) {
-        container.innerHTML = `
-          <div class="empty-state">
-            <div class="empty-icon">&#9825;</div>
-            <div class="empty-title">YOUR WISHLIST IS EMPTY</div>
-            <div class="empty-sub">Heart items in the marketplace to save them here.</div>
-          </div>
-        `;
-      } else {
-        container.innerHTML = '';
-        container.classList.add('stagger');
-        listings.forEach(l => container.appendChild(createListingCard(l)));
-        animateCards(container);
-      }
-    }
-  } catch (err) {
-    console.error('Error loading wishlist:', err);
-  }
+.card-no-image {
+  width: 100%; height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  color: var(--text-muted);
+  background: linear-gradient(135deg, var(--bg-2), var(--bg-3));
 }
 
-async function toggleWishlist(e, listingId) {
-  e.stopPropagation();
-  if (!State.user) { openAuthModal(); return; }
+/* Scanline overlay on hover */
+.listing-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--neon), transparent);
+  z-index: 2;
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+.listing-card:hover::before { opacity: 1; }
 
-  const btn = e.currentTarget;
-  const isWished = State.wishlistIds.has(listingId);
+.card-badge {
+  position: absolute;
+  top: 10px; left: 10px;
+  background: rgba(0,0,0,0.85);
+  border: 1px solid var(--border-bright);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 0.68rem;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--neon);
+  z-index: 1;
+}
+.card-badge.fair { color: var(--neon); border-color: var(--neon); }
+.card-badge.featured { color: var(--warning); border-color: var(--warning); }
 
-  // Optimistic UI
-  btn.classList.toggle('active', !isWished);
-  if (isWished) {
-    State.wishlistIds.delete(listingId);
-  } else {
-    State.wishlistIds.add(listingId);
-  }
+.wishlist-btn {
+  position: absolute;
+  top: 10px; right: 10px;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.7);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  cursor: pointer;
+  z-index: 2;
+  transition: all var(--transition);
+  color: var(--text-muted);
+}
+.wishlist-btn:hover { border-color: var(--danger); color: var(--danger); }
+.wishlist-btn.active { border-color: var(--danger); color: var(--danger); background: rgba(255,45,85,0.15); }
 
-  try {
-    if (isWished) {
-      await db.from('wishlists').delete()
-        .eq('user_id', State.user.id)
-        .eq('listing_id', listingId);
-      showToast('Removed from wishlist.', 'info');
-    } else {
-      await db.from('wishlists').insert({
-        user_id: State.user.id,
-        listing_id: listingId
-      });
-      showToast('Added to wishlist!', 'success');
-    }
-  } catch (err) {
-    // Revert optimistic update
-    btn.classList.toggle('active', isWished);
-    if (isWished) State.wishlistIds.add(listingId);
-    else State.wishlistIds.delete(listingId);
-    showToast('Could not update wishlist.', 'error');
-  }
+.card-body {
+  padding: 12px;
+}
+.card-title {
+  font-weight: 600;
+  font-size: 0.92rem;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+.card-price {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--neon);
+  margin-bottom: 6px;
+}
+.card-msrp {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-decoration: line-through;
+  margin-left: 6px;
+}
+.card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-family: 'Rajdhani', sans-serif;
+}
+.card-condition {
+  font-size: 0.7rem;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  text-transform: capitalize;
+  letter-spacing: 0.04em;
+}
+
+/* Skeleton loader */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-2) 25%, var(--bg-3) 50%, var(--bg-2) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.5s infinite linear;
+  border-radius: var(--radius);
+}
+.skeleton-card {
+  height: 260px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+/* Empty state */
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 80px 20px;
+  animation: fadeIn 0.4s ease both;
+}
+.empty-icon {
+  font-size: 4rem;
+  margin-bottom: 16px;
+  opacity: 0.4;
+}
+.empty-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.1rem;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+}
+.empty-sub {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin-top: 8px;
 }
 
 /* ============================================================
-   SECTION: CREATE LISTING MODULE — Form, Image Upload, Submit
+   SECTION: ITEM DETAIL PAGE
    ============================================================ */
-
-function initCreatePage() {
-  const notice = document.getElementById('create-auth-notice');
-  const form = document.getElementById('create-form');
-  if (!State.user) {
-    if (notice) notice.classList.remove('hidden');
-    if (form) form.classList.add('hidden');
-  } else {
-    if (notice) notice.classList.add('hidden');
-    if (form) form.classList.remove('hidden');
-  }
+#page-detail {
+  display: none;
+}
+#page-detail.active {
+  display: block;
+  animation: fadeIn 0.35s ease both;
 }
 
-function handleImageUpload(event) {
-  const files = Array.from(event.target.files);
-  const maxImages = 10;
-  const remaining = maxImages - State.imageFiles.length;
-  const newFiles = files.slice(0, remaining);
-
-  newFiles.forEach(file => {
-    if (!file.type.startsWith('image/')) return;
-    State.imageFiles.push(file);
-    const reader = new FileReader();
-    reader.onload = (e) => addImagePreview(e.target.result, State.imageFiles.length - 1);
-    reader.readAsDataURL(file);
-  });
-
-  if (files.length > remaining) {
-    showToast(`Max ${maxImages} images allowed.`, 'info');
-  }
+.detail-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 20px;
 }
 
-function addImagePreview(src, index) {
-  const grid = document.getElementById('image-preview-grid');
-  const item = document.createElement('div');
-  item.className = 'image-preview-item animate-pop';
-  item.dataset.index = index;
-  item.innerHTML = `
-    <img src="${src}" alt="Preview ${index + 1}" />
-    <button class="remove-image" onclick="removeImage(${index})" title="Remove">&times;</button>
-  `;
-  grid.appendChild(item);
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 0;
+  margin-bottom: 24px;
+  transition: color var(--transition);
+}
+.back-btn:hover { color: var(--neon); }
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 32px;
+  align-items: start;
 }
 
-function removeImage(index) {
-  State.imageFiles.splice(index, 1);
-  renderImagePreviews();
+.detail-images {
+  position: sticky;
+  top: calc(var(--header-h) + 24px);
 }
 
-function renderImagePreviews() {
-  const grid = document.getElementById('image-preview-grid');
-  grid.innerHTML = '';
-  State.imageFiles.forEach((file, i) => {
-    const reader = new FileReader();
-    reader.onload = (e) => addImagePreview(e.target.result, i);
-    reader.readAsDataURL(file);
-  });
+.main-image-wrap {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  aspect-ratio: 1.2;
+  position: relative;
+  margin-bottom: 12px;
+}
+.main-image-wrap img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+}
+.main-image-wrap .card-no-image {
+  aspect-ratio: unset;
+  height: 100%;
+  font-size: 5rem;
 }
 
-async function uploadImages(userId) {
-  const urls = [];
-  for (const file of State.imageFiles) {
-    const ext = file.name.split('.').pop();
-    const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await db.storage
-      .from('listing-images')
-      .upload(path, file, { cacheControl: '3600', upsert: false });
+.image-thumbs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.image-thumb {
+  flex-shrink: 0;
+  width: 64px; height: 64px;
+  border-radius: 8px;
+  border: 2px solid var(--border);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color var(--transition);
+}
+.image-thumb:hover, .image-thumb.active { border-color: var(--neon); }
+.image-thumb img { width: 100%; height: 100%; object-fit: cover; }
 
-    if (!error) {
-      const { data: { publicUrl } } = db.storage
-        .from('listing-images')
-        .getPublicUrl(path);
-      urls.push(publicUrl);
-    }
-  }
-  return urls;
+.detail-info {
+  animation: slideInRight 0.4s ease both;
 }
 
-async function submitListing(e) {
-  e.preventDefault();
-  if (!State.user) { openAuthModal(); return; }
+.detail-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+  line-height: 1.3;
+}
 
-  const errEl = document.getElementById('create-error');
-  const btn = document.getElementById('create-submit');
-  errEl.classList.remove('show');
-  setLoading(btn, true, 'PUBLISHING...');
+.detail-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.detail-price {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 2rem;
+  font-weight: 900;
+  color: var(--neon);
+  text-shadow: 0 0 20px var(--neon-glow);
+}
+.detail-msrp {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+.detail-savings {
+  font-size: 0.82rem;
+  color: var(--neon);
+  background: rgba(0,255,65,0.1);
+  border: 1px solid rgba(0,255,65,0.3);
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+}
 
-  try {
-    // Upload images first
-    let imageUrls = [];
-    if (State.imageFiles.length > 0) {
-      imageUrls = await uploadImages(State.user.id);
-    }
+.detail-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.badge {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid;
+}
+.badge-condition { border-color: var(--blue); color: var(--blue); }
+.badge-type { border-color: var(--border-bright); color: var(--neon); }
+.badge-shipping { border-color: var(--text-muted); color: var(--text-muted); }
 
-    const tagsRaw = document.getElementById('c-tags').value;
-    const tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean);
+.detail-description {
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  line-height: 1.7;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
 
-    const listing = {
-      seller_id: State.user.id,
-      name: document.getElementById('c-name').value.trim(),
-      category: document.getElementById('c-category').value,
-      description: document.getElementById('c-desc').value.trim(),
-      price: parseFloat(document.getElementById('c-price').value),
-      msrp: parseFloat(document.getElementById('c-msrp').value) || null,
-      condition: document.getElementById('c-condition').value,
-      type: document.getElementById('c-type').value,
-      shipping: document.getElementById('c-shipping').value,
-      location: document.getElementById('c-location').value.trim() || null,
-      tags: tags.slice(0, 10),
-      images: imageUrls,
-      is_fair: document.getElementById('c-fair').checked
-    };
+.detail-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.detail-meta-item {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+}
+.detail-meta-label {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+.detail-meta-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  text-transform: capitalize;
+}
 
-    const { error } = await db.from('listings').insert(listing);
-    if (error) throw error;
+.seller-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.seller-avatar {
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  background: var(--bg-3);
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.9rem;
+  color: var(--neon);
+  flex-shrink: 0;
+}
+.seller-name { font-weight: 600; font-size: 0.9rem; }
+.seller-location { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
+.seller-rating { color: var(--warning); font-size: 0.78rem; margin-top: 2px; }
 
-    // Reset form
-    e.target.reset();
-    State.imageFiles = [];
-    document.getElementById('image-preview-grid').innerHTML = '';
+.detail-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 
-    showToast('Listing published successfully!', 'success');
-    navigate('shop');
-  } catch (err) {
-    errEl.textContent = err.message || 'Failed to publish listing.';
-    errEl.classList.add('show');
-  } finally {
-    setLoading(btn, false, 'PUBLISH LISTING');
-  }
+/* AI Insights panel */
+.ai-panel {
+  background: linear-gradient(135deg, rgba(0,255,65,0.04), rgba(0,15,5,0.6));
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-top: 28px;
+  position: relative;
+  overflow: hidden;
+  animation: fadeInUp 0.5s ease both 0.2s;
+}
+.ai-panel::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--neon), transparent);
+  animation: neonPulse 2.5s ease-in-out infinite;
+}
+
+.ai-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.15em;
+  color: var(--neon);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ai-dot {
+  width: 6px; height: 6px;
+  background: var(--neon);
+  border-radius: 50%;
+  animation: neonPulse 1.5s ease-in-out infinite;
+}
+
+.ai-insights {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ai-insight {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(0,255,65,0.05);
+  animation: fadeInUp 0.4s ease both;
+}
+.ai-insight:last-child { border-bottom: none; }
+.ai-bullet {
+  color: var(--neon);
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* Similar items */
+.similar-section {
+  padding: 32px 0;
+}
+.section-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.95rem;
+  letter-spacing: 0.12em;
+  color: var(--neon);
+  text-transform: uppercase;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.section-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.similar-scroll {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scroll-snap-type: x mandatory;
+}
+.similar-scroll .listing-card {
+  min-width: 200px;
+  max-width: 200px;
+  scroll-snap-align: start;
+  flex-shrink: 0;
 }
 
 /* ============================================================
-   SECTION: PROFILE MODULE — Load, Update, Tabs
+   SECTION: CREATE LISTING PAGE
    ============================================================ */
-
-async function loadProfile() {
-  if (!State.user) {
-    navigate('shop');
-    openAuthModal();
-    return;
-  }
-
-  // Refresh profile data
-  const { data: profile } = await db
-    .from('profiles')
-    .select('*')
-    .eq('id', State.user.id)
-    .single();
-  State.profile = profile;
-
-  // Render profile banner
-  const avatarEl = document.getElementById('profile-avatar-lg');
-  const usernameEl = document.getElementById('profile-username');
-  const emailEl = document.getElementById('profile-email');
-  const bioEl = document.getElementById('profile-bio');
-
-  const name = profile?.username || State.user.email?.split('@')[0] || '?';
-
-  if (profile?.avatar_url) {
-    avatarEl.innerHTML = `<img src="${profile.avatar_url}" alt="${name}" />`;
-  } else {
-    avatarEl.textContent = name.charAt(0).toUpperCase();
-  }
-
-  if (usernameEl) usernameEl.textContent = (profile?.username || name).toUpperCase();
-  if (emailEl) emailEl.textContent = State.user.email;
-  if (bioEl) bioEl.textContent = profile?.bio || '';
-
-  // Pre-fill settings
-  if (document.getElementById('s-username')) {
-    document.getElementById('s-username').value = profile?.username || '';
-    document.getElementById('s-bio').value = profile?.bio || '';
-    document.getElementById('s-location').value = profile?.location || '';
-  }
-
-  // Load user's listings
-  await loadProfileListings();
+#page-create {
+  display: none;
+}
+#page-create.active {
+  display: block;
+  animation: fadeIn 0.35s ease both;
 }
 
-async function loadProfileListings() {
-  if (!State.user) return;
-
-  const { data } = await db
-    .from('listings')
-    .select('*, profiles:seller_id(username, avatar_url, rating, location)')
-    .eq('seller_id', State.user.id)
-    .order('created_at', { ascending: false });
-
-  const allListings = data || [];
-  const active = allListings.filter(l => !l.is_sold);
-  const sold = allListings.filter(l => l.is_sold);
-
-  // Stats
-  const totalViews = allListings.reduce((s, l) => s + (l.view_count || 0), 0);
-  const totalFavs = allListings.reduce((s, l) => s + (l.favorite_count || 0), 0);
-
-  const statListings = document.getElementById('stat-listings');
-  const statViews = document.getElementById('stat-views');
-  const statFavs = document.getElementById('stat-favorites');
-  if (statListings) animateNumber(statListings, allListings.length);
-  if (statViews) animateNumber(statViews, totalViews);
-  if (statFavs) animateNumber(statFavs, totalFavs);
-
-  // Render active listings
-  const grid = document.getElementById('profile-listings-grid');
-  if (grid) {
-    if (active.length === 0) {
-      grid.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">&#128722;</div>
-          <div class="empty-title">NO LISTINGS YET</div>
-          <div class="empty-sub">Start selling by creating your first listing.</div>
-          <br/>
-          <button class="btn btn-primary" onclick="navigate('create')" style="margin-top:12px;">+ CREATE LISTING</button>
-        </div>
-      `;
-    } else {
-      grid.innerHTML = '';
-      active.forEach(l => grid.appendChild(createListingCard(l)));
-      animateCards(grid);
-    }
-  }
-
-  // Render sold listings
-  const soldGrid = document.getElementById('profile-sold-grid');
-  if (soldGrid) {
-    if (sold.length === 0) {
-      soldGrid.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">&#10003;</div>
-          <div class="empty-title">NO SOLD ITEMS</div>
-        </div>
-      `;
-    } else {
-      soldGrid.innerHTML = '';
-      sold.forEach(l => soldGrid.appendChild(createListingCard(l)));
-    }
-  }
+.create-container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 40px 20px;
 }
 
-async function saveProfile(e) {
-  e.preventDefault();
-  if (!State.user) return;
-
-  const updates = {
-    username: document.getElementById('s-username').value.trim(),
-    bio: document.getElementById('s-bio').value.trim(),
-    location: document.getElementById('s-location').value.trim()
-  };
-
-  const { error } = await db
-    .from('profiles')
-    .update(updates)
-    .eq('id', State.user.id);
-
-  if (error) {
-    showToast('Failed to save profile: ' + error.message, 'error');
-  } else {
-    State.profile = { ...State.profile, ...updates };
-    updateAuthUI();
-    showToast('Profile updated!', 'success');
-  }
+.page-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.2rem;
+  letter-spacing: 0.1em;
+  color: var(--neon);
+  text-transform: uppercase;
+  margin-bottom: 28px;
 }
 
-function switchProfileTab(btn) {
-  const tabName = btn.dataset.ptab;
+.create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
 
-  document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
-  btn.classList.add('active');
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
 
-  ['my-listings', 'sold', 'settings'].forEach(t => {
-    const el = document.getElementById('ptab-' + t);
-    if (el) el.classList.toggle('hidden', t !== tabName);
-  });
+.image-upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition);
+  position: relative;
+}
+.image-upload-zone:hover {
+  border-color: var(--neon);
+  background: rgba(0,255,65,0.04);
+}
+.upload-icon { font-size: 2.5rem; margin-bottom: 8px; opacity: 0.6; }
+.upload-text {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  font-family: 'Rajdhani', sans-serif;
+}
+.upload-text span { color: var(--neon); }
+.upload-input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+
+.image-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.image-preview-item {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid var(--border);
+}
+.image-preview-item img { width: 100%; height: 100%; object-fit: cover; }
+.remove-image {
+  position: absolute;
+  top: 4px; right: 4px;
+  width: 20px; height: 20px;
+  background: rgba(0,0,0,0.8);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.7rem;
+  color: white;
+  cursor: pointer;
+  transition: background var(--transition);
+  border: none;
+}
+.remove-image:hover { background: var(--danger); }
+
+/* ============================================================
+   SECTION: LOGIN / REGISTER MODAL
+   ============================================================ */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  backdrop-filter: blur(6px);
+  z-index: 2000;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal-overlay.open {
+  display: flex;
+  animation: fadeIn 0.25s ease both;
+}
+
+.modal {
+  background: var(--bg-2);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  width: 100%;
+  max-width: 420px;
+  position: relative;
+  animation: popIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both;
+  box-shadow: 0 0 40px rgba(0,255,65,0.15), 0 20px 60px rgba(0,0,0,0.6);
+}
+
+.modal-close {
+  position: absolute;
+  top: 16px; right: 16px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.modal-close:hover { border-color: var(--danger); color: var(--danger); }
+
+.modal-logo {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  font-size: 1.5rem;
+  color: var(--neon);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  animation: neonPulse 3s ease-in-out infinite;
+  text-align: center;
+  margin-bottom: 4px;
+}
+.modal-tagline {
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-family: 'Rajdhani', sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 24px;
+}
+
+.modal-tabs {
+  display: flex;
+  gap: 0;
+  background: var(--bg-3);
+  border-radius: var(--radius);
+  padding: 3px;
+  margin-bottom: 24px;
+}
+.modal-tab {
+  flex: 1;
+  padding: 8px;
+  border-radius: calc(var(--radius) - 2px);
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  text-align: center;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  transition: all var(--transition);
+}
+.modal-tab.active {
+  background: var(--neon);
+  color: #001a07;
+  box-shadow: 0 0 12px var(--neon-glow);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-error {
+  background: rgba(255,45,85,0.1);
+  border: 1px solid rgba(255,45,85,0.4);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  color: var(--danger);
+  display: none;
+}
+.auth-error.show { display: block; animation: fadeIn 0.25s ease both; }
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-family: 'Rajdhani', sans-serif;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
 }
 
 /* ============================================================
-   SECTION: ITEM DETAIL MODULE — View, AI Insights, Similar Items
+   SECTION: PROFILE PAGE
    ============================================================ */
-
-async function openListing(listingId) {
-  navigate('detail');
-
-  const content = document.getElementById('detail-content');
-  if (content) content.innerHTML = '<div class="empty-state"><div class="spinner spinner-lg"></div></div>';
-
-  try {
-    // Fetch listing + seller profile
-    const { data: listing, error } = await db
-      .from('listings')
-      .select('*, profiles:seller_id(username, avatar_url, rating, location, bio)')
-      .eq('id', listingId)
-      .single();
-
-    if (error) throw error;
-    State.selectedListing = listing;
-
-    // Increment view count (fire and forget)
-    db.from('listings')
-      .update({ view_count: (listing.view_count || 0) + 1 })
-      .eq('id', listingId)
-      .then(() => {});
-
-    renderDetail(listing);
-    loadSimilarItems(listing);
-  } catch (err) {
-    console.error('Detail error:', err);
-    if (content) content.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">&#9888;</div>
-        <div class="empty-title">LISTING NOT FOUND</div>
-        <div class="empty-sub">This item may have been removed or sold.</div>
-      </div>
-    `;
-  }
+#page-profile {
+  display: none;
+}
+#page-profile.active {
+  display: block;
+  animation: fadeIn 0.35s ease both;
 }
 
-function renderDetail(listing) {
-  const content = document.getElementById('detail-content');
-  if (!content) return;
-
-  const seller = listing.profiles || {};
-  const isWished = State.wishlistIds.has(listing.id);
-  const savings = listing.msrp && listing.price < listing.msrp
-    ? Math.round((1 - listing.price / listing.msrp) * 100)
-    : null;
-
-  const imagesHtml = listing.images && listing.images.length > 0
-    ? `<img src="${listing.images[0]}" alt="${escHtml(listing.name)}" id="main-detail-img" />`
-    : `<div class="card-no-image">${categoryIcon(listing.category)}</div>`;
-
-  const thumbsHtml = listing.images && listing.images.length > 1
-    ? `<div class="image-thumbs">
-        ${listing.images.map((img, i) => `
-          <div class="image-thumb ${i === 0 ? 'active' : ''}" onclick="switchDetailImage('${img}', this)">
-            <img src="${img}" alt="Thumb ${i + 1}" />
-          </div>
-        `).join('')}
-      </div>`
-    : '';
-
-  content.innerHTML = `
-    <!-- Images -->
-    <div class="detail-images animate-fade">
-      <div class="main-image-wrap">${imagesHtml}</div>
-      ${thumbsHtml}
-    </div>
-
-    <!-- Info Panel -->
-    <div class="detail-info">
-      <h1 class="detail-title">${escHtml(listing.name)}</h1>
-
-      <div class="detail-price-row">
-        <span class="detail-price">$${parseFloat(listing.price).toFixed(2)}</span>
-        ${listing.msrp ? `<span class="detail-msrp">$${parseFloat(listing.msrp).toFixed(2)} MSRP</span>` : ''}
-        ${savings ? `<span class="detail-savings">${savings}% BELOW MSRP</span>` : ''}
-      </div>
-
-      <div class="detail-badges">
-        <span class="badge badge-condition">${CONDITION_LABELS[listing.condition] || listing.condition}</span>
-        <span class="badge badge-type">${listing.type.replace('-', ' ').toUpperCase()}</span>
-        <span class="badge badge-shipping">&#9992; ${listing.shipping.toUpperCase()}</span>
-        ${listing.is_fair ? '<span class="badge" style="border-color:var(--neon);color:var(--neon);">&#10003; FAIR PRICE</span>' : ''}
-        ${listing.is_featured ? '<span class="badge" style="border-color:var(--warning);color:var(--warning);">&#9733; FEATURED</span>' : ''}
-      </div>
-
-      <div class="detail-description">${escHtml(listing.description)}</div>
-
-      <div class="detail-meta-grid">
-        <div class="detail-meta-item">
-          <div class="detail-meta-label">Category</div>
-          <div class="detail-meta-value">${escHtml(listing.category)}</div>
-        </div>
-        ${listing.location ? `
-        <div class="detail-meta-item">
-          <div class="detail-meta-label">Location</div>
-          <div class="detail-meta-value">&#128205; ${escHtml(listing.location)}</div>
-        </div>` : ''}
-        <div class="detail-meta-item">
-          <div class="detail-meta-label">Views</div>
-          <div class="detail-meta-value">&#128065; ${(listing.view_count || 0) + 1}</div>
-        </div>
-        <div class="detail-meta-item">
-          <div class="detail-meta-label">Favorites</div>
-          <div class="detail-meta-value">&#9825; ${listing.favorite_count || 0}</div>
-        </div>
-        ${listing.payment_methods?.length ? `
-        <div class="detail-meta-item" style="grid-column:1/-1;">
-          <div class="detail-meta-label">Payment Methods</div>
-          <div class="detail-meta-value">${listing.payment_methods.join(', ')}</div>
-        </div>` : ''}
-      </div>
-
-      <!-- Seller Info -->
-      <div class="seller-card">
-        <div class="seller-avatar">
-          ${seller.avatar_url
-            ? `<img src="${seller.avatar_url}" alt="${escHtml(seller.username || '')}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" />`
-            : (seller.username || '?').charAt(0).toUpperCase()
-          }
-        </div>
-        <div>
-          <div class="seller-name">${escHtml(seller.username || 'Anonymous')}</div>
-          ${seller.location ? `<div class="seller-location">&#128205; ${escHtml(seller.location)}</div>` : ''}
-          ${seller.rating ? `<div class="seller-rating">${'&#9733;'.repeat(Math.round(seller.rating))} ${parseFloat(seller.rating).toFixed(1)}</div>` : ''}
-        </div>
-      </div>
-
-      <!-- Action Buttons -->
-      <div class="detail-actions">
-        ${listing.type === 'buy-now' ? '<button class="btn btn-primary btn-lg">BUY NOW</button>' : ''}
-        ${listing.type === 'offers' ? '<button class="btn btn-primary btn-lg">MAKE AN OFFER</button>' : ''}
-        ${listing.type === 'auction' ? '<button class="btn btn-primary btn-lg">PLACE BID</button>' : ''}
-        <button class="btn btn-outline" onclick="toggleWishlist(event, '${listing.id}')" id="detail-wish-btn">
-          ${isWished ? '&#9829; REMOVE FROM WISHLIST' : '&#9825; ADD TO WISHLIST'}
-        </button>
-      </div>
-
-      <!-- AI Insights -->
-      <div class="ai-panel">
-        <div class="ai-label">
-          <span class="ai-dot"></span>
-          AI PRICE &amp; MARKET ANALYSIS
-        </div>
-        <div class="ai-insights" id="ai-insights">
-          <div style="display:flex;align-items:center;gap:10px;color:var(--text-muted);font-size:0.85rem;">
-            <div class="spinner"></div> Analyzing market data...
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  // Generate AI insights after render
-  setTimeout(() => generateAIInsights(listing), 600);
+.profile-container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 40px 20px;
 }
 
-function switchDetailImage(src, thumbEl) {
-  const main = document.getElementById('main-detail-img');
-  if (main) {
-    main.style.opacity = '0';
-    main.style.transform = 'scale(0.96)';
-    setTimeout(() => {
-      main.src = src;
-      main.style.opacity = '1';
-      main.style.transform = 'scale(1)';
-    }, 150);
-  }
-  document.querySelectorAll('.image-thumb').forEach(t => t.classList.remove('active'));
-  if (thumbEl) thumbEl.classList.add('active');
+.profile-banner {
+  background: linear-gradient(135deg, var(--bg-2), var(--bg-3));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  position: relative;
+  overflow: hidden;
+  animation: fadeInUp 0.4s ease both;
+}
+.profile-banner::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--neon), transparent);
 }
 
-// Simulate AI analysis based on listing data (no external AI key required)
-function generateAIInsights(listing) {
-  const panel = document.getElementById('ai-insights');
-  if (!panel) return;
+.profile-avatar-lg {
+  width: 88px; height: 88px;
+  border-radius: 50%;
+  background: var(--bg-3);
+  border: 3px solid var(--neon);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 2rem;
+  color: var(--neon);
+  box-shadow: 0 0 24px var(--neon-glow);
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
+.profile-avatar-lg img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 
-  const insights = [];
-  const price = parseFloat(listing.price);
-  const msrp = parseFloat(listing.msrp) || null;
-
-  // Price fairness
-  if (msrp && price <= msrp * 1.1) {
-    insights.push({ type: 'positive', text: `Price Fairness: Listing is at or below retail MSRP ($${msrp.toFixed(2)}). This appears to be a fair, non-scalped price.` });
-  } else if (msrp && price > msrp * 1.5) {
-    insights.push({ type: 'warning', text: `Price Alert: This item is priced ${Math.round((price/msrp - 1)*100)}% above MSRP. Consider checking local retailers before purchasing.` });
-  } else if (!msrp) {
-    insights.push({ type: 'neutral', text: `Price Verification: No MSRP listed. Research similar items on retail sites to verify fair market value before buying.` });
-  }
-
-  // Condition assessment
-  const conditionMap = {
-    'new': 'Item is listed as New — expect full functionality and original packaging. Request proof photos before committing.',
-    'like-new': 'Like-New condition suggests minimal use. Ideal for collectors who value near-mint items.',
-    'good': 'Good condition indicates normal wear. Great for collectors who prioritize play value over display.',
-    'fair': 'Fair condition items may have visible wear or missing accessories. Verify with the seller.',
-    'poor': 'Poor condition — heavily used or damaged. Best for parts, customs, or budget collectors.'
-  };
-  if (conditionMap[listing.condition]) {
-    insights.push({ type: 'info', text: `Condition Assessment: ${conditionMap[listing.condition]}` });
-  }
-
-  // Market value estimate
-  if (msrp) {
-    const low = (msrp * 0.7).toFixed(2);
-    const high = (msrp * 1.3).toFixed(2);
-    insights.push({ type: 'info', text: `Estimated Market Range: Similar items in ${listing.condition} condition typically sell for $${low} – $${high} based on MSRP ratios.` });
-  }
-
-  // Risk analysis
-  const risks = [];
-  if (!listing.images || listing.images.length === 0) risks.push('no photos provided');
-  if (!listing.location) risks.push('no location specified');
-  if (listing.payment_methods?.includes('cash') && !listing.payment_methods?.includes('paypal')) risks.push('cash-only increases risk');
-
-  if (risks.length > 0) {
-    insights.push({ type: 'warning', text: `Risk Analysis: This listing has some caution flags — ${risks.join(', ')}. Always communicate through the platform and verify before payment.` });
-  } else {
-    insights.push({ type: 'positive', text: 'Risk Analysis: This listing looks well-documented with images and verified seller details. Low risk profile.' });
-  }
-
-  // Recommendation
-  const rec = listing.is_fair
-    ? 'Recommendation: This listing is marked Fair Price by the seller. Combined with the data above, this appears to be a trustworthy deal worth considering.'
-    : 'Recommendation: Research comparable sold listings on eBay or COMC to benchmark this price before purchasing.';
-  insights.push({ type: 'info', text: rec });
-
-  const iconMap = { positive: '&#9679;', warning: '&#9651;', info: '&#9670;', neutral: '&#9632;' };
-  const colorMap = { positive: 'var(--neon)', warning: 'var(--warning)', info: 'var(--blue)', neutral: 'var(--text-muted)' };
-
-  panel.innerHTML = insights.map((ins, i) => `
-    <div class="ai-insight animate-fade-up" style="animation-delay:${i * 0.1}s;">
-      <span class="ai-bullet" style="color:${colorMap[ins.type]}">${iconMap[ins.type]}</span>
-      <span>${ins.text}</span>
-    </div>
-  `).join('');
+.profile-info { flex: 1; }
+.profile-username {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--neon);
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+.profile-email { font-size: 0.88rem; color: var(--text-muted); margin-bottom: 8px; }
+.profile-stats {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.stat-item { text-align: center; }
+.stat-value {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--neon);
+}
+.stat-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-family: 'Rajdhani', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
-async function loadSimilarItems(listing) {
-  const scroll = document.getElementById('similar-scroll');
-  if (!scroll) return;
-  scroll.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;padding:20px;">Loading...</div>';
-
-  try {
-    const { data } = await db
-      .from('listings')
-      .select('*, profiles:seller_id(username, avatar_url, rating, location)')
-      .eq('category', listing.category)
-      .eq('is_sold', false)
-      .neq('id', listing.id)
-      .limit(10);
-
-    const items = data || [];
-    if (items.length === 0) {
-      const section = document.getElementById('similar-section');
-      if (section) section.style.display = 'none';
-      return;
-    }
-
-    scroll.innerHTML = '';
-    items.forEach(l => {
-      const card = createListingCard(l);
-      scroll.appendChild(card);
-    });
-    animateCards(scroll);
-  } catch (err) {
-    const section = document.getElementById('similar-section');
-    if (section) section.style.display = 'none';
-  }
+.profile-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  gap: 0;
+  margin-bottom: 24px;
+  overflow-x: auto;
+}
+.profile-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 0.88rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.profile-tab:hover { color: var(--neon); }
+.profile-tab.active {
+  color: var(--neon);
+  border-bottom-color: var(--neon);
 }
 
 /* ============================================================
-   SECTION: RENDER ENGINE — Card creation, skeleton, etc.
+   SECTION: WISHLIST PAGE
    ============================================================ */
-
-function createListingCard(listing) {
-  const card = document.createElement('div');
-  card.className = 'listing-card animate-fade-up';
-  card.onclick = () => openListing(listing.id);
-
-  const isWished = State.wishlistIds.has(listing.id);
-  const img = listing.images && listing.images.length > 0
-    ? `<img src="${listing.images[0]}" alt="${escHtml(listing.name)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'card-no-image\\'>${categoryIcon(listing.category)}</div>'" />`
-    : `<div class="card-no-image">${categoryIcon(listing.category)}</div>`;
-
-  card.innerHTML = `
-    <div class="card-image-wrap">
-      ${img}
-      ${listing.is_fair ? '<span class="card-badge fair">FAIR</span>' : ''}
-      ${listing.is_featured ? '<span class="card-badge featured" style="left:auto;right:40px;">&#9733;</span>' : ''}
-      <button class="wishlist-btn ${isWished ? 'active' : ''}"
-        onclick="toggleWishlist(event, '${listing.id}')"
-        title="${isWished ? 'Remove from wishlist' : 'Add to wishlist'}"
-      >${isWished ? '&#9829;' : '&#9825;'}</button>
-    </div>
-    <div class="card-body">
-      <div class="card-title" title="${escHtml(listing.name)}">${escHtml(listing.name)}</div>
-      <div>
-        <span class="card-price">$${parseFloat(listing.price).toFixed(2)}</span>
-        ${listing.msrp && listing.msrp > listing.price
-          ? `<span class="card-msrp">$${parseFloat(listing.msrp).toFixed(2)}</span>`
-          : ''}
-      </div>
-      <div class="card-meta">
-        <span class="card-condition">${listing.condition || 'N/A'}</span>
-        ${listing.location ? `<span>&#128205; ${escHtml(listing.location)}</span>` : ''}
-      </div>
-    </div>
-  `;
-
-  return card;
+#page-wishlist {
+  display: none;
+}
+#page-wishlist.active {
+  display: block;
+  animation: fadeIn 0.35s ease both;
 }
 
-function renderListings(listings) {
-  const grid = document.getElementById('listings-grid');
-  if (!grid) return;
+.wishlist-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 40px 20px;
+}
 
-  if (listings.length === 0) {
-    grid.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-icon">&#128269;</div>
-        <div class="empty-title">NO LISTINGS FOUND</div>
-        <div class="empty-sub">
-          ${State.listings.length === 0
-            ? 'Be the first to list something for sale!'
-            : 'Try adjusting your search or filters.'}
-        </div>
-        ${State.user ? '<br/><button class="btn btn-primary" onclick="navigate(\'create\')" style="margin-top:12px;">+ LIST AN ITEM</button>' : ''}
-      </div>
-    `;
-    return;
+/* ============================================================
+   SECTION: TOAST NOTIFICATIONS
+   ============================================================ */
+#toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 260px;
+  max-width: 360px;
+  box-shadow: var(--shadow-card);
+  pointer-events: all;
+  animation: toastIn 0.35s ease both;
+  position: relative;
+  overflow: hidden;
+}
+.toast::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+}
+.toast.success { border-color: rgba(0,255,65,0.4); }
+.toast.success::before { background: var(--neon); }
+.toast.error { border-color: rgba(255,45,85,0.4); }
+.toast.error::before { background: var(--danger); }
+.toast.info { border-color: rgba(10,245,255,0.4); }
+.toast.info::before { background: var(--blue); }
+
+.toast-icon { font-size: 1.1rem; flex-shrink: 0; }
+.toast-msg { font-size: 0.88rem; font-family: 'Rajdhani', sans-serif; font-weight: 500; line-height: 1.3; }
+.toast.exit { animation: toastOut 0.3s ease forwards; }
+
+/* ============================================================
+   SECTION: SPINNER / LOADING
+   ============================================================ */
+.spinner {
+  width: 20px; height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--neon);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+}
+.spinner-lg {
+  width: 40px; height: 40px;
+  border-width: 3px;
+}
+
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  border-radius: inherit;
+}
+
+/* ============================================================
+   SECTION: GLITCH EFFECT (for logo)
+   ============================================================ */
+.glitch {
+  position: relative;
+}
+.glitch::before,
+.glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+}
+.glitch:hover::before {
+  color: #ff0066;
+  opacity: 0.7;
+  animation: glitchX 0.3s steps(1) both;
+  clip-path: inset(0 0 70% 0);
+  left: -2px;
+}
+.glitch:hover::after {
+  color: var(--blue);
+  opacity: 0.7;
+  animation: glitchX 0.3s steps(1) reverse both;
+  clip-path: inset(60% 0 0 0);
+  left: 2px;
+}
+
+/* ============================================================
+   SECTION: SCANLINE OVERLAY
+   ============================================================ */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 255, 65, 0.012) 2px,
+    rgba(0, 255, 65, 0.012) 4px
+  );
+  pointer-events: none;
+  z-index: 9998;
+}
+body.light-mode::after { opacity: 0; }
+
+/* ============================================================
+   SECTION: FOOTER
+   ============================================================ */
+footer {
+  background: var(--bg-2);
+  border-top: 1px solid var(--border);
+  padding: 24px 20px;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-family: 'Rajdhani', sans-serif;
+  letter-spacing: 0.06em;
+  margin-top: auto;
+}
+footer .footer-logo {
+  font-family: 'Orbitron', sans-serif;
+  color: var(--neon);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  margin-bottom: 6px;
+}
+footer .footer-links {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+footer .footer-links a {
+  color: var(--text-muted);
+  transition: color var(--transition);
+}
+footer .footer-links a:hover { color: var(--neon); }
+
+/* ============================================================
+   SECTION: RESPONSIVE / MOBILE STYLES
+   ============================================================ */
+@media (max-width: 900px) {
+  .shop-layout {
+    grid-template-columns: 1fr;
   }
-
-  grid.innerHTML = '';
-  grid.classList.add('stagger');
-  listings.forEach(l => grid.appendChild(createListingCard(l)));
-  animateCards(grid);
-}
-
-function showSkeletons() {
-  const grid = document.getElementById('listings-grid');
-  if (!grid) return;
-  grid.innerHTML = Array(8).fill(0).map(() =>
-    `<div class="skeleton-card skeleton"></div>`
-  ).join('');
-}
-
-function categoryIcon(cat) {
-  const icons = {
-    'Collectibles': '&#127942;',
-    'Electronics': '&#128267;',
-    'Clothing & Accessories': '&#128084;',
-    'Toys & Figures': '&#9875;',
-    'Sports & Outdoors': '&#9917;',
-    'Books & Media': '&#128218;',
-    'Home & Garden': '&#127968;',
-    'Tools & Equipment': '&#128296;',
-    'Other': '&#128722;'
-  };
-  return icons[cat] || '&#128722;';
-}
-
-/* ============================================================
-   SECTION: ANIMATIONS — Stagger, number counter, transitions
-   ============================================================ */
-
-function animateCards(container) {
-  const children = container.querySelectorAll('.listing-card, .skeleton-card');
-  children.forEach((card, i) => {
-    card.style.animationDelay = `${i * 0.05}s`;
-  });
-}
-
-function animateNumber(el, target) {
-  const duration = 800;
-  const start = performance.now();
-  const startVal = parseInt(el.textContent) || 0;
-
-  function step(timestamp) {
-    const elapsed = timestamp - start;
-    const progress = Math.min(elapsed / duration, 1);
-    const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
-    el.textContent = Math.round(startVal + (target - startVal) * eased);
-    if (progress < 1) requestAnimationFrame(step);
+  .sidebar {
+    position: relative;
+    top: 0;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    display: none;
   }
-  requestAnimationFrame(step);
+  .sidebar.mobile-open { display: block; }
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .detail-images { position: relative; top: 0; }
+  .form-row { grid-template-columns: 1fr; }
+  .nav-menu { display: none; }
+  .hamburger { display: flex; }
 }
 
-// Mobile sidebar animation
-function toggleMobileSidebar() {
-  const sidebar = document.getElementById('sidebar');
-  if (sidebar) sidebar.classList.toggle('mobile-open');
-}
-
-/* ============================================================
-   SECTION: MODAL & UI UTILITIES
-   ============================================================ */
-
-function closeModal(id) {
-  const el = document.getElementById(id);
-  if (el) el.classList.remove('open');
-}
-
-function closeOnOverlay(e, id) {
-  if (e.target === e.currentTarget) closeModal(id);
-}
-
-function closeMobileNav() {
-  document.getElementById('mobile-nav')?.classList.remove('open');
-}
-
-function setLoading(btn, isLoading, text) {
-  btn.disabled = isLoading;
-  btn.innerHTML = isLoading
-    ? `<span class="spinner"></span> ${text}`
-    : text;
-}
-
-function escHtml(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+@media (max-width: 600px) {
+  :root { --header-h: 58px; }
+  .logo { font-size: 1.1rem; }
+  .header-search { max-width: 100%; }
+  .profile-banner { flex-direction: column; text-align: center; }
+  .profile-stats { justify-content: center; }
+  .shop-main { padding: 16px; }
+  .listings-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .modal { padding: 24px 16px; }
 }
 
 /* ============================================================
-   SECTION: TOAST NOTIFICATIONS — Show, Auto-dismiss
+   SECTION: DOWN / ERROR STATE
    ============================================================ */
-
-function showToast(message, type = 'info') {
-  const container = document.getElementById('toast-container');
-  if (!container) return;
-
-  const icons = { success: '&#10003;', error: '&#9888;', info: '&#9432;' };
-  const toast = document.createElement('div');
-  toast.className = `toast ${type}`;
-  toast.innerHTML = `
-    <span class="toast-icon">${icons[type] || icons.info}</span>
-    <span class="toast-msg">${escHtml(message)}</span>
-  `;
-
-  container.appendChild(toast);
-
-  setTimeout(() => {
-    toast.classList.add('exit');
-    toast.addEventListener('animationend', () => toast.remove());
-  }, 3500);
+#error-banner {
+  display: none;
+  position: fixed;
+  top: var(--header-h);
+  left: 0; right: 0;
+  background: rgba(255,45,85,0.12);
+  border-bottom: 2px solid var(--danger);
+  padding: 12px 24px;
+  text-align: center;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 0.9rem;
+  letter-spacing: 0.06em;
+  color: var(--danger);
+  z-index: 998;
 }
+#error-banner.show { display: block; animation: fadeIn 0.35s ease both; }
 
-/* ============================================================
-   SECTION: ERROR BANNER — Downtime / Connectivity
-   ============================================================ */
-
-function showErrorBanner() {
-  document.getElementById('error-banner')?.classList.add('show');
-}
-
-function hideErrorBanner() {
-  document.getElementById('error-banner')?.classList.remove('show');
-}
-
-/* ============================================================
-   SECTION: EVENT LISTENERS — Search, keyboard, resize, etc.
-   ============================================================ */
-
-function setupEventListeners() {
-  // Theme toggle
-  document.getElementById('theme-toggle')?.addEventListener('click', toggleTheme);
-
-  // Hamburger
-  document.getElementById('hamburger')?.addEventListener('click', () => {
-    document.getElementById('mobile-nav')?.classList.toggle('open');
-  });
-
-  // Search input (debounced)
-  let searchTimer;
-  document.getElementById('search-input')?.addEventListener('input', (e) => {
-    clearTimeout(searchTimer);
-    State.searchQuery = e.target.value;
-    searchTimer = setTimeout(() => {
-      if (State.currentPage !== 'shop') navigate('shop');
-      applyFilters();
-    }, 320);
-  });
-
-  // Keyboard shortcuts
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
-      document.getElementById('mobile-nav')?.classList.remove('open');
-    }
-    // Ctrl/Cmd + K to focus search
-    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-      e.preventDefault();
-      document.getElementById('search-input')?.focus();
-    }
-  });
-
-  // Online/offline monitoring
-  window.addEventListener('online', () => {
-    State.isOnline = true;
-    hideErrorBanner();
-    showToast('Connection restored.', 'success');
-    loadListings();
-  });
-
-  window.addEventListener('offline', () => {
-    State.isOnline = false;
-    showErrorBanner();
-    showToast('You are offline. Some features may not work.', 'error');
-  });
-
-  // Mobile filter toggle visibility on resize
-  const mobileFilterToggle = document.getElementById('mobile-filter-toggle');
-  const updateFilterBtnVisibility = () => {
-    if (mobileFilterToggle) {
-      mobileFilterToggle.style.display = window.innerWidth < 900 ? 'inline-flex' : 'none';
-    }
-  };
-  window.addEventListener('resize', updateFilterBtnVisibility);
-  updateFilterBtnVisibility();
-
-  // Click outside mobile nav to close
-  document.addEventListener('click', (e) => {
-    const mobileNav = document.getElementById('mobile-nav');
-    const hamburger = document.getElementById('hamburger');
-    if (mobileNav && mobileNav.classList.contains('open')) {
-      if (!mobileNav.contains(e.target) && !hamburger?.contains(e.target)) {
-        mobileNav.classList.remove('open');
-      }
-    }
-  });
-}
 
 /* ============================================================
    SECTION: OPEN EDIT PROFILE (stub — extend as needed)
