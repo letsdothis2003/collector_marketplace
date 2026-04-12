@@ -1,4 +1,4 @@
-//* ============================================================
+/* ============================================================
    OBTAINUM MARKETPLACE — style.css
    Techno-cyberpunk marketplace theme with neon green accents
    ============================================================ */
@@ -875,6 +875,45 @@
     background-color: rgba(255, 45, 85, 0.1);
     box-shadow: 0 0 8px rgba(255, 45, 85, 0.4);
    }
+   
+    .card-type {
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+    }
+
+    .card-subcategory {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        margin-bottom: 4px;
+    }
+
+    .card-sold-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(200, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: 'Orbitron', sans-serif;
+        font-size: 2rem;
+        font-weight: 900;
+        color: white;
+        letter-spacing: 0.1em;
+        z-index: 3;
+        pointer-events: none;
+    }
+
+    .owner-btn.sold {
+        background-color: transparent;
+        border: 1px solid var(--neon);
+        color: var(--neon);
+    }
+    .owner-btn.sold:hover {
+        background-color: rgba(0, 255, 65, 0.1);
+        box-shadow: 0 0 8px var(--neon-glow);
+    }
 
    /* Skeleton loader */
    .skeleton {
@@ -970,6 +1009,7 @@
    .main-image-wrap img {
      width: 100%; height: 100%;
      object-fit: cover;
+     transition: opacity 0.2s ease, transform 0.2s ease;
    }
    .main-image-wrap .card-no-image {
      aspect-ratio: unset;
@@ -1056,6 +1096,15 @@
    .badge-type { border-color: var(--border-bright); color: var(--neon); }
    .badge-shipping { border-color: var(--text-muted); color: var(--text-muted); }
    
+    .badge-fair {
+        border-color: var(--neon);
+        color: var(--neon);
+    }
+    .badge-featured {
+        border-color: var(--warning);
+        color: var(--warning);
+    }
+    
    .detail-description {
      color: var(--text-secondary);
      font-size: 0.92rem;
@@ -1224,6 +1273,34 @@
      flex-shrink: 0;
    }
    
+    .sold-banner {
+        background: var(--danger);
+        color: white;
+        padding: 12px;
+        border-radius: var(--radius);
+        text-align: center;
+        font-family: 'Orbitron', sans-serif;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        margin-bottom: 16px;
+    }
+
+    .detail-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 20px;
+    }
+
+    .tag-chip {
+        background: var(--bg-3);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 4px 10px;
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+
    /* ============================================================
       SECTION: CREATE LISTING PAGE
       ============================================================ */
@@ -1313,6 +1390,26 @@
    }
    .remove-image:hover { background: var(--danger); }
    
+    .payment-methods-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 12px;
+    }
+
+    .payment-method-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--bg-2);
+        border: 1px solid var(--border);
+        padding: 8px 12px;
+        border-radius: var(--radius);
+        cursor: pointer;
+    }
+    .payment-method-item input {
+        accent-color: var(--neon);
+    }
+
    /* ============================================================
       SECTION: LOGIN / REGISTER MODAL
       ============================================================ */
@@ -1442,6 +1539,14 @@
      background: var(--border);
    }
    
+    .auth-confirm-panel {
+        text-align: center;
+        padding: 20px 0;
+    }
+    .confirm-icon { font-size: 3rem; margin-bottom: 12px; }
+    .confirm-title { font-family: 'Orbitron', sans-serif; font-size: 1.1rem; letter-spacing: 0.08em; margin-bottom: 8px; }
+    .confirm-msg { color: var(--text-secondary); line-height: 1.6; margin-bottom: 20px; }
+
    /* ============================================================
       SECTION: PROFILE PAGE
       ============================================================ */
@@ -1508,6 +1613,7 @@
      margin-bottom: 4px;
    }
    .profile-email { font-size: 0.88rem; color: var(--text-muted); margin-bottom: 8px; }
+   .profile-location { font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 8px; }
    .profile-stats {
      display: flex;
      gap: 24px;
@@ -1787,154 +1893,3 @@
      z-index: 998;
    }
    #error-banner.show { display: block; animation: fadeIn 0.35s ease both; }
-
-   /* ============================================================
-      SECTION: NEW — Card type label, subcategory, sold overlay
-      ============================================================ */
-   .card-type {
-     font-size: 0.68rem;
-     color: var(--text-muted);
-     font-family: 'Rajdhani', sans-serif;
-     text-transform: capitalize;
-     opacity: 0.8;
-   }
-   .card-subcategory {
-     font-size: 0.72rem;
-     color: var(--text-muted);
-     margin-bottom: 4px;
-     font-family: 'Rajdhani', sans-serif;
-   }
-   .card-sold-overlay {
-     position: absolute;
-     inset: 0;
-     background: rgba(0,0,0,0.55);
-     display: flex;
-     align-items: center;
-     justify-content: center;
-     font-family: 'Orbitron', sans-serif;
-     font-weight: 900;
-     font-size: 1.2rem;
-     letter-spacing: 0.15em;
-     color: var(--danger);
-     border: 2px solid var(--danger);
-     z-index: 3;
-   }
-
-   .owner-btn.sold {
-     background-color: transparent;
-     border: 1px solid var(--neon);
-     color: var(--neon);
-   }
-   .owner-btn.sold:hover {
-     background-color: rgba(0, 255, 65, 0.1);
-     box-shadow: 0 0 8px var(--neon-glow);
-   }
-
-   /* ============================================================
-      SECTION: NEW — Detail page sold banner and tag chips
-      ============================================================ */
-   .sold-banner {
-     background: rgba(255,45,85,0.12);
-     border: 1px solid var(--danger);
-     border-radius: var(--radius);
-     color: var(--danger);
-     font-family: 'Orbitron', sans-serif;
-     font-weight: 700;
-     font-size: 0.85rem;
-     letter-spacing: 0.12em;
-     text-align: center;
-     padding: 8px;
-     margin-bottom: 12px;
-   }
-
-   .detail-tags {
-     display: flex;
-     flex-wrap: wrap;
-     gap: 6px;
-     margin-bottom: 16px;
-   }
-   .tag-chip {
-     background: var(--bg-3);
-     border: 1px solid var(--border);
-     border-radius: 20px;
-     padding: 3px 10px;
-     font-size: 0.75rem;
-     font-family: 'Rajdhani', sans-serif;
-     font-weight: 600;
-     color: var(--text-muted);
-     letter-spacing: 0.03em;
-   }
-
-   .badge-fair { border-color: var(--neon); color: var(--neon); }
-   .badge-featured { border-color: var(--warning); color: var(--warning); }
-
-   /* ============================================================
-      SECTION: NEW — Payment methods grid in create form
-      ============================================================ */
-   .payment-methods-grid {
-     display: grid;
-     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-     gap: 8px;
-   }
-   .payment-method-item {
-     display: flex;
-     align-items: center;
-     gap: 8px;
-     background: var(--bg-2);
-     border: 1px solid var(--border);
-     border-radius: var(--radius);
-     padding: 8px 12px;
-     cursor: pointer;
-     font-family: 'Rajdhani', sans-serif;
-     font-weight: 600;
-     font-size: 0.88rem;
-     color: var(--text-secondary);
-     transition: all var(--transition);
-   }
-   .payment-method-item:hover { border-color: var(--neon); color: var(--text); }
-   .payment-method-item input[type="checkbox"] {
-     accent-color: var(--neon);
-     cursor: pointer;
-     width: 15px; height: 15px;
-   }
-
-   /* ============================================================
-      SECTION: NEW — Profile location line
-      ============================================================ */
-   .profile-location {
-     font-size: 0.82rem;
-     color: var(--text-muted);
-     margin-top: 4px;
-     font-family: 'Rajdhani', sans-serif;
-   }
-
-   /* ============================================================
-      SECTION: NEW — Auth confirm panel
-      ============================================================ */
-   .auth-confirm-panel {
-     display: flex;
-     flex-direction: column;
-     align-items: center;
-     gap: 12px;
-     text-align: center;
-     padding: 20px 0;
-   }
-   .confirm-icon { font-size: 3rem; }
-   .confirm-title {
-     font-family: 'Orbitron', sans-serif;
-     font-size: 1rem;
-     letter-spacing: 0.1em;
-     color: var(--neon);
-   }
-   .confirm-msg {
-     font-size: 0.88rem;
-     color: var(--text-muted);
-     line-height: 1.6;
-   }
-
-   /* ============================================================
-      SECTION: NEW — Main image wrap transition for detail
-      ============================================================ */
-   .main-image-wrap img {
-     transition: opacity 0.2s ease, transform 0.2s ease;
-   }
