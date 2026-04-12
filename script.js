@@ -1560,7 +1560,7 @@ function createListingCard(listing, showOwnerActions) {
       <div class="card-meta">
         <span class="card-condition">${listing.condition || 'N/A'}</span>
         <span class="card-type">${listing.type ? listing.type.replace(/-/g, ' ') : ''}</span>
-        ${listing.location ? `<span>&#128205; ${escHtml(listing.location)}</span>` : ''}
+        ${listing.location ? `<span>; ${escHtml(listing.location)}</span>` : ''}
       </div>
       ${ownerActions}
     </div>
