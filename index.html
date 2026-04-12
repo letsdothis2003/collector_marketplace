@@ -1,129 +1,88 @@
-<<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OBTAINUM | Collectibles Hub</title>
+    <title>Obtainum | Anti-Scalp Marketplace</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@700&family=JetBrains+Mono&display=swap" rel="stylesheet">
 </head>
 <body class="dark-mode">
 
-    <div id="status-lock" class="hidden">
-        <div class="lock-panel">
-            <h2 class="neon-text">SYSTEM_PAUSED</h2>
-            <p>Data consistency check in progress. Please wait for synchronization...</p>
-        </div>
-    </div>
-
-    <nav class="fb-nav">
-        <div class="nav-left">
-            <h1 class="logo-text">OBTAINUM</h1>
-            <div class="search-wrapper">
-                <input type="text" id="global-search" placeholder="Search Listings...">
-            </div>
-        </div>
-        <div class="nav-center">
-            <button class="nav-tab active" data-page="shop" title="Marketplace">🏛️</button>
-            <button class="nav-tab" data-page="sell" title="Create Listing">➕</button>
-            <button class="nav-tab" data-page="vault" title="Your Wishlist">❤️</button>
-        </div>
-        <div class="nav-right">
-            <button id="theme-toggle">🌓</button>
-            <div id="profile-pill">
-                <button id="login-btn" class="login-trigger">Sign In</button>
+    <nav class="main-nav">
+        <div class="nav-container">
+            <div class="logo" onclick="router.navigate('home')">Obtainum</div>
+            <div class="nav-links">
+                <button onclick="router.navigate('home')">Home</button>
+                <button onclick="router.navigate('shop')">Shop</button>
+                <button onclick="router.navigate('sell')">Sell</button>
+                <button onclick="router.navigate('profile')">Profile</button>
+                <button id="theme-toggle">🌓</button>
             </div>
         </div>
     </nav>
 
-    <div class="main-container">
-        <aside class="sidebar">
-            <h2 class="section-title">Marketplace</h2>
-            
-            <div class="filter-group">
-                <h3>Filters</h3>
-                <div class="filter-item">
-                    <label>Location</label>
-                    <input type="text" id="loc-filter" placeholder="City, Zip...">
-                </div>
-                <div class="filter-item">
-                    <label>Price Range</label>
-                    <div class="price-inputs">
-                        <input type="number" id="min-p" placeholder="Min">
-                        <input type="number" id="max-p" placeholder="Max">
+    <div id="page-container">
+        <section id="view-home" class="page-view active">
+            <div class="hero">
+                <h1>The Collector's <span class="highlight">Fair Price</span> Marketplace</h1>
+                <p>Buy and sell without the scalper tax.</p>
+                <button class="btn-primary" onclick="router.navigate('shop')">Browse Marketplace</button>
+            </div>
+        </section>
+
+        <section id="view-shop" class="page-view hidden">
+            <div class="shop-shell">
+                <aside class="filters">
+                    <h3>Refine Market</h3>
+                    <label>Condition</label>
+                    <select id="filter-condition">
+                        <option value="all">All</option>
+                        <option value="new">New</option>
+                        <option value="like-new">Like-New</option>
+                        <option value="good">Good</option>
+                        <option value="fair">Fair</option>
+                        <option value="poor">Poor</option>
+                    </select>
+                </aside>
+                <main id="market-grid" class="grid"></main>
+            </div>
+        </section>
+
+        <section id="view-sell" class="page-view hidden">
+            <div class="form-card">
+                <h2>Deploy New Listing</h2>
+                <form id="sell-form">
+                    <input type="text" id="l-name" placeholder="Item Name (max 100)" required>
+                    <select id="l-category" required>
+                        <option value="Electronics">Electronics</option>
+                        <option value="Collectibles">Collectibles</option>
+                        <option value="Clothing & Accessories">Apparel</option>
+                    </select>
+                    <select id="l-condition">
+                        <option value="new">New</option>
+                        <option value="like-new">Like-New</option>
+                        <option value="good">Good</option>
+                    </select>
+                    <div class="row">
+                        <input type="number" id="l-price" placeholder="Price ($)" step="0.01" required>
+                        <input type="number" id="l-msrp" placeholder="MSRP ($)" step="0.01">
                     </div>
-                </div>
+                    <select id="l-shipping">
+                        <option value="paid">Paid Shipping</option>
+                        <option value="free">Free</option>
+                        <option value="pickup">Pickup</option>
+                    </select>
+                    <textarea id="l-desc" placeholder="Description (min 10 chars)" required></textarea>
+                    <button type="submit">Publish Asset</button>
+                </form>
             </div>
+        </section>
 
-            <div class="category-list">
-                <h3>Categories</h3>
-                <button class="cat-btn active" data-cat="all">All Items</button>
-                <button class="cat-btn" data-cat="Collectibles">Collectibles</button>
-                <button class="cat-btn" data-cat="Electronics">Electronics</button>
-                <button class="cat-btn" data-cat="Clothing">Clothing</button>
-            </div>
-        </aside>
-
-        <main class="feed-area">
-            
-            <section id="page-shop" class="page-view">
-                <div class="feed-header">
-                    <h3>Today's Picks</h3>
+        <section id="view-profile" class="page-view hidden">
+            <div id="user-vault" class="profile-card">
                 </div>
-                <div id="listing-grid" class="fb-grid">
-                    </div>
-            </section>
-
-            <section id="page-sell" class="page-view hidden">
-                <div class="fb-card-form">
-                    <h2>Create New Listing</h2>
-                    <form id="listing-form">
-                        <input type="text" id="form-name" placeholder="Title" required>
-                        <select id="form-cat">
-                            <option value="Collectibles">Collectibles</option>
-                            <option value="Electronics">Electronics</option>
-                            <option value="Clothing">Clothing</option>
-                        </select>
-                        <div class="row">
-                            <input type="number" id="form-price" placeholder="Price" required>
-                            <input type="number" id="form-msrp" placeholder="Retail MSRP (for AI Fairness)">
-                        </div>
-                        <select id="form-condition">
-                            <option value="new">New</option>
-                            <option value="like-new">Like New</option>
-                            <option value="good">Good</option>
-                            <option value="fair">Fair</option>
-                            <option value="poor">Poor</option>
-                        </select>
-                        <textarea id="form-desc" placeholder="Description (min 10 chars)"></textarea>
-                        <button type="submit" class="submit-btn">Post Listing</button>
-                    </form>
-                </div>
-            </section>
-
-            <section id="page-ai-full" class="page-view hidden">
-                <div class="intel-dashboard">
-                    <div class="intel-nav">
-                        <h2>AI Market Analysis Dashboard</h2>
-                        <button id="minimize-ai">Back to Marketplace</button>
-                    </div>
-                    <div id="deep-stats">
-                        </div>
-                </div>
-            </section>
-        </main>
-
-        <aside id="ai-sidebar" class="ai-right-pane">
-            <div class="ai-header">
-                <span>AI_ASSISTANT</span>
-                <button id="maximize-ai">⤢ Maximize</button>
-            </div>
-            <div id="ai-context" class="ai-body">
-                <p class="welcome">Select an item to see AI Market Worth and Risk analysis.</p>
-                <ul id="ai-bullets" class="ai-list"></ul>
-            </div>
-        </aside>
+        </section>
     </div>
 
     <script src="script.js"></script>
