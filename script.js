@@ -885,7 +885,7 @@ async function submitListing(e) {
     const isFair = msrp ? price <= msrp * 1.2 : true;
 
     const listingData = {
-      seller_id = State.user.id,
+      seller_id: State.user.id,
       name: document.getElementById('c-name').value.trim(),
       category: document.getElementById('c-category').value,
       subcategory: subcategory,
