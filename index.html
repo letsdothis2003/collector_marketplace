@@ -1,90 +1,573 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark-mode">
+
+<!-- ============================================================
+     OBTAINUM MARKETPLACE — index.html
+     Techno-cyberpunk Facebook-Marketplace alternative
+     Sections: HEAD | HEADER | SHOP | DETAIL | CREATE | PROFILE
+               WISHLIST | AUTH-MODAL | TOASTS | FOOTER | SCRIPTS
+     ============================================================ -->
+
+<!-- ============================================================
+     SECTION: HEAD — Meta, Fonts, Stylesheets
+     ============================================================ -->
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Obtainum | Anti-Scalp Marketplace</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="OBTAINUM — The techno marketplace for collectors and hobbyists. Fair prices, no scalping." />
+  <meta name="theme-color" content="#00ff41" />
+  <title>OBTAINUM — Next-Gen Marketplace</title>
+
+  <!-- Supabase CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="./style.css" />
 </head>
-<body class="dark-mode">
 
-    <nav class="main-nav">
-        <div class="nav-container">
-            <div class="logo" onclick="router.navigate('home')">Obtainum</div>
-            <div class="nav-links">
-                <button onclick="router.navigate('home')">Home</button>
-                <button onclick="router.navigate('shop')">Shop</button>
-                <button onclick="router.navigate('sell')">Sell</button>
-                <button onclick="router.navigate('profile')">Profile</button>
-                <button id="theme-toggle">🌓</button>
-            </div>
-        </div>
-    </nav>
+<body>
 
-    <div id="page-container">
-        <section id="view-home" class="page-view active">
-            <div class="hero">
-                <h1>The Collector's <span class="highlight">Fair Price</span> Marketplace</h1>
-                <p>Buy and sell without the scalper tax.</p>
-                <button class="btn-primary" onclick="router.navigate('shop')">Browse Marketplace</button>
-            </div>
-        </section>
+<!-- ============================================================
+     SECTION: HEADER / NAVIGATION
+     ============================================================ -->
+<header id="header">
+  <!-- Logo -->
+  <div class="logo glitch" data-text="OBTAINUM" onclick="navigate('shop')">OBTAINUM</div>
 
-        <section id="view-shop" class="page-view hidden">
-            <div class="shop-shell">
-                <aside class="filters">
-                    <h3>Refine Market</h3>
-                    <label>Condition</label>
-                    <select id="filter-condition">
-                        <option value="all">All</option>
-                        <option value="new">New</option>
-                        <option value="like-new">Like-New</option>
-                        <option value="good">Good</option>
-                        <option value="fair">Fair</option>
-                        <option value="poor">Poor</option>
-                    </select>
-                </aside>
-                <main id="market-grid" class="grid"></main>
-            </div>
-        </section>
+  <!-- Search Bar -->
+  <div class="header-search" id="header-search">
+    <span class="search-icon">&#9906;</span>
+    <input
+      type="search"
+      id="search-input"
+      placeholder="Search listings, categories, sellers..."
+      autocomplete="off"
+      spellcheck="false"
+    />
+  </div>
 
-        <section id="view-sell" class="page-view hidden">
-            <div class="form-card">
-                <h2>Deploy New Listing</h2>
-                <form id="sell-form">
-                    <input type="text" id="l-name" placeholder="Item Name (max 100)" required>
-                    <select id="l-category" required>
-                        <option value="Electronics">Electronics</option>
-                        <option value="Collectibles">Collectibles</option>
-                        <option value="Clothing & Accessories">Apparel</option>
-                    </select>
-                    <select id="l-condition">
-                        <option value="new">New</option>
-                        <option value="like-new">Like-New</option>
-                        <option value="good">Good</option>
-                    </select>
-                    <div class="row">
-                        <input type="number" id="l-price" placeholder="Price ($)" step="0.01" required>
-                        <input type="number" id="l-msrp" placeholder="MSRP ($)" step="0.01">
-                    </div>
-                    <select id="l-shipping">
-                        <option value="paid">Paid Shipping</option>
-                        <option value="free">Free</option>
-                        <option value="pickup">Pickup</option>
-                    </select>
-                    <textarea id="l-desc" placeholder="Description (min 10 chars)" required></textarea>
-                    <button type="submit">Publish Asset</button>
-                </form>
-            </div>
-        </section>
+  <!-- Desktop Nav -->
+  <nav class="nav-menu">
+    <button class="nav-btn" id="nav-shop" onclick="navigate('shop')">
+      <span>&#9776;</span> Marketplace
+    </button>
+    <button class="nav-btn" id="nav-wishlist" onclick="navigate('wishlist')">
+      <span>&#9825;</span> Wishlist
+    </button>
+    <button class="nav-btn" id="nav-create" onclick="navigate('create')">
+      <span>&#43;</span> Sell
+    </button>
+  </nav>
 
-        <section id="view-profile" class="page-view hidden">
-            <div id="user-vault" class="profile-card">
-                </div>
-        </section>
+  <!-- Right Actions -->
+  <div class="header-actions">
+    <!-- Theme Toggle -->
+    <div>
+      <button class="theme-toggle" id="theme-toggle" aria-label="Toggle dark/light mode"></button>
+      <div class="theme-toggle-label" id="theme-label">DARK</div>
     </div>
 
-    <script src="script.js"></script>
+    <!-- Auth / Avatar -->
+    <div id="auth-btn-wrap">
+      <button class="btn btn-outline btn-sm" onclick="openAuthModal()">LOGIN</button>
+    </div>
+    <div id="user-avatar-wrap" class="hidden">
+      <div class="header-avatar" id="header-avatar" onclick="navigate('profile')"></div>
+    </div>
+  </div>
+
+  <!-- Hamburger for mobile -->
+  <button class="hamburger" id="hamburger" aria-label="Menu">
+    <span></span><span></span><span></span>
+  </button>
+</header>
+
+<!-- Mobile Nav Drawer -->
+<nav class="mobile-nav" id="mobile-nav">
+  <button class="nav-btn" onclick="navigate('shop'); closeMobileNav()">&#9776; Marketplace</button>
+  <button class="nav-btn" onclick="navigate('wishlist'); closeMobileNav()">&#9825; Wishlist</button>
+  <button class="nav-btn" onclick="navigate('create'); closeMobileNav()">&#43; Sell Item</button>
+  <button class="nav-btn" onclick="navigate('profile'); closeMobileNav()">&#9787; My Profile</button>
+</nav>
+
+<!-- Error / Downtime Banner -->
+<div id="error-banner">
+  &#9888; OBTAINUM IS EXPERIENCING ISSUES — PLEASE WAIT WHILE WE RESTORE SERVICE
+</div>
+
+<!-- ============================================================
+     SECTION: APP WRAPPER (all pages rendered inside)
+     ============================================================ -->
+<main id="app">
+
+  <!-- ==========================================================
+       SECTION: SHOP PAGE — Main Marketplace Listings
+       ========================================================== -->
+  <div id="page-shop" class="page">
+    <div class="shop-layout">
+
+      <!-- Sidebar Filters -->
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-title">&#9882; FILTER RESULTS</div>
+
+        <!-- Category Filter -->
+        <div class="filter-section">
+          <div class="filter-title">&#9670; CATEGORY</div>
+          <div class="filter-chips" id="category-chips">
+            <button class="chip active" data-cat="all" onclick="selectCategory(this, 'all')">All</button>
+            <button class="chip" data-cat="Collectibles" onclick="selectCategory(this, 'Collectibles')">Collectibles</button>
+            <button class="chip" data-cat="Electronics" onclick="selectCategory(this, 'Electronics')">Electronics</button>
+            <button class="chip" data-cat="Clothing &amp; Accessories" onclick="selectCategory(this, 'Clothing & Accessories')">Clothing</button>
+            <button class="chip" data-cat="Toys &amp; Figures" onclick="selectCategory(this, 'Toys & Figures')">Toys &amp; Figures</button>
+            <button class="chip" data-cat="Sports &amp; Outdoors" onclick="selectCategory(this, 'Sports & Outdoors')">Sports</button>
+            <button class="chip" data-cat="Books &amp; Media" onclick="selectCategory(this, 'Books & Media')">Books &amp; Media</button>
+            <button class="chip" data-cat="Home &amp; Garden" onclick="selectCategory(this, 'Home & Garden')">Home &amp; Garden</button>
+            <button class="chip" data-cat="Tools &amp; Equipment" onclick="selectCategory(this, 'Tools & Equipment')">Tools</button>
+            <button class="chip" data-cat="Other" onclick="selectCategory(this, 'Other')">Other</button>
+          </div>
+        </div>
+
+        <!-- Condition Filter -->
+        <div class="filter-section">
+          <div class="filter-title">&#9733; CONDITION</div>
+          <div class="filter-chips" id="condition-chips">
+            <button class="chip active" data-cond="all" onclick="selectCondition(this, 'all')">All</button>
+            <button class="chip" data-cond="new" onclick="selectCondition(this, 'new')">New</button>
+            <button class="chip" data-cond="like-new" onclick="selectCondition(this, 'like-new')">Like New</button>
+            <button class="chip" data-cond="good" onclick="selectCondition(this, 'good')">Good</button>
+            <button class="chip" data-cond="fair" onclick="selectCondition(this, 'fair')">Fair</button>
+            <button class="chip" data-cond="poor" onclick="selectCondition(this, 'poor')">Poor</button>
+          </div>
+        </div>
+
+        <!-- Price Range -->
+        <div class="filter-section">
+          <div class="filter-title">&#36; PRICE RANGE</div>
+          <div class="price-range">
+            <input type="number" id="price-min" placeholder="Min" min="0" oninput="applyFilters()" />
+            <span>—</span>
+            <input type="number" id="price-max" placeholder="Max" min="0" oninput="applyFilters()" />
+          </div>
+          <br />
+          <input type="range" id="price-slider" min="0" max="2000" value="2000" step="10" oninput="onPriceSlider(this)" />
+          <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;font-family:'Rajdhani',sans-serif;">
+            Up to: <span id="price-slider-val" style="color:var(--neon);">$2000</span>
+          </div>
+        </div>
+
+        <!-- Fair Price Only -->
+        <div class="filter-section">
+          <div class="filter-title">&#9996; QUALITY</div>
+          <label class="source-item">
+            <input type="checkbox" id="fair-only" onchange="applyFilters()" />
+            <label for="fair-only">Fair Price Only</label>
+          </label>
+          <label class="source-item">
+            <input type="checkbox" id="featured-only" onchange="applyFilters()" />
+            <label for="featured-only">Featured Only</label>
+          </label>
+        </div>
+
+        <button class="btn btn-ghost w-full" onclick="resetFilters()" style="margin-top:4px;">
+          &#8634; RESET FILTERS
+        </button>
+      </aside>
+
+      <!-- Main Listings -->
+      <section class="shop-main">
+        <!-- Mobile filter toggle -->
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;" class="mobile-filter-row">
+          <button class="btn btn-ghost btn-sm" id="mobile-filter-toggle" onclick="toggleMobileSidebar()" style="display:none;">
+            &#9881; FILTERS
+          </button>
+        </div>
+
+        <div class="shop-header">
+          <div class="results-info">
+            <span id="results-count" class="results-count">—</span> listings found
+          </div>
+          <select class="sort-select" id="sort-select" onchange="applyFilters()">
+            <option value="newest">Newest First</option>
+            <option value="price-asc">Price: Low to High</option>
+            <option value="price-desc">Price: High to Low</option>
+            <option value="popular">Most Viewed</option>
+          </select>
+        </div>
+
+        <div class="listings-grid stagger" id="listings-grid">
+          <!-- Cards injected by JS -->
+          <div class="skeleton-card skeleton"></div>
+          <div class="skeleton-card skeleton"></div>
+          <div class="skeleton-card skeleton"></div>
+          <div class="skeleton-card skeleton"></div>
+          <div class="skeleton-card skeleton"></div>
+          <div class="skeleton-card skeleton"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+  <!-- END: SHOP PAGE -->
+
+  <!-- ==========================================================
+       SECTION: ITEM DETAIL PAGE
+       ========================================================== -->
+  <div id="page-detail" class="page">
+    <div class="detail-container">
+      <div class="back-btn" onclick="navigate('shop')">
+        &#8592; Back to Marketplace
+      </div>
+
+      <div class="detail-grid" id="detail-content">
+        <!-- Injected by JS -->
+      </div>
+
+      <!-- Similar Items -->
+      <div class="similar-section" id="similar-section">
+        <div class="section-title">&#9870; Similar Items</div>
+        <div class="similar-scroll stagger" id="similar-scroll">
+          <!-- Injected by JS -->
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- END: DETAIL PAGE -->
+
+  <!-- ==========================================================
+       SECTION: CREATE LISTING PAGE
+       ========================================================== -->
+  <div id="page-create" class="page">
+    <div class="create-container">
+      <div class="page-title">&#43; Create New Listing</div>
+
+      <div id="create-auth-notice" class="hidden" style="
+        background:rgba(0,255,65,0.07);
+        border:1px solid var(--border-bright);
+        border-radius:var(--radius);
+        padding:20px;
+        text-align:center;
+        margin-bottom:24px;
+      ">
+        <div style="font-family:'Orbitron',sans-serif;font-size:0.9rem;color:var(--neon);margin-bottom:8px;">
+          LOGIN REQUIRED
+        </div>
+        <div style="font-size:0.88rem;color:var(--text-muted);margin-bottom:16px;">
+          You need to be logged in to create listings.
+        </div>
+        <button class="btn btn-primary" onclick="openAuthModal()">Login / Register</button>
+      </div>
+
+      <form class="create-form" id="create-form" onsubmit="submitListing(event)">
+
+        <!-- Images -->
+        <div class="form-group">
+          <label class="form-label">&#128247; Images (up to 10)</label>
+          <div class="image-upload-zone" id="upload-zone">
+            <div class="upload-icon">&#128247;</div>
+            <div class="upload-text">
+              Drop images here or <span>click to upload</span>
+            </div>
+            <input type="file" class="upload-input" id="image-input" multiple accept="image/*" onchange="handleImageUpload(event)" />
+          </div>
+          <div class="image-preview-grid" id="image-preview-grid"></div>
+        </div>
+
+        <!-- Title & Category -->
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="c-name">Item Name *</label>
+            <input class="form-input" id="c-name" type="text" placeholder="e.g. Optimus Prime G1 Figure" required maxlength="100" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="c-category">Category *</label>
+            <select class="form-input" id="c-category" required>
+              <option value="">Select category...</option>
+              <option>Collectibles</option>
+              <option>Electronics</option>
+              <option>Clothing &amp; Accessories</option>
+              <option>Toys &amp; Figures</option>
+              <option>Sports &amp; Outdoors</option>
+              <option>Books &amp; Media</option>
+              <option>Home &amp; Garden</option>
+              <option>Tools &amp; Equipment</option>
+              <option>Other</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Description -->
+        <div class="form-group">
+          <label class="form-label" for="c-desc">Description *</label>
+          <textarea class="form-input" id="c-desc" placeholder="Describe your item — condition, history, what's included..." required minlength="10" maxlength="2000" rows="5"></textarea>
+        </div>
+
+        <!-- Price, MSRP, Condition -->
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="c-price">Your Price ($) *</label>
+            <input class="form-input" id="c-price" type="number" placeholder="0.00" min="0" step="0.01" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="c-msrp">MSRP / Retail Price ($)</label>
+            <input class="form-input" id="c-msrp" type="number" placeholder="0.00" min="0" step="0.01" />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="c-condition">Condition *</label>
+            <select class="form-input" id="c-condition" required>
+              <option value="">Select condition...</option>
+              <option value="new">New</option>
+              <option value="like-new">Like New</option>
+              <option value="good">Good</option>
+              <option value="fair">Fair</option>
+              <option value="poor">Poor</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="c-type">Listing Type *</label>
+            <select class="form-input" id="c-type" required>
+              <option value="buy-now">Buy Now</option>
+              <option value="offers">Accepting Offers</option>
+              <option value="auction">Auction</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="c-shipping">Shipping *</label>
+            <select class="form-input" id="c-shipping" required>
+              <option value="paid">Paid Shipping</option>
+              <option value="free">Free Shipping</option>
+              <option value="local">Local Delivery</option>
+              <option value="pickup">Pickup Only</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="c-location">Location</label>
+            <input class="form-input" id="c-location" type="text" placeholder="City, State" />
+          </div>
+        </div>
+
+        <!-- Tags -->
+        <div class="form-group">
+          <label class="form-label" for="c-tags">Tags (comma separated)</label>
+          <input class="form-input" id="c-tags" type="text" placeholder="transformer, g1, vintage, sealed..." />
+        </div>
+
+        <!-- Mark as Fair Price -->
+        <label class="source-item" style="padding:12px 0;">
+          <input type="checkbox" id="c-fair" checked />
+          <label for="c-fair" style="font-size:0.88rem;color:var(--text);">
+            Mark as Fair Price (no scalping, no excessive markup)
+          </label>
+        </label>
+
+        <!-- Submit -->
+        <div id="create-error" class="auth-error"></div>
+        <button type="submit" class="btn btn-primary btn-lg" id="create-submit">
+          PUBLISH LISTING
+        </button>
+      </form>
+    </div>
+  </div>
+  <!-- END: CREATE PAGE -->
+
+  <!-- ==========================================================
+       SECTION: PROFILE PAGE
+       ========================================================== -->
+  <div id="page-profile" class="page">
+    <div class="profile-container">
+      <!-- Banner / user info -->
+      <div class="profile-banner" id="profile-banner">
+        <div class="profile-avatar-lg" id="profile-avatar-lg"></div>
+        <div class="profile-info">
+          <div class="profile-username" id="profile-username">LOADING...</div>
+          <div class="profile-email" id="profile-email"></div>
+          <div id="profile-bio" style="font-size:0.85rem;color:var(--text-muted);margin-bottom:8px;"></div>
+          <div class="profile-stats" id="profile-stats">
+            <div class="stat-item">
+              <div class="stat-value" id="stat-listings">0</div>
+              <div class="stat-label">Listings</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="stat-views">0</div>
+              <div class="stat-label">Total Views</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="stat-favorites">0</div>
+              <div class="stat-label">Favorites</div>
+            </div>
+          </div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="openEditProfile()" style="margin-left:auto;align-self:flex-start;">
+          &#9998; Edit
+        </button>
+      </div>
+
+      <!-- Profile Tabs -->
+      <div class="profile-tabs">
+        <button class="profile-tab active" data-ptab="my-listings" onclick="switchProfileTab(this)">My Listings</button>
+        <button class="profile-tab" data-ptab="sold" onclick="switchProfileTab(this)">Sold</button>
+        <button class="profile-tab" data-ptab="settings" onclick="switchProfileTab(this)">Settings</button>
+      </div>
+
+      <!-- Tab Contents -->
+      <div id="ptab-my-listings">
+        <div class="listings-grid stagger" id="profile-listings-grid">
+          <div class="skeleton-card skeleton"></div>
+          <div class="skeleton-card skeleton"></div>
+          <div class="skeleton-card skeleton"></div>
+        </div>
+      </div>
+
+      <div id="ptab-sold" class="hidden">
+        <div class="listings-grid stagger" id="profile-sold-grid"></div>
+      </div>
+
+      <div id="ptab-settings" class="hidden">
+        <div style="max-width:480px;margin-top:16px;">
+          <form class="create-form" onsubmit="saveProfile(event)">
+            <div class="form-group">
+              <label class="form-label">Username</label>
+              <input class="form-input" id="s-username" type="text" placeholder="Your username" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Bio</label>
+              <textarea class="form-input" id="s-bio" rows="3" placeholder="Tell the community about yourself..." maxlength="500"></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Location</label>
+              <input class="form-input" id="s-location" type="text" placeholder="City, State" />
+            </div>
+            <button type="submit" class="btn btn-primary">SAVE PROFILE</button>
+            <button type="button" class="btn btn-danger" onclick="signOut()" style="margin-top:8px;">SIGN OUT</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- END: PROFILE PAGE -->
+
+  <!-- ==========================================================
+       SECTION: WISHLIST PAGE
+       ========================================================== -->
+  <div id="page-wishlist" class="page">
+    <div class="wishlist-container">
+      <div class="page-title">&#9825; My Wishlist</div>
+      <div id="wishlist-auth-notice" class="hidden" style="
+        text-align:center;
+        padding:60px 20px;
+      ">
+        <div style="font-size:3rem;margin-bottom:16px;opacity:0.4;">&#9825;</div>
+        <div style="font-family:'Orbitron',sans-serif;font-size:1rem;color:var(--text-muted);">
+          LOGIN TO VIEW YOUR WISHLIST
+        </div>
+        <div style="margin-top:8px;font-size:0.85rem;color:var(--text-muted);margin-bottom:20px;">
+          Save items you love and revisit them anytime
+        </div>
+        <button class="btn btn-primary" onclick="openAuthModal()">Login / Register</button>
+      </div>
+      <div class="listings-grid stagger" id="wishlist-grid"></div>
+    </div>
+  </div>
+  <!-- END: WISHLIST PAGE -->
+
+</main>
+
+<!-- ============================================================
+     SECTION: AUTH MODAL — Login & Register
+     ============================================================ -->
+<div class="modal-overlay" id="auth-modal" onclick="closeOnOverlay(event, 'auth-modal')">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Authentication">
+    <button class="modal-close" onclick="closeModal('auth-modal')" aria-label="Close">&times;</button>
+
+    <div class="modal-logo glitch" data-text="OBTAINUM">OBTAINUM</div>
+    <div class="modal-tagline">Access the techno marketplace</div>
+
+    <!-- Login / Register Tabs -->
+    <div class="modal-tabs">
+      <button class="modal-tab active" id="tab-login" onclick="switchAuthTab('login')">LOGIN</button>
+      <button class="modal-tab" id="tab-register" onclick="switchAuthTab('register')">REGISTER</button>
+    </div>
+
+    <!-- Login Form -->
+    <div id="auth-login">
+      <form class="auth-form" onsubmit="handleLogin(event)">
+        <div class="auth-error" id="login-error"></div>
+        <div class="form-group">
+          <label class="form-label" for="login-email">Email</label>
+          <input class="form-input" id="login-email" type="email" placeholder="your@email.com" required autocomplete="email" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="login-pass">Password</label>
+          <input class="form-input" id="login-pass" type="password" placeholder="••••••••" required autocomplete="current-password" />
+        </div>
+        <button type="submit" class="btn btn-primary w-full" id="login-btn">
+          LOGIN TO OBTAINUM
+        </button>
+        <div style="font-size:0.8rem;text-align:center;color:var(--text-muted);">
+          Don't have an account?
+          <a href="#" onclick="switchAuthTab('register'); return false;" style="color:var(--neon);">Register</a>
+        </div>
+      </form>
+    </div>
+
+    <!-- Register Form -->
+    <div id="auth-register" class="hidden">
+      <form class="auth-form" onsubmit="handleRegister(event)">
+        <div class="auth-error" id="register-error"></div>
+        <div class="form-group">
+          <label class="form-label" for="reg-username">Username</label>
+          <input class="form-input" id="reg-username" type="text" placeholder="your_handle" required minlength="3" maxlength="30"
+            pattern="[a-zA-Z0-9_]+" title="Letters, numbers and underscores only" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="reg-email">Email</label>
+          <input class="form-input" id="reg-email" type="email" placeholder="your@email.com" required autocomplete="email" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="reg-pass">Password</label>
+          <input class="form-input" id="reg-pass" type="password" placeholder="Min 8 characters" required minlength="8" autocomplete="new-password" />
+        </div>
+        <button type="submit" class="btn btn-primary w-full" id="register-btn">
+          CREATE ACCOUNT
+        </button>
+        <div style="font-size:0.8rem;text-align:center;color:var(--text-muted);">
+          Already a member?
+          <a href="#" onclick="switchAuthTab('login'); return false;" style="color:var(--neon);">Login</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SECTION: TOAST NOTIFICATION CONTAINER
+     ============================================================ -->
+<div id="toast-container" aria-live="polite" aria-atomic="true"></div>
+
+<!-- ============================================================
+     SECTION: FOOTER
+     ============================================================ -->
+<footer>
+  <div class="footer-logo">OBTAINUM</div>
+  <div class="footer-links">
+    <a href="#" onclick="navigate('shop');return false;">Marketplace</a>
+    <a href="#" onclick="navigate('create');return false;">Sell</a>
+    <a href="#" onclick="navigate('wishlist');return false;">Wishlist</a>
+    <a href="#" onclick="navigate('profile');return false;">Profile</a>
+  </div>
+  <div>
+    &copy; 2026 OBTAINUM &mdash; Fair prices for real collectors. No scalpers allowed.
+  </div>
+</footer>
+
+<!-- ============================================================
+     SECTION: SCRIPTS — script.js loaded last
+     ============================================================ -->
+<script src="./script.js"></script>
+
 </body>
 </html>
