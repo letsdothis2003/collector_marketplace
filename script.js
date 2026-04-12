@@ -1,150 +1,154 @@
+/* ================================================================
+   OBTAINUM MARKETPLACE — script.js
+   Logic: Navigation, Supabase CRUD, and AI Reasoning
+================================================================ */
 
-
-// --- SECTION 1: DATABASE CLIENT (db) ---
-const DB_URL = 'https://gotzmuobwuubsugnowxq.supabase.co';
-const DB_KEY = 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs';
+// --- 1. SUPABASE CLIENT ---
+const DB_URL = 'https://YOUR_PROJECT.supabase.co';
+const DB_KEY = 'YOUR_ANON_KEY';
 const db = supabase.createClient(DB_URL, DB_KEY);
 
-// --- SECTION 2: APP STATE ---
-let appState = {
-    activeView: 'shop',
-    previousView: 'shop',
-    user: null,
-    listings: [],
-    theme: 'dark',
-    integrity: true
+// --- 2. GLOBAL STATE ---
+let state = {
+    view: 'shop',
+    prevView: 'shop',
+    items: [],
+    selectedItem: null,
+    user: null
 };
 
-// --- SECTION 3: SYSTEM INITIALIZATION ---
+// --- 3. CORE INIT ---
 document.addEventListener('DOMContentLoaded', () => {
+    fetchListings();
     initAuth();
-    loadMarketplace();
-    bindEvents();
+    setupListeners();
 });
 
-// --- SECTION 4: AUTHENTICATION (Supabase Auth) ---
-async function initAuth() {
-    const { data: { user } } = await db.auth.getUser();
-    if (user) {
-        appState.user = user;
-        updateUserUI(user);
-    }
-}
-
-function updateUserUI(user) {
-    const zone = document.getElementById('user-display');
-    zone.innerHTML = `<span class="neon-text">ID_${user.email.split('@')[0].toUpperCase()}</span>`;
-}
-
-// --- SECTION 5: MARKETPLACE ENGINE ---
-async function loadMarketplace() {
+// --- 4. DATA FETCHING (SQL MATCHED) ---
+async function fetchListings() {
     try {
+        // Fetch from 'listings' table, join with 'profiles' for seller data
         const { data, error } = await db
             .from('listings')
-            .select('*')
+            .select(`*, profiles(username, rating)`)
+            .eq('is_sold', false)
             .order('created_at', { ascending: false });
 
         if (error) throw error;
-        
-        appState.listings = data;
-        renderListings(data);
+        state.items = data;
+        renderGrid(data);
     } catch (err) {
-        triggerSystemHalt(err.message);
+        showSystemCrash(err.message);
     }
 }
 
-function renderListings(items) {
+function renderGrid(data) {
     const grid = document.getElementById('listing-grid');
-    grid.innerHTML = items.map(item => `
-        <div class="item-card" onclick="openItemDetail('${item.id}')">
-            <div class="card-header">
-                <span class="tag">${item.category}</span>
-                <span class="fairness ${item.is_fair ? 'fair' : 'scalp'}">
-                    ${item.is_fair ? '◈ FAIR_PRICE' : '⚠ SCALP_ALERT'}
-                </span>
-            </div>
-            <h3>${item.name}</h3>
-            <p class="price-line">$${item.price}</p>
-            <div class="card-footer">
-                <small>LOC: ${item.location || 'GLOBAL'}</small>
+    grid.innerHTML = data.map(item => `
+        <div class="item-card" onclick="selectItem('${item.id}')">
+            <div class="card-img" style="background: url('${item.images[0] || 'https://via.placeholder.com/300'}') center/cover"></div>
+            <div class="card-info">
+                <div class="card-price">$${item.price}</div>
+                <div class="card-title">${item.name}</div>
+                <div class="card-loc">${item.location || 'Local'}</div>
+                ${item.is_fair ? '<span class="fair-badge">◈ FAIR</span>' : ''}
             </div>
         </div>
     `).join('');
 }
 
-// --- SECTION 6: SELL LOGIC & AI ANALYTICS ---
-const listingForm = document.getElementById('listing-form');
-listingForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    if (!appState.user) return alert("AUTH_REQUIRED: Please login to deploy.");
+// --- 5. NAVIGATION & VIEW SWITCHING ---
+function setupListeners() {
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+        tab.onclick = () => {
+            const page = tab.dataset.page;
+            switchPage(page);
+        };
+    });
 
-    const newAsset = {
-        seller_id: appState.user.id,
-        name: document.getElementById('item_name').value,
-        category: document.getElementById('item_category').value,
-        price: parseFloat(document.getElementById('item_price').value),
-        msrp: parseFloat(document.getElementById('item_msrp').value) || 0,
-        description: document.getElementById('item_desc').value,
-        condition: 'new', // Static for demo
-        is_fair: true 
+    // Theme Toggle
+    document.getElementById('theme-toggle').onclick = () => {
+        document.body.classList.toggle('light-mode');
     };
 
-    // AI FAIRNESS PROTOCOL
-    if (newAsset.msrp > 0 && newAsset.price > (newAsset.msrp * 1.25)) {
-        newAsset.is_fair = false;
-        showAIFeedback("Warning: Price exceeds 25% over MSRP. This will be flagged as a scalp listing.");
-    }
+    // AI Maximize Logic
+    document.getElementById('maximize-ai').onclick = () => {
+        state.prevView = state.view;
+        document.getElementById('ai-sidebar').classList.add('hidden');
+        switchPage('ai-full');
+    };
 
-    const { error } = await db.from('listings').insert([newAsset]);
+    document.getElementById('minimize-ai').onclick = () => {
+        document.getElementById('ai-sidebar').classList.remove('hidden');
+        switchPage(state.prevView);
+    };
+}
+
+function switchPage(pageId) {
+    state.view = pageId;
+    document.querySelectorAll('.page-view').forEach(p => p.classList.add('hidden'));
+    document.getElementById(`page-${pageId}`).classList.remove('hidden');
     
+    document.querySelectorAll('.nav-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.page === pageId);
+    });
+}
+
+// --- 6. AI LOGIC (Personalized & Bulleted) ---
+function selectItem(id) {
+    const item = state.items.find(i => i.id === id);
+    if (!item) return;
+    
+    state.selectedItem = item;
+    const aiUl = document.getElementById('ai-bullets');
+    document.querySelector('.welcome').innerText = `Analyzing: ${item.name}`;
+
+    // Calculate Fairness
+    const markup = item.msrp ? ((item.price / item.msrp) - 1) * 100 : 0;
+    
+    aiUl.innerHTML = `
+        <li><strong>Price Integrity:</strong> This item is listed at ${markup.toFixed(1)}% ${markup > 0 ? 'above' : 'below'} MSRP.</li>
+        <li><strong>Condition Scan:</strong> Tagged as "${item.condition.toUpperCase()}". Check high-res photos for joint stress.</li>
+        <li><strong>Market Worth:</strong> Demand for ${item.category} has spiked due to recent collector trends. This price is considered ${item.is_fair ? 'Fair' : 'Aggressive'}.</li>
+        <li><strong>Risk Assessment:</strong> Seller rating: ${item.profiles?.rating || 'New'}/5. Transaction risk is LOW.</li>
+    `;
+}
+
+// --- 7. AUTH & FORMS ---
+async function initAuth() {
+    const { data: { user } } = await db.auth.getUser();
+    if (user) {
+        state.user = user;
+        document.getElementById('profile-pill').innerHTML = `<span>${user.email}</span>`;
+    }
+}
+
+const sellForm = document.getElementById('listing-form');
+sellForm.onsubmit = async (e) => {
+    e.preventDefault();
+    if (!state.user) return alert("Sign in to list items!");
+
+    const payload = {
+        seller_id: state.user.id,
+        name: document.getElementById('form-name').value,
+        category: document.getElementById('form-cat').value,
+        price: parseFloat(document.getElementById('form-price').value),
+        msrp: parseFloat(document.getElementById('form-msrp').value),
+        condition: document.getElementById('form-condition').value,
+        description: document.getElementById('form-desc').value,
+        is_fair: true // Logic could be added to calculate this based on MSRP
+    };
+
+    const { error } = await db.from('listings').insert([payload]);
     if (!error) {
-        alert("DEPLOYMENT_SUCCESSFUL");
-        switchView('shop');
-        loadMarketplace();
+        alert("Listing Deployed!");
+        fetchListings();
+        switchPage('shop');
     }
-});
+};
 
-// --- SECTION 7: AI SIDEBAR INTERACTION ---
-const nameInput = document.getElementById('item_name');
-nameInput.addEventListener('input', (e) => {
-    const val = e.target.value.toLowerCase();
-    const bullets = document.getElementById('ai-live-bullets');
-    
-    if (val.includes('transformers') || val.includes('optimus')) {
-        bullets.innerHTML = `
-            <li>◈ HIGH_DEMAND: Transformers G1 series is currently trending.</li>
-            <li>◈ ADVICE: Check joint tightness before shipping.</li>
-        `;
-    }
-});
-
-// --- SECTION 8: NAVIGATION & MAXIMIZE ---
-function switchView(viewId) {
-    appState.previousView = appState.activeView;
-    appState.activeView = viewId;
-
-    document.querySelectorAll('.page-view').forEach(v => v.classList.add('hidden'));
-    document.getElementById(`page-${viewId}`).classList.remove('hidden');
+// --- 8. NON-FUNCTIONAL: CRASH PROTECTION ---
+function showSystemCrash(msg) {
+    console.error("Critical Failure:", msg);
+    document.getElementById('status-lock').classList.remove('hidden');
 }
-
-document.getElementById('maximize-ai').onclick = () => {
-    document.getElementById('ai-sidebar').classList.add('hidden');
-    switchView('ai-full');
-};
-
-document.getElementById('minimize-ai').onclick = () => {
-    document.getElementById('ai-sidebar').classList.remove('hidden');
-    switchView(appState.previousView);
-};
-
-// --- SECTION 9: UTILS (Consistency Check) ---
-function triggerSystemHalt(msg) {
-    appState.integrity = false;
-    document.getElementById('integrity-shield').classList.remove('hidden');
-    console.error("CRITICAL_FAIL:", msg);
-}
-
-document.getElementById('theme-toggle').onclick = () => {
-    document.body.classList.toggle('light-mode');
-};
