@@ -1,5 +1,5 @@
 /* ================================================================
-   OBTAINUM MARKETPLACE — script.js
+   OBTAINIUM MARKETPLACE — script.js
    Potentially split into these separate files:
    - supabase-client.js          (Supabase initialization)
    - state.js                    (global app state)
@@ -29,69 +29,16 @@ document.addEventListener('DOMContentLoaded', () => {
      Replace the URL and ANON KEY below with your own project's values.
      Get them at: https://supabase.com/dashboard → Project → Settings → API
   ============================================================== */
+  const SUPABASE_URL  = 'https://gotzmuobwuubsugnowxq.supabase.co';
+  const SUPABASE_ANON = 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs';  
 
-  /**
-   * DATABASE ARCHITECT OPTIMIZATION:
-   * 1. Singleton Pattern: Prevents multiple client instances.
-   * 2. Immutable Config: Protects sensitive keys from runtime modification.
-   * 3. Atomic Initialization: Uses a getter to ensure DB is ready before use.
-   */
-  const SUPABASE_CONFIG = Object.freeze({
-    url: 'https://gotzmuobwuubsugnowxq.supabase.co',
-    anonKey: 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs',
-    options: {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-        storageKey: 'obtainum-auth-token',
-        storage: window.localStorage,
-        flowType: 'pkce'
-      },
-      global: {
-        headers: { 'x-application-name': 'obtainum-engine' },
-      },
-    }
-  });
+  let DB = null;
 
-  let instance = null;
-
-  const DatabaseProvider = {
-    /**
-     * Returns the existing client or initializes a new one.
-     * Use this instead of the global DB variable.
-     */
-    getClient() {
-      if (instance) return instance;
-
-      try {
-        if (!SUPABASE_CONFIG.url || !SUPABASE_CONFIG.anonKey) {
-          throw new Error("Missing Credentials");
-        }
-
-        const supabaseClient = window.supabase || window.Supabase || window?.supabase;
-        if (!supabaseClient) {
-          console.error('Supabase client library not loaded. Check the CDN script tag in index.html.');
-          console.error('window.supabase:', window.supabase, 'window.Supabase:', window.Supabase);
-          throw new Error('Supabase library missing');
-        }
-
-        instance = supabaseClient.createClient(
-          SUPABASE_CONFIG.url,
-          SUPABASE_CONFIG.anonKey,
-          SUPABASE_CONFIG.options
-        );
-
-        return instance;
-      } catch (e) {
-        console.warn('⚡ [DB-CORE] Running in Demo Mode:', e.message);
-        return null;
-      }
-    }
-  };
-
-  // Usage across your application modules:
-  const DB = DatabaseProvider.getClient();
+  try {
+    DB = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+  } catch (e) {
+    console.warn('Supabase init failed. Running in demo mode.', e);
+  }
 
 
   /* ==============================================================
@@ -99,46 +46,136 @@ document.addEventListener('DOMContentLoaded', () => {
   ============================================================== */
   let products       = [];   // All loaded product listings
   let filteredItems  = [];   // Currently filtered view
-  let cart           = JSON.parse(localStorage.getItem('OBTAINUM_cart') || '[]');
-  let wishlist       = JSON.parse(localStorage.getItem('OBTAINUM_wishlist') || '[]');
+  let cart           = JSON.parse(localStorage.getItem('obtainium_cart') || '[]');
+  let wishlist       = JSON.parse(localStorage.getItem('obtainium_wishlist') || '[]');
   let currentPage    = 1;
   const ITEMS_PER_PAGE = 12;
   let currentView    = 'grid'; // 'grid' | 'list'
   let activeCategory = 'all';
   let currentUser    = null;
-  let userLocation   = localStorage.getItem('OBTAINUM_user_location') || ''; // user's city for route/shipping calc
+  let userLocation   = localStorage.getItem('obtainium_user_location') || ''; // user's city for route/shipping calc
   let lastAnalyzedProduct = null; // last product sent to AI analysis tab
-  const STORAGE_BUCKET = 'listing-images'; // Ensure this bucket exists in Supabase Storage
 
 
   /* ==============================================================
-     SECTION: api/products.js — Real Data Fetching
+     SECTION: api/products.js — Mock Product Data
+     In production: replace with Supabase queries.
+     e.g. const { data } = await DB.from('listings').select('*');
   ============================================================== */
-  async function fetchListings() {
-    if (!DB) return [];
-    let { data, error } = await DB
-      .from('listings')
-      .select('*, profiles(username, rating)');
-
-    if (error) {
-      console.warn('Primary listings fetch failed, retrying without profile join:', error.message || error);
-      const fallback = await DB.from('listings').select('*');
-      if (fallback.error) {
-        console.error('Fallback listings fetch failed:', fallback.error);
-        return [];
-      }
-      data = fallback.data || [];
-    }
-
-    return (data || []).map(item => ({
-      ...item,
-      images: normalizeImages(item.images),
-      seller: item.profiles?.username || item.seller || 'Unknown Seller',
-      seller_rating: parseFloat(item.profiles?.rating || item.rating || 5.0),
-      views: item.view_count || 0,
-      likes: item.favorite_count || 0
-    }));
-  }
+  const MOCK_PRODUCTS = [
+    {
+      id: 1, name: 'Nintendo Switch OLED – White Edition', category: 'electronics',
+      price: 299.99, msrp: 349.99, condition: 'like-new', seller: 'GameGuru99', seller_rating: 4.8,
+      location: 'Austin, TX', description: 'Purchased new last year, used lightly for about 3 months. Comes with original box, dock, all cables, and two Joy-Cons. No scratches on screen.',
+      images: [], type: 'buy-now', shipping: 'free', tags: ['nintendo', 'gaming', 'console'], is_fair: true,
+      created_at: '2026-04-01T10:00:00Z', views: 342, likes: 28
+    },
+    {
+      id: 2, name: 'Funko Pop! Exclusive: Iron Man Mark L Metallic', category: 'toys',
+      price: 45.00, msrp: 15.00, condition: 'new', seller: 'CollectorJane', seller_rating: 4.9,
+      location: 'New York, NY', description: 'SDCC 2024 exclusive Funko Pop! Still in original box, never displayed. Comes with protector case.',
+      images: [], type: 'offers', shipping: 'paid', tags: ['funko', 'marvel', 'sdcc', 'exclusive'], is_fair: false,
+      created_at: '2026-04-03T14:30:00Z', views: 1204, likes: 87
+    },
+    {
+      id: 3, name: 'Bose QuietComfort 45 – Noise Cancelling Headphones', category: 'electronics',
+      price: 189.99, msrp: 329.00, condition: 'good', seller: 'AudioPhile_TX', seller_rating: 4.7,
+      location: 'Seattle, WA', description: 'Used for about 6 months for remote work. Works perfectly. Slight scuff on the headband. Includes case and cables.',
+      images: [], type: 'buy-now', shipping: 'free', tags: ['bose', 'headphones', 'noise-cancelling'], is_fair: true,
+      created_at: '2026-04-05T09:15:00Z', views: 521, likes: 41
+    },
+    {
+      id: 4, name: 'Supreme Box Logo Hoodie – FW23 Black L', category: 'apparel',
+      price: 350.00, msrp: 168.00, condition: 'new', seller: 'StreetWearKing', seller_rating: 4.5,
+      location: 'Los Angeles, CA', description: 'Brand new with tags. Purchased during FW23 drop. Size Large. Authentic with receipt available.',
+      images: [], type: 'buy-now', shipping: 'paid', tags: ['supreme', 'hoodie', 'streetwear'], is_fair: false,
+      created_at: '2026-04-02T16:45:00Z', views: 2100, likes: 154
+    },
+    {
+      id: 5, name: 'Pokémon Scarlet & Violet Booster Box (36 Packs)', category: 'toys',
+      price: 110.00, msrp: 143.64, condition: 'new', seller: 'PokeTrader', seller_rating: 5.0,
+      location: 'Chicago, IL', description: 'Sealed booster box from Scarlet & Violet base set. Ships in protective box for safety.',
+      images: [], type: 'buy-now', shipping: 'free', tags: ['pokemon', 'tcg', 'cards', 'sealed'], is_fair: true,
+      created_at: '2026-04-06T08:00:00Z', views: 890, likes: 63
+    },
+    {
+      id: 6, name: 'Sony WH-1000XM5 Wireless Headphones – Black', category: 'electronics',
+      price: 249.99, msrp: 399.99, condition: 'like-new', seller: 'TechResell', seller_rating: 4.6,
+      location: 'Miami, FL', description: 'Like new, used for 2 months. Comes with all accessories and original box. Minor cosmetic marks on headband only.',
+      images: [], type: 'buy-now', shipping: 'free', tags: ['sony', 'headphones', 'wireless'], is_fair: true,
+      created_at: '2026-04-04T11:30:00Z', views: 678, likes: 49
+    },
+    {
+      id: 7, name: 'LEGO Technic Bugatti Chiron #42083 – Retired', category: 'toys',
+      price: 380.00, msrp: 349.99, condition: 'new', seller: 'BrickMaster', seller_rating: 4.9,
+      location: 'Denver, CO', description: 'Sealed, retired set. Includes original box and all parts. This set is no longer in production and is a rare find.',
+      images: [], type: 'buy-now', shipping: 'paid', tags: ['lego', 'technic', 'bugatti', 'retired'], is_fair: true,
+      created_at: '2026-04-07T13:00:00Z', views: 1432, likes: 112
+    },
+    {
+      id: 8, name: 'Vintage Levi\'s 501 Jeans – 32x30 – Distressed', category: 'apparel',
+      price: 75.00, msrp: 98.00, condition: 'good', seller: 'ThriftKing', seller_rating: 4.8,
+      location: 'Portland, OR', description: 'Authentic vintage 501s from the early 90s. Natural distressing, no holes. Size 32x30.',
+      images: [], type: 'offers', shipping: 'free', tags: ['levis', 'vintage', 'denim', 'jeans'], is_fair: true,
+      created_at: '2026-04-08T10:00:00Z', views: 304, likes: 31
+    },
+    {
+      id: 9, name: 'Apple iPad Pro 12.9" M2 – 256GB WiFi + Cellular', category: 'electronics',
+      price: 899.99, msrp: 1299.00, condition: 'like-new', seller: 'AppleReseller', seller_rating: 4.7,
+      location: 'San Francisco, CA', description: 'Used for 4 months. Immaculate condition. Comes with original box, USB-C cable. No Apple Pencil or keyboard included.',
+      images: [], type: 'buy-now', shipping: 'free', tags: ['apple', 'ipad', 'tablet', 'm2'], is_fair: true,
+      created_at: '2026-04-09T14:00:00Z', views: 756, likes: 58
+    },
+    {
+      id: 10, name: 'NBA Topps Chrome Refractor – LeBron James RC PSA 9', category: 'sports',
+      price: 4500.00, msrp: 2.99, condition: 'new', seller: 'CardShark', seller_rating: 4.9,
+      location: 'Houston, TX', description: 'Graded PSA 9 LeBron James rookie card. 2003-04 Topps Chrome Refractor. Authenticated and graded. Comes in protective slab.',
+      images: [], type: 'offers', shipping: 'paid', tags: ['nba', 'topps', 'lebron', 'rookie', 'psa'], is_fair: true,
+      created_at: '2026-04-05T17:00:00Z', views: 3200, likes: 241
+    },
+    {
+      id: 11, name: 'The Legend of Zelda: Tears of the Kingdom – Collector\'s Edition', category: 'electronics',
+      price: 110.00, msrp: 129.99, condition: 'new', seller: 'ZeldaFan', seller_rating: 4.8,
+      location: 'Nashville, TN', description: 'Sealed collector\'s edition. Includes steelbook, artbook, and digital DLC. For Nintendo Switch.',
+      images: [], type: 'buy-now', shipping: 'free', tags: ['zelda', 'nintendo', 'switch', 'collector'], is_fair: true,
+      created_at: '2026-04-08T09:00:00Z', views: 612, likes: 55
+    },
+    {
+      id: 12, name: 'Patagonia Better Sweater Fleece Jacket – Navy M', category: 'apparel',
+      price: 85.00, msrp: 139.00, condition: 'good', seller: 'OutdoorGear', seller_rating: 4.6,
+      location: 'Boulder, CO', description: 'Classic Patagonia Better Sweater, size Medium. Light pilling on sleeves, otherwise great condition. Very warm.',
+      images: [], type: 'buy-now', shipping: 'free', tags: ['patagonia', 'fleece', 'jacket', 'outdoors'], is_fair: true,
+      created_at: '2026-04-06T15:00:00Z', views: 289, likes: 24
+    },
+    {
+      id: 13, name: 'IKEA KALLAX Shelving Unit 4x4 – White', category: 'home',
+      price: 90.00, msrp: 199.00, condition: 'good', seller: 'HomeDecor', seller_rating: 4.5,
+      location: 'Atlanta, GA', description: 'KALLAX 4x4 in white. Some scuff marks, one backing corner slightly bent but fully functional. Pickup only.',
+      images: [], type: 'buy-now', shipping: 'local', tags: ['ikea', 'shelving', 'storage', 'kallax'], is_fair: true,
+      created_at: '2026-04-07T12:00:00Z', views: 183, likes: 17
+    },
+    {
+      id: 14, name: 'Magic: The Gathering Collector Booster Box – MH3', category: 'toys',
+      price: 225.00, msrp: 264.00, condition: 'new', seller: 'MTGTrader', seller_rating: 4.9,
+      location: 'Phoenix, AZ', description: 'Sealed MTG Modern Horizons 3 Collector Booster Box. Best chance for serialized cards and full art cards.',
+      images: [], type: 'buy-now', shipping: 'free', tags: ['mtg', 'magic', 'collector', 'sealed'], is_fair: true,
+      created_at: '2026-04-09T11:00:00Z', views: 978, likes: 72
+    },
+    {
+      id: 15, name: 'Canon EOS R6 Mark II Body Only (Low Shutter Count)', category: 'electronics',
+      price: 1999.00, msrp: 2499.00, condition: 'like-new', seller: 'PhotoPro', seller_rating: 4.8,
+      location: 'Boston, MA', description: 'Only 1,800 shutter actuations. Comes with battery, charger, and body cap. No scratches on sensor or body. Great for stills and video.',
+      images: [], type: 'buy-now', shipping: 'paid', tags: ['canon', 'camera', 'mirrorless', 'r6'], is_fair: true,
+      created_at: '2026-04-04T10:00:00Z', views: 1120, likes: 89
+    },
+    {
+      id: 16, name: 'Star Wars The Mandalorian – LEGO UCS 75331 Razor Crest', category: 'toys',
+      price: 480.00, msrp: 499.99, condition: 'new', seller: 'LEGOuniverse', seller_rating: 4.9,
+      location: 'Columbus, OH', description: 'Sealed, purchased from LEGO store at launch. 6,187 pieces. Includes exclusive Grogu minifigure.',
+      images: [], type: 'buy-now', shipping: 'paid', tags: ['lego', 'star-wars', 'mandalorian', 'ucs'], is_fair: true,
+      created_at: '2026-04-03T09:00:00Z', views: 1876, likes: 138
+    },
+  ];
 
 
   /* ==============================================================
@@ -168,31 +205,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Format currency
   function formatPrice(n) {
     return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }
-
-  function normalizeImages(images) {
-    if (!images) return [];
-    if (Array.isArray(images)) {
-      return images.map((img) => {
-        if (typeof img === 'string') return img;
-        if (img?.url) return img.url;
-        return '';
-      }).filter(Boolean);
-    }
-    if (typeof images === 'string') {
-      try {
-        const parsed = JSON.parse(images);
-        if (Array.isArray(parsed)) {
-          return parsed.map((img) => typeof img === 'string' ? img : img?.url || '').filter(Boolean);
-        }
-      } catch (_) {
-        return [images];
-      }
-    }
-    if (typeof images === 'object' && images.url) {
-      return [images.url];
-    }
-    return [];
   }
 
   // Relative time
@@ -257,7 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const themeIcon = document.getElementById('theme-icon');
 
   // Load saved theme
-  const savedTheme = localStorage.getItem('OBTAINUM_theme') || 'light';
+  const savedTheme = localStorage.getItem('obtainium_theme') || 'light';
   document.documentElement.setAttribute('data-theme', savedTheme);
   updateThemeIcon(savedTheme);
 
@@ -265,7 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const current = document.documentElement.getAttribute('data-theme');
     const next = current === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('OBTAINUM_theme', next);
+    localStorage.setItem('obtainium_theme', next);
     updateThemeIcon(next);
     showToast(next === 'dark' ? 'Dark mode on' : 'Light mode on', '', 'info', 2000);
   });
@@ -307,40 +319,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (error) {
       errEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${error.message}`;
       errEl.style.display = 'flex';
-      return;
-    }
-
-    if (data?.user) {
+    } else {
       currentUser = data.user;
-      await ensureProfileExists(currentUser);
       updateNavUI();
       showPage('home');
-      showToast('Logged in!', `Welcome back, ${currentUser.email}`, 'success');
-      return;
+      showToast('Welcome back!', `Logged in as ${currentUser.email}`, 'success');
     }
-
-    // Note: Session handling is also centralized in onAuthStateChange
   });
-
-  // Handle Auth Changes (Persistent Login)
-  if (DB) {
-    DB.auth.onAuthStateChange(async (event, session) => {
-      currentUser = session?.user || null;
-      if (currentUser) {
-        await ensureProfileExists(currentUser);
-        updateNavUI();
-        if (event === 'SIGNED_IN') {
-          console.log('User signed in:', currentUser.email);
-          showPage('home');
-          showToast('Welcome!', `Logged in as ${currentUser.email}`, 'success');
-        }
-      } else if (event === 'SIGNED_OUT') {
-        console.log('User signed out');
-        currentUser = null;
-        updateNavUI();
-      }
-    });
-  }
 
   // REGISTER
   const registerForm = document.getElementById('register-form');
@@ -398,7 +383,6 @@ document.addEventListener('DOMContentLoaded', () => {
       errEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${error.message}`;
       errEl.style.display = 'flex';
     } else {
-      if (data?.user) await ensureProfileExists(data.user);
       showPage('login');
       showToast('Account created!', 'Check your email to confirm your account.', 'success', 6000);
     }
@@ -406,13 +390,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // LOGOUT
   window.logout = async function () {
-    if (DB) {
-      await DB.auth.signOut();
-      currentUser = null;
-      updateNavUI();
-      showPage('home');
-      showToast('Logged out', 'See you next time!', 'info');
-    }
+    if (DB) await DB.auth.signOut();
+    currentUser = null;
+    updateNavUI();
+    showPage('home');
+    showToast('Logged out', 'See you next time!', 'info');
   };
 
   // GOOGLE OAUTH
@@ -473,44 +455,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  async function ensureProfileExists(user) {
-    if (!DB || !user?.id) return;
-
-    const username = user.user_metadata?.username || user.email?.split('@')[0] || `user_${user.id.slice(0, 8)}`;
-    const profileRow = {
-      id: user.id,
-      username,
-      email: user.email,
-      rating: 5.00,
-      bio: '',
-      location: '',
-      avatar_url: '',
-      phone: '',
-      website: '',
-      social_links: {},
-      preferences: { notifications: true, email_updates: true, theme: localStorage.getItem('OBTAINUM_theme') || 'light' },
-      is_verified: Boolean(user.email_confirmed_at),
-      updated_at: new Date().toISOString()
-    };
-
-    const { error } = await DB.from('profiles').upsert(profileRow);
-    if (error) {
-      console.error('Profile sync failed:', error);
-    }
-  }
-
   // Check session on load
   async function checkAuthSession() {
     if (!DB) return;
-    try {
-      const { data: { session }, error } = await DB.auth.getSession();
-      if (error) throw error;
+    const { data: { user } } = await DB.auth.getUser();
+    if (user) { currentUser = user; updateNavUI(); }
+    DB.auth.onAuthStateChange((_event, session) => {
       currentUser = session?.user || null;
-      if (currentUser) await ensureProfileExists(currentUser);
       updateNavUI();
-    } catch (err) {
-      console.error('Session check failed:', err);
-    }
+    });
   }
 
   // Toggle password visibility
@@ -578,7 +531,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   function saveCart() {
-    localStorage.setItem('OBTAINUM_cart', JSON.stringify(cart));
+    localStorage.setItem('obtainium_cart', JSON.stringify(cart));
   }
 
   function updateCartCount() {
@@ -614,15 +567,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     cart.forEach((item) => {
-      const imageUrls = normalizeImages(item.images);
-      const firstImage = imageUrls[0] || null;
-
       const el = document.createElement('div');
       el.className = 'cart-item';
       el.innerHTML = `
         <div class="cart-item-img">
-          ${firstImage
-            ? `<img src="${firstImage}" alt="${item.name}" loading="lazy" decoding="async">`
+          ${item.images && item.images.length > 0
+            ? `<img src="${item.images[0]}" alt="${item.name}" loading="lazy">`
             : `<i class="fas ${getCategoryIcon(item.category)}"></i>`}
         </div>
         <div class="cart-item-info">
@@ -684,7 +634,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   window.applyPromo = function () {
     const code = document.getElementById('promo-code').value.trim().toUpperCase();
-    if (code === 'OBTAINUM10') {
+    if (code === 'OBTAINIUM10') {
       showToast('Promo applied!', '10% discount — not yet implemented in demo.', 'success');
     } else {
       showToast('Invalid promo code', '', 'error');
@@ -706,7 +656,7 @@ document.addEventListener('DOMContentLoaded', () => {
       wishlist.push(productId);
       showToast('Added to wishlist', '', 'success', 2000);
     }
-    localStorage.setItem('OBTAINUM_wishlist', JSON.stringify(wishlist));
+    localStorage.setItem('obtainium_wishlist', JSON.stringify(wishlist));
     // Update all heart buttons with this product id
     document.querySelectorAll(`.wishlist-btn[data-id="${productId}"]`).forEach(btn => {
       btn.classList.toggle('active', wishlist.includes(productId));
@@ -736,14 +686,11 @@ document.addEventListener('DOMContentLoaded', () => {
       'new': 'New', 'like-new': 'Like New', 'good': 'Good', 'fair': 'Fair', 'poor': 'For Parts'
     }[product.condition] || product.condition;
 
-    const imageUrls = normalizeImages(product.images);
-    const firstImage = imageUrls[0] || null;
-
     return `
       <div class="product-card" role="listitem" onclick="openProductModal(${product.id})" tabindex="0" onkeydown="if(event.key==='Enter')openProductModal(${product.id})">
         <div class="product-card-img">
-          ${firstImage
-            ? `<img src="${firstImage}" alt="${product.name}" loading="lazy" decoding="async">`
+          ${product.images && product.images.length > 0
+            ? `<img src="${product.images[0]}" alt="${product.name}" loading="lazy">`
             : `<i class="fas ${getCategoryIcon(product.category)}"></i>`}
           <div class="product-card-badges">${fairBadge}</div>
           <button class="wishlist-btn ${isWished ? 'active' : ''}" data-id="${product.id}"
@@ -767,7 +714,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ${(product.payment_methods || []).includes('trade')  ? `<span class="pay-badge pay-badge-trade"><i class="fas fa-exchange-alt"></i> Trade</span>` : ''}
             ${(product.payment_methods || []).includes('online') ? `<span class="pay-badge pay-badge-online"><i class="fas fa-credit-card"></i> Online</span>` : ''}
           </div>
-          <div class="product-price-row" style="margin-top:auto;">
+          <div class="product-price-row">
             <span class="product-price">${formatPrice(product.price)}</span>
             ${product.msrp ? `<span class="product-msrp">MSRP ${formatPrice(product.msrp)}</span>` : ''}
             ${discountPct !== null && discountPct > 0 ? `<span class="product-discount">-${discountPct}%</span>` : ''}
@@ -812,8 +759,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const modal   = document.getElementById('product-modal');
     const content = document.getElementById('modal-product-content');
-    const imageUrls = normalizeImages(product.images);
-    const firstImage = imageUrls[0] || null;
 
     const discountPct = product.msrp && product.price < product.msrp
       ? Math.round((1 - product.price / product.msrp) * 100)
@@ -823,14 +768,10 @@ document.addEventListener('DOMContentLoaded', () => {
       'new': 'New', 'like-new': 'Like New', 'good': 'Good', 'fair': 'Fair', 'poor': 'For Parts'
     }[product.condition] || product.condition;
 
-    // Use view_count and favorite_count from DB (aliased to views/likes in fetchListings)
-    const viewCount = product.views || product.view_count || 0;
-    const likeCount = product.likes || product.favorite_count || 0;
-
     content.innerHTML = `
       <div class="modal-img-col">
-        ${firstImage
-          ? `<img src="${firstImage}" alt="${product.name}" decoding="async">`
+        ${product.images && product.images.length > 0
+          ? `<img src="${product.images[0]}" alt="${product.name}">`
           : `<i class="fas ${getCategoryIcon(product.category)}"></i>`}
       </div>
       <div class="modal-info-col">
@@ -858,8 +799,8 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div class="modal-desc">${product.description}</div>
         <div style="font-size:0.82rem;color:var(--text-muted);display:flex;gap:16px;flex-wrap:wrap;">
-          <span><i class="fas fa-eye"></i> ${viewCount} views</span>
-          <span><i class="fas fa-heart"></i> ${likeCount} saves</span>
+          <span><i class="fas fa-eye"></i> ${product.views} views</span>
+          <span><i class="fas fa-heart"></i> ${product.likes} saves</span>
           <span><i class="fas fa-clock"></i> Listed ${timeAgo(product.created_at)}</span>
           <span><i class="fas fa-shipping-fast"></i> ${product.shipping === 'free' ? 'Free shipping' : product.shipping === 'local' ? 'Local pickup only' : 'Paid shipping'}</span>
         </div>
@@ -1184,7 +1125,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
   // Check if key saved
-  let geminiKey = localStorage.getItem('OBTAINUM_gemini_key') || '';
+  let geminiKey = localStorage.getItem('obtainium_gemini_key') || '';
 
   function checkGeminiKeySetup() {
     const setupCard   = document.getElementById('gemini-key-setup');
@@ -1203,7 +1144,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const key = input.value.trim();
     if (!key) { showToast('Please enter a key', '', 'warning'); return; }
     geminiKey = key;
-    localStorage.setItem('OBTAINUM_gemini_key', geminiKey);
+    localStorage.setItem('obtainium_gemini_key', geminiKey);
     checkGeminiKeySetup();
     showToast('Gemini key saved!', 'AI Assistant is ready.', 'success');
     input.value = '';
@@ -1221,7 +1162,7 @@ document.addEventListener('DOMContentLoaded', () => {
     history.innerHTML = `
       <div class="chat-msg bot-msg">
         <div class="chat-msg-avatar bot-avatar"><i class="fas fa-robot"></i></div>
-        <div class="chat-msg-bubble"><p>Chat cleared! Ask me anything about the OBTAINUM marketplace.</p></div>
+        <div class="chat-msg-bubble"><p>Chat cleared! Ask me anything about the Obtainium marketplace.</p></div>
         <span class="chat-msg-time">Just now</span>
       </div>`;
     chatMessages = [];
@@ -1277,8 +1218,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       // Build context-aware system prompt
-      const systemContext = `You are the OBTAINUM AI Shopping Assistant, an expert on collectibles, electronics, apparel, and fair marketplace pricing.
-You help users find good deals, identify scalping, and navigate the OBTAINUM marketplace.
+      const systemContext = `You are the Obtainium AI Shopping Assistant, an expert on collectibles, electronics, apparel, and fair marketplace pricing.
+You help users find good deals, identify scalping, and navigate the Obtainium marketplace.
 Current marketplace stats: ${products.length} listings, categories: electronics, toys & collectibles, apparel, sports, books, home, vehicles.
 Always be helpful, concise, and honest. If a price seems unfair (above MSRP), say so. Give specific, actionable advice.
 Format responses with markdown-like plain text. Keep responses under 300 words.`;
@@ -1438,14 +1379,8 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
   function handleImageFiles(files) {
     const maxFiles = 8;
     const maxSize  = 5 * 1024 * 1024; // 5MB
-
-    // Filter out duplicates and invalid files
     [...files].forEach((file) => {
-      const isDuplicate = uploadedFiles.some(f => f && f.name === file.name && f.size === file.size);
-      if (isDuplicate) return;
-
-      const currentActiveCount = uploadedFiles.filter(f => f !== null).length;
-      if (currentActiveCount >= maxFiles) {
+      if (uploadedFiles.length >= maxFiles) {
         showToast('Max 8 photos', 'Remove some to add more.', 'warning');
         return;
       }
@@ -1488,133 +1423,66 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
   if (sellForm) {
     sellForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (!currentUser) {
+      if (!currentUser && DB) {
         showToast('Login required', 'Please log in to list an item.', 'warning');
         showPage('login');
         return;
       }
 
-      if (!DB) {
-        showToast('Supabase not configured', 'Listing upload requires Supabase.', 'error');
-        return;
-      }
-
       const btn = document.getElementById('sell-submit-btn');
-      const originalBtnText = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Publishing...';
 
-      try {
-        const nameInput       = document.getElementById('sell-item-name');
-        const categoryInput   = document.getElementById('sell-item-category');
-        const descInput       = document.getElementById('sell-item-description');
-        const conditionInput  = document.getElementById('sell-item-condition');
-        const locationInput   = document.getElementById('sell-item-location');
-        const priceInput      = document.getElementById('sell-item-price');
-        const msrpInput       = document.getElementById('sell-item-msrp');
-        const typeInput       = document.getElementById('sell-item-type');
-        const shippingInput   = document.getElementById('sell-item-shipping');
-        const tagsInput       = document.getElementById('sell-item-tags');
+      const newListing = {
+        id:          Date.now(),
+        name:        document.getElementById('sell-item-name').value.trim(),
+        category:    document.getElementById('sell-item-category').value,
+        description: document.getElementById('sell-item-description').value.trim(),
+        condition:   document.getElementById('sell-item-condition').value,
+        location:    document.getElementById('sell-item-location').value.trim(),
+        price:       parseFloat(document.getElementById('sell-item-price').value),
+        msrp:        parseFloat(document.getElementById('sell-item-msrp').value) || null,
+        type:        document.getElementById('sell-item-type').value,
+        shipping:    document.getElementById('sell-item-shipping').value,
+        tags:        document.getElementById('sell-item-tags').value.split(',').map(t => t.trim()).filter(Boolean),
+        seller:      currentUser?.user_metadata?.username || currentUser?.email?.split('@')[0] || 'Anonymous',
+        seller_rating: 5.0,
+        images:      [],
+        is_fair:     true,
+        created_at:  new Date().toISOString(),
+        views:       0,
+        likes:       0,
+        payment_methods: Array.from(document.querySelectorAll('input[name="payment-method"]:checked')).map(el => el.value),
+        meetup_spot:  document.getElementById('sell-meetup-spot')?.value.trim() || '',
+        meetup_hours: document.getElementById('sell-meetup-hours')?.value.trim() || '',
+        trade_for:    document.getElementById('sell-trade-for')?.value.trim() || ''
+      };
 
-        const name = nameInput?.value.trim() || '';
-        const category = categoryInput?.value || 'other';
-        const description = descInput?.value.trim() || '';
-        const condition = conditionInput?.value || 'good';
-        const location = locationInput?.value.trim() || '';
-        const price = parseFloat(priceInput?.value || '0');
-        const msrpValue = parseFloat(msrpInput?.value || '0');
-        const msrp = Number.isFinite(msrpValue) && msrpValue > 0 ? msrpValue : null;
-        const rawType = typeInput?.value || 'buy-now';
-        const rawShipping = shippingInput?.value || 'paid';
-        const tags = tagsInput?.value.split(',').map(t => t.trim()).filter(Boolean) || [];
-        const activeFiles = uploadedFiles.filter(file => file !== null);
-
-        // Collect selected payment methods from checkboxes (name="payment_methods")
-        const payment_methods = [...document.querySelectorAll('.payment-method-check:checked')]
-          .map(cb => cb.value);
-
-        if (!name) throw new Error('Item name is required.');
-        if (!category || category === '') throw new Error('Select a category.');
-        if (!description) throw new Error('Item description is required.');
-        if (!condition || condition === '') throw new Error('Select a condition.');
-        if (!price || Number.isNaN(price) || price <= 0) throw new Error('Enter a valid asking price.');
-
-        const listingType = ['buy-now', 'offers'].includes(rawType) ? rawType : 'offers';
-        const shipping = ['free', 'paid', 'local'].includes(rawShipping) ? rawShipping : 'paid';
-        const is_fair = msrp ? price <= msrp * 1.1 : true;
-
-        const imageUrls = [];
-        for (const file of activeFiles) {
-          const fileExt = file.name.split('.').pop();
-          const fileName = `${currentUser.id}/${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
-
-          const { error: uploadError } = await DB.storage
-            .from(STORAGE_BUCKET)
-            .upload(fileName, file);
-
-          if (uploadError) throw uploadError;
-
-          const { data: urlData } = DB.storage
-            .from(STORAGE_BUCKET)
-            .getPublicUrl(fileName);
-
-          imageUrls.push(urlData.publicUrl);
-        }
-
-        const listingData = {
-          seller_id: currentUser.id,
-          seller_profile_id: currentUser.id,
-          name,
-          category,
-          description,
-          condition,
-          location,
-          price,
-          msrp,
-          type: listingType,
-          shipping,
-          payment_methods,
-          tags,
-          images: imageUrls,
-          is_fair
-        };
-
-        const { data: newListing, error: dbError } = await DB
-          .from('listings')
-          .insert([listingData])
-          .select('*, profiles!fk_listings_seller_profiles(username, rating)')
-          .single();
-
-        if (dbError) throw dbError;
-
-        const formattedListing = {
-          ...newListing,
-          seller: newListing.profiles?.username || 'You',
-          seller_rating: parseFloat(newListing.profiles?.rating || 5.0),
-          views: newListing.view_count || 0,
-          likes: newListing.favorite_count || 0
-        };
-
-        products.unshift(formattedListing);
-        filteredItems = products.slice();
-
-        showToast('Listing published!', `"${formattedListing.name}" is now live.`, 'success', 5000);
-        showPage('shop');
-        renderCurrentPage();
-        updateResultsCount(products.length);
-
-        sellForm.reset();
-        uploadedFiles = [];
-        if (imagePreviewRow) imagePreviewRow.innerHTML = '';
-        if (fairnessEl) fairnessEl.style.display = 'none';
-
-      } catch (err) {
-        console.error('Publishing error:', err);
-        showToast('Failed to publish', err.message || 'Please check your form and try again.', 'error');
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = originalBtnText;
+      // Compute is_fair
+      if (newListing.msrp) {
+        newListing.is_fair = newListing.price <= newListing.msrp * 1.1;
       }
+
+      // TODO: In production, upload images to Supabase Storage and save listing to DB
+      // const { data, error } = await DB.from('listings').insert([newListing]);
+
+      // For now: add to local products array
+      products.unshift(newListing);
+      filteredItems = products.slice();
+
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-paper-plane"></i> Publish Listing';
+      sellForm.reset();
+      uploadedFiles = [];
+      if (imagePreviewRow) imagePreviewRow.innerHTML = '';
+      if (fairnessEl) fairnessEl.style.display = 'none';
+      if (nameCount)  nameCount.textContent = '0';
+      if (descCount)  descCount.textContent = '0';
+
+      showToast('Listing published!', `"${newListing.name}" is now live on the marketplace.`, 'success', 5000);
+      showPage('shop');
+      renderProductGrid(products.slice(0, ITEMS_PER_PAGE), 'product-grid');
+      updateResultsCount(products.length);
     });
   }
 
@@ -1652,9 +1520,8 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
     const firstName = currentUser.user_metadata?.first_name || '';
     const fullName  = firstName ? `${firstName} ${currentUser.user_metadata?.last_name || ''}`.trim() : username;
     const joinDate  = new Date(currentUser.created_at || Date.now()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-    const sellerId  = currentUser.id;
 
-    const userListings = products.filter(p => p.seller_id === sellerId || p.seller_profile_id === sellerId);
+    const userListings = products.filter(p => p.seller === username);
 
     document.getElementById('profile-content').innerHTML = `
       <div class="profile-header">
@@ -1701,11 +1568,11 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
     document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
     btn.classList.add('active');
     const content = document.getElementById('profile-tab-content');
-    const sellerId = currentUser?.id;
+    const username = currentUser?.user_metadata?.username || currentUser?.email?.split('@')[0];
 
     switch (tab) {
       case 'listings':
-        content.innerHTML = renderProfileListings(products.filter(p => p.seller_id === sellerId || p.seller_profile_id === sellerId));
+        content.innerHTML = renderProfileListings(products.filter(p => p.seller === username));
         break;
       case 'purchases':
         content.innerHTML = `<div style="text-align:center;padding:60px 0;color:var(--text-muted);">
@@ -1741,7 +1608,7 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
               <textarea placeholder="Tell buyers about yourself..." rows="3"></textarea>
             </div>
             <div style="display:flex;gap:12px;margin-top:8px;">
-              <button class="btn btn-primary" onclick="showToast('Settings saved','','success',2000)">Save Changes</button>
+              <button class="btn btn-primary" onclick="showToast('Settings saved','',success,2000)">Save Changes</button>
               <button class="btn btn-danger" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</button>
             </div>
           </div>`;
@@ -1860,10 +1727,9 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
     });
   }
 
-  // Animate cards in on home page — requires GSAP ScrollTrigger plugin (loaded in index.html)
+  // Animate cards in on home page
   function animateHomeCards() {
-    if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
-    gsap.registerPlugin(ScrollTrigger);
+    if (typeof gsap === 'undefined') return;
     gsap.from('.category-card', {
       y: 30, opacity: 0, duration: 0.5, stagger: 0.06, ease: 'power2.out',
       scrollTrigger: { trigger: '.category-grid', start: 'top 85%' }
@@ -1903,7 +1769,6 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
 
     // Animate counters
     animateCounters();
-    animateHomeCards();
   }
 
 
@@ -1956,15 +1821,12 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
     if (!product) return;
 
     lastAnalyzedProduct = product;
-    window.lastAnalyzedProduct = product;
     closeProductModal();
+    showPage('ai');
 
-    // Bug Fix: page id is 'assistant', not 'ai'
-    showPage('assistant');
-
-    // Bug Fix: tab id is 'analyze', not 'analysis'
+    // Switch to analysis tab
     setTimeout(() => {
-      switchAITab('analyze');
+      switchAITab('analysis');
       runProductAnalysis(product);
     }, 100);
   };
@@ -2002,7 +1864,7 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
     const userLoc    = userLocation || 'Not specified';
 
     const prompt = `
-You are an anti-scalp collector marketplace assistant for OBTAINUM. Analyze this product listing and return a structured JSON object with your analysis.
+You are an anti-scalp collector marketplace assistant for Obtainium. Analyze this product listing and return a structured JSON object with your analysis.
 
 LISTING DETAILS:
 - Product: ${product.name}
@@ -2233,16 +2095,13 @@ Return ONLY valid JSON (no markdown, no code fences) in this exact format:
 
   /* ==============================================================
      SECTION: features/sell.js — Payment Method Toggle Handlers
-     Bug Fix: Corrected selectors to match HTML (name="payment_methods",
-     class="payment-method-check") and correct wrap IDs
-     (cash-details-wrap / trade-details-wrap).
   ============================================================== */
 
   function initPaymentMethodToggles() {
-    const cashCheck  = document.querySelector('.payment-method-check[value="cash"]');
-    const tradeCheck = document.querySelector('.payment-method-check[value="trade"]');
-    const cashFields  = document.getElementById('cash-details-wrap');
-    const tradeFields = document.getElementById('trade-details-wrap');
+    const cashCheck  = document.querySelector('input[name="payment-method"][value="cash"]');
+    const tradeCheck = document.querySelector('input[name="payment-method"][value="trade"]');
+    const cashFields  = document.getElementById('sell-cash-fields');
+    const tradeFields = document.getElementById('sell-trade-fields');
 
     function updateFields() {
       if (cashFields)  cashFields.style.display = cashCheck?.checked  ? 'block' : 'none';
@@ -2261,34 +2120,57 @@ Return ONLY valid JSON (no markdown, no code fences) in this exact format:
      SECTION: App Initialization
   ============================================================== */
   async function init() {
-    await checkAuthSession();
+    // Assign mock payment_methods to products for demo variety
+    const payVariants = [
+      ['cash'],
+      ['cash', 'trade'],
+      ['cash', 'online'],
+      ['cash'],
+      ['cash', 'trade'],
+      ['cash'],
+      ['cash', 'online'],
+      ['trade'],
+      ['cash', 'trade', 'online'],
+      ['cash'],
+      ['cash'],
+      ['trade'],
+      ['cash'],
+      ['cash', 'online'],
+      ['cash'],
+      ['cash', 'trade']
+    ];
+    const tradeItems = [
+      '', 'Similar LEGO sets or Star Wars memorabilia', '', '', 'Other rare Pokémon sealed product',
+      '', '', 'Other vintage Levi\'s or denim jackets', '', '', '', 'Other graded NBA rookie cards',
+      '', '', '', 'Other vintage gaming gear'
+    ];
+    MOCK_PRODUCTS.forEach((p, i) => {
+      if (!p.payment_methods) {
+        p.payment_methods = payVariants[i % payVariants.length];
+        p.meetup_spot  = p.payment_methods.includes('cash') ? 'Public library or police station lobby' : '';
+        p.meetup_hours = p.payment_methods.includes('cash') ? 'Weekdays 5pm–8pm, weekends 10am–4pm' : '';
+        p.trade_for    = tradeItems[i % tradeItems.length];
+      }
+    });
 
-    // Load Real Products
-    products = await fetchListings();
+    // Load products (mock data; swap for Supabase query in production)
+    products     = MOCK_PRODUCTS;
     filteredItems = products.slice();
 
+    // Auth session
+    await checkAuthSession();
+
+    // Initial UI updates
     updateCartCount();
     updateNavUI();
     populateHomePage();
+
+    // Initial shop filter state
     applyFilters();
 
-    // Check if storage bucket exists
-    if (DB) {
-      try {
-        const { data, error } = await DB.storage.listBuckets();
-        if (error) throw error;
-        const bucketExists = data.some(bucket => bucket.name === STORAGE_BUCKET);
-        if (!bucketExists) {
-          console.warn(`Storage bucket '${STORAGE_BUCKET}' not found. Please create it in Supabase Dashboard > Storage.`);
-          showToast('Storage setup needed', `Create '${STORAGE_BUCKET}' bucket in Supabase to upload images.`, 'warning', 8000);
-        }
-      } catch (e) {
-        console.warn('Could not check storage buckets:', e);
-      }
-    }
-
-    console.log(`OBTAINUM Live: ${products.length} listings loaded from DB.`);
+    console.log(`Obtainium loaded: ${products.length} listings`);
   }
 
   init().catch(console.error);
-});
+
+}); // end DOMContentLoaded
