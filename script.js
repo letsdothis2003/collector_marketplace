@@ -1,23 +1,6 @@
 /* ================================================================
-   OBTAINUM MARKETPLACE — script.js
-   
-   ORGANIZATION:
-   1. supabase-client.js
-   2. state.js
-   3. utils/toast.js
-   4. utils/dom.js
-   5. features/theme.js
-   6. features/auth.js
-   7. features/cart.js
-   8. features/wishlist.js
-   9. features/sell.js
-   10. features/filters.js
-   11. features/pagination.js
-   12. pages/home.js
-   13. pages/shop.js
-   14. pages/profile.js
-   15. features/ai-analysis.js
-   16. app.js
+   OBTAINIUM MARKETPLACE — script.js
+   Organization: Each section can be split into its own file later
 ================================================================ */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -26,8 +9,8 @@ document.addEventListener('DOMContentLoaded', () => {
      SECTION: supabase-client.js
   ================================================================ */
   let DB = null;
-  const SUPABASE_URL = 'https://ofvwpzdhuugyexdcroya.supabase.co';
-  const SUPABASE_API_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9mdndwemRodXVneWV4ZGNyb3lhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDk5Njk3MTMsImV4cCI6MTcyNzc0NTcxM30.sb_publishable_f9UqvNZVLitIS4Ysm6YWxQ_qwMpbwKL';
+  const SUPABASE_URL = 'https://gotzmuobwuubsugnowxq.supabase.co';
+  const SUPABASE_API_KEY = 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs';
   const STORAGE_BUCKET = 'listing-images';
 
   try {
@@ -45,7 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
   } catch (e) {
-    console.warn('Supabase initialization failed. Running in demo mode.', e.message);
+    console.warn('Supabase init failed:', e.message);
     DB = null;
   }
 
@@ -59,18 +42,20 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentPage = 1;
   const ITEMS_PER_PAGE = 12;
   let currentView = 'grid';
-  let activeCategory = '';
   let currentUser = null;
   let sessionInterval = null;
-  let geminiApiKey = localStorage.getItem('OBTAINUM_gemini_key') || '';
-  let mapsApiKey = localStorage.getItem('OBTAINUM_maps_key') || '';
 
   /* ================================================================
      SECTION: utils/toast.js
   ================================================================ */
   function showToast(title, message = '', type = 'info', duration = 4000) {
     const container = document.getElementById('toast-container');
-    const icons = { success: 'fa-check-circle', error: 'fa-times-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' };
+    const icons = {
+      success: 'fa-check-circle',
+      error: 'fa-times-circle',
+      warning: 'fa-exclamation-triangle',
+      info: 'fa-info-circle'
+    };
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.innerHTML = `
@@ -79,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="toast-title">${title}</div>
         ${message ? `<div class="toast-msg">${message}</div>` : ''}
       </div>
-      <button class="toast-close" aria-label="Close notification"><i class="fas fa-times"></i></button>
+      <button class="toast-close" aria-label="Close"><i class="fas fa-times"></i></button>
     `;
     container.appendChild(toast);
     toast.querySelector('.toast-close').addEventListener('click', () => removeToast(toast));
@@ -95,18 +80,17 @@ document.addEventListener('DOMContentLoaded', () => {
      SECTION: utils/dom.js
   ================================================================ */
   function getCategoryIcon(category) {
-    const map = {
+    const icons = {
       'Electronics': 'fa-microchip',
       'Clothing & Accessories': 'fa-tshirt',
+      'Collectibles': 'fa-gem',
+      'Books & Media': 'fa-book',
       'Home & Garden': 'fa-home',
       'Sports & Outdoors': 'fa-futbol',
-      'Books & Media': 'fa-book',
       'Vehicles': 'fa-car',
-      'Collectibles': 'fa-gem',
-      'Tools & Equipment': 'fa-tools',
       'Other': 'fa-box-open'
     };
-    return map[category] || 'fa-tag';
+    return icons[category] || 'fa-tag';
   }
 
   function formatPrice(n) {
@@ -137,27 +121,24 @@ document.addEventListener('DOMContentLoaded', () => {
     return html;
   }
 
-  function setButtonLoading(btn, loading) {
-    btn.disabled = loading;
-    const label = btn.querySelector('.btn-label') || btn;
-    if (label) label.style.opacity = loading ? '0.6' : '1';
-  }
-
   function debounce(fn, delay) {
     let timer;
-    return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
+    return (...args) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn(...args), delay);
+    };
   }
 
   /* ================================================================
      SECTION: features/theme.js
   ================================================================ */
-  const themeToggleBtn = document.getElementById('theme-toggle');
+  const themeToggle = document.getElementById('theme-toggle');
   const themeIcon = document.getElementById('theme-icon');
   const savedTheme = localStorage.getItem('OBTAINUM_theme') || 'light';
   document.documentElement.setAttribute('data-theme', savedTheme);
   updateThemeIcon(savedTheme);
 
-  themeToggleBtn.addEventListener('click', () => {
+  themeToggle.addEventListener('click', () => {
     const current = document.documentElement.getAttribute('data-theme');
     const next = current === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', next);
@@ -168,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateThemeIcon(theme) {
     themeIcon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
-    themeToggleBtn.title = theme === 'dark' ? 'Light mode' : 'Dark mode';
+    themeToggle.title = theme === 'dark' ? 'Light mode' : 'Dark mode';
   }
 
   /* ================================================================
@@ -211,15 +192,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const loginForm = document.getElementById('login-form');
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!DB) return showToast('Database not configured', 'Cannot log in.', 'error');
-
-    const btn = document.getElementById('login-btn');
-    const errEl = document.getElementById('login-error');
-    setButtonLoading(btn, true);
-    errEl.style.display = 'none';
+    if (!DB) return showToast('Error', 'Database not configured.', 'error');
 
     const email = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
+    const errEl = document.getElementById('login-error');
 
     try {
       const { error } = await DB.auth.signInWithPassword({ email, password });
@@ -227,43 +204,37 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       errEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${err.message}`;
       errEl.style.display = 'flex';
-    } finally {
-      setButtonLoading(btn, false);
     }
   });
 
   const registerForm = document.getElementById('register-form');
   registerForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!DB) return showToast('Database not configured', 'Cannot register.', 'error');
-
-    const btn = document.getElementById('register-btn');
-    const errEl = document.getElementById('register-error');
-    setButtonLoading(btn, true);
-    errEl.style.display = 'none';
+    if (!DB) return showToast('Error', 'Database not configured.', 'error');
 
     const email = document.getElementById('register-email').value.trim();
     const password = document.getElementById('register-password').value;
-    const confirm = document.getElementById('register-confirm-password').value;
+    const confirm = document.getElementById('register-confirm').value;
     const username = document.getElementById('register-username').value.trim();
     const terms = document.getElementById('register-terms').checked;
+    const errEl = document.getElementById('register-error');
 
     if (!terms) {
-      errEl.innerHTML = '<i class="fas fa-exclamation-circle"></i> Accept the Terms.';
+      errEl.innerHTML = '<i class="fas fa-exclamation-circle"></i> Accept Terms.';
       errEl.style.display = 'flex';
-      setButtonLoading(btn, false);
       return;
     }
+
     if (password !== confirm) {
-      errEl.innerHTML = '<i class="fas fa-exclamation-circle"></i> Passwords do not match.';
+      errEl.innerHTML = '<i class="fas fa-exclamation-circle"></i> Passwords don\'t match.';
       errEl.style.display = 'flex';
-      setButtonLoading(btn, false);
       return;
     }
 
     try {
       const { error } = await DB.auth.signUp({
-        email, password,
+        email,
+        password,
         options: { data: { username } }
       });
       if (error) throw error;
@@ -272,8 +243,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       errEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${err.message}`;
       errEl.style.display = 'flex';
-    } finally {
-      setButtonLoading(btn, false);
     }
   });
 
@@ -282,62 +251,26 @@ document.addEventListener('DOMContentLoaded', () => {
     currentUser = null;
     updateNavUI();
     showPage('home');
-    showToast('Logged out', 'See you next time!', 'info');
+    showToast('Logged out', '', 'info');
   };
 
   window.loginWithGoogle = async function () {
-    if (!DB) return showToast('Database not configured', '', 'error');
+    if (!DB) return showToast('Error', 'Database not configured.', 'error');
     try {
-      const { error } = await DB.auth.signInWithOAuth({
+      await DB.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: window.location.href }
       });
-      if (error) throw error;
     } catch (err) {
       showToast('OAuth Error', err.message, 'error');
     }
   };
 
-  const forgotForm = document.getElementById('forgot-form');
-  forgotForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const email = document.getElementById('forgot-email').value.trim();
-    const msgEl = document.getElementById('forgot-msg');
-    if (!DB) {
-      msgEl.textContent = 'Database not configured.';
-      msgEl.className = 'form-error';
-      msgEl.style.display = 'block';
-      return;
-    }
-    try {
-      const { error } = await DB.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
-      if (error) throw error;
-      msgEl.textContent = 'Reset link sent! Check your email.';
-      msgEl.className = 'form-success';
-    } catch (err) {
-      msgEl.textContent = err.message;
-      msgEl.className = 'form-error';
-    }
-    msgEl.style.display = 'block';
-  });
-
   function updateNavUI() {
-    const loginLink = document.getElementById('login-link');
-    const logoutLink = document.getElementById('logout-link');
-    const profileLink = document.getElementById('profile-link');
-    const sellLink = document.querySelector('.nav-link[data-page="sell"]');
-
-    if (currentUser) {
-      loginLink.style.display = 'none';
-      logoutLink.style.display = 'flex';
-      profileLink.style.display = 'flex';
-      sellLink.style.display = 'flex';
-    } else {
-      loginLink.style.display = 'flex';
-      logoutLink.style.display = 'none';
-      profileLink.style.display = 'none';
-      sellLink.style.display = 'none';
-    }
+    document.getElementById('login-link').style.display = currentUser ? 'none' : 'flex';
+    document.getElementById('logout-link').style.display = currentUser ? 'flex' : 'none';
+    document.getElementById('profile-link').style.display = currentUser ? 'flex' : 'none';
+    document.querySelector('.nav-link[data-page="sell"]').style.display = currentUser ? 'flex' : 'none';
   }
 
   async function ensureProfileExists(user) {
@@ -345,26 +278,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const { error } = await DB.from('profiles').select('id').eq('id', user.id).single();
     if (error && error.code === 'PGRST116') {
       const username = user.user_metadata?.username || user.email?.split('@')[0] || `user_${user.id.slice(0, 8)}`;
-      await DB.from('profiles').insert({
-        id: user.id,
-        email: user.email,
-        username: username,
-        rating: 0.00
-      });
+      await DB.from('profiles').insert({ id: user.id, email: user.email, username });
     }
   }
 
   async function checkAuthSession() {
     if (!DB) return;
     try {
-      const { data: { session }, error } = await DB.auth.getSession();
-      if (error) throw error;
+      const { data: { session } } = await DB.auth.getSession();
       currentUser = session?.user || null;
-      if (currentUser) {
-        await ensureProfileExists(currentUser);
-        if (sessionInterval) clearInterval(sessionInterval);
-        sessionInterval = setInterval(checkSessionTimeout, 60000);
-      }
+      if (currentUser) await ensureProfileExists(currentUser);
       updateNavUI();
     } catch (err) {
       console.error('Session check failed:', err);
@@ -383,36 +306,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  const regPass = document.getElementById('register-password');
-  if (regPass) {
-    regPass.addEventListener('input', () => {
-      const val = regPass.value;
-      let score = 0;
-      if (val.length >= 8) score++;
-      if (val.length >= 12) score++;
-      if (/[A-Z]/.test(val)) score++;
-      if (/[0-9]/.test(val)) score++;
-      if (/[^A-Za-z0-9]/.test(val)) score++;
-
-      const fill = document.getElementById('strength-fill');
-      const label = document.getElementById('strength-label');
-      const levels = [
-        { pct: '20%', color: '#ef4444', text: 'Very weak' },
-        { pct: '40%', color: '#f97316', text: 'Weak' },
-        { pct: '60%', color: '#f59e0b', text: 'Fair' },
-        { pct: '80%', color: '#22c55e', text: 'Strong' },
-        { pct: '100%', color: '#10b981', text: 'Very strong' },
-      ];
-      const lvl = levels[Math.max(0, score - 1)] || levels[0];
-      fill.style.width = val.length ? lvl.pct : '0%';
-      fill.style.background = lvl.color;
-      label.textContent = val.length ? lvl.text : '';
-      label.style.color = lvl.color;
-    });
-  }
-
   /* ================================================================
-     SECTION: api/products.js - Fetch & Build Products
+     SECTION: api/products.js
   ================================================================ */
   async function fetchListings() {
     if (!DB) return [];
@@ -423,64 +318,44 @@ document.addEventListener('DOMContentLoaded', () => {
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Listings fetch failed:', error);
+      console.error('Fetch failed:', error);
       return [];
     }
 
     return (data || []).map(item => ({
-      id: item.id,
-      name: item.name,
-      category: item.category,
-      description: item.description,
-      condition: item.condition,
-      location: item.location,
-      price: parseFloat(item.price),
-      msrp: item.msrp ? parseFloat(item.msrp) : null,
-      type: item.type,
-      shipping: item.shipping,
-      payment_methods: item.payment_methods || [],
-      tags: item.tags || [],
+      ...item,
       images: normalizeImages(item.images),
-      is_fair: item.is_fair,
-      is_featured: item.is_featured,
-      is_sold: item.is_sold,
-      seller_id: item.seller_id,
-      seller: item.profiles?.username || 'Unknown Seller',
+      seller: item.profiles?.username || 'Unknown',
       seller_rating: item.profiles?.rating || 0,
-      view_count: item.view_count || 0,
-      favorite_count: item.favorite_count || 0,
-      created_at: item.created_at,
-      updated_at: item.updated_at,
     }));
   }
 
   function buildProductCard(product) {
-    const isWished = inWishlist(product.id);
     const inCart = cart.some(c => c.id === product.id);
+    const inWish = wishlist.includes(product.id);
+    const firstImage = product.images?.[0] || null;
+
     const discountPct = product.msrp && product.price < product.msrp
       ? Math.round((1 - product.price / product.msrp) * 100)
       : null;
 
-    const fairBadge = product.is_fair
-      ? `<span class="badge badge-fair"><i class="fas fa-shield-alt"></i> Fair Price</span>`
-      : `<span class="badge badge-scalp"><i class="fas fa-exclamation-triangle"></i> Above MSRP</span>`;
-
     const conditionLabel = {
-      'new': 'New', 'like-new': 'Like New', 'good': 'Good', 'fair': 'Fair', 'poor': 'For Parts'
+      'new': 'New',
+      'like-new': 'Like New',
+      'good': 'Good',
+      'fair': 'Fair',
+      'poor': 'For Parts'
     }[product.condition] || product.condition;
 
-    const firstImage = product.images?.[0] || null;
-
     return `
-      <div class="product-card" role="listitem" onclick="openProductModal('${product.id}')" tabindex="0">
+      <div class="product-card" role="listitem" onclick="openProductModal('${product.id}')">
         <div class="product-card-img">
-          ${firstImage
-            ? `<img src="${firstImage}" alt="${product.name}" loading="lazy" decoding="async">`
-            : `<i class="fas ${getCategoryIcon(product.category)}"></i>`}
-          <div class="product-card-badges">${fairBadge}</div>
-          <button class="wishlist-btn ${isWished ? 'active' : ''}" data-id="${product.id}"
-            onclick="toggleWishlist('${product.id}', event)" aria-label="Toggle wishlist">
-            <i class="${isWished ? 'fas' : 'far'} fa-heart"></i>
+          ${firstImage ? `<img src="${firstImage}" alt="${product.name}" loading="lazy">` : `<i class="fas ${getCategoryIcon(product.category)}"></i>`}
+          <div class="product-card-badges">
+            ${product.is_fair ? `<span class="badge badge-fair"><i class="fas fa-shield-alt"></i> Fair</span>` : `<span class="badge badge-scalp">Above MSRP</span>`}
+          </div>
+          <button class="wishlist-btn ${inWish ? 'active' : ''}" onclick="toggleWishlist('${product.id}', event)">
+            <i class="${inWish ? 'fas' : 'far'} fa-heart"></i>
           </button>
         </div>
         <div class="product-card-body">
@@ -493,7 +368,6 @@ document.addEventListener('DOMContentLoaded', () => {
             <i class="fas fa-user-circle"></i> ${product.seller}
             <span class="product-seller-rating">${starsHTML(product.seller_rating)}</span>
           </div>
-          ${product.location ? `<div class="product-location"><i class="fas fa-map-marker-alt"></i> ${product.location}</div>` : ''}
           <div class="product-price-row">
             <span class="product-price">${formatPrice(product.price)}</span>
             ${product.msrp ? `<span class="product-msrp">MSRP ${formatPrice(product.msrp)}</span>` : ''}
@@ -503,9 +377,6 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="product-card-actions">
           <button class="btn btn-primary" onclick="addToCart('${product.id}', event)">
             <i class="fas fa-cart-plus"></i> ${inCart ? 'Add More' : 'Add'}
-          </button>
-          <button class="btn btn-outline" onclick="event.stopPropagation(); analyzeProductWithAI('${product.id}');" title="AI Analysis">
-            <i class="fas fa-brain"></i>
           </button>
         </div>
       </div>
@@ -518,9 +389,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (items.length === 0) {
       grid.innerHTML = `
         <div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--text-muted);">
-          <i class="fas fa-search" style="font-size:3rem;opacity:0.3;margin-bottom:16px;display:block;"></i>
+          <i class="fas fa-search" style="font-size:3rem;opacity:0.3;display:block;margin-bottom:16px;"></i>
           <h3>No listings found</h3>
-          <p>Try adjusting your filters or search terms.</p>
           <button class="btn btn-primary" style="margin-top:16px;" onclick="clearAllFilters()">Clear Filters</button>
         </div>`;
       return;
@@ -546,7 +416,6 @@ document.addEventListener('DOMContentLoaded', () => {
     saveCart();
     updateCartCount();
     showToast('Added to cart!', product.name, 'success', 2500);
-    animateCartBadge();
   };
 
   function saveCart() {
@@ -560,13 +429,6 @@ document.addEventListener('DOMContentLoaded', () => {
     badge.style.display = total > 0 ? 'inline-flex' : 'none';
   }
 
-  function animateCartBadge() {
-    const badge = document.getElementById('cart-count');
-    badge.classList.remove('pop');
-    void badge.offsetWidth;
-    badge.classList.add('pop');
-  }
-
   function renderCartPage() {
     const itemsEl = document.getElementById('cart-items');
     if (!itemsEl) return;
@@ -577,10 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="cart-empty">
           <i class="fas fa-shopping-cart"></i>
           <h3>Your cart is empty</h3>
-          <p>Browse our marketplace and find something you love.</p>
-          <button class="btn btn-primary" style="margin-top:16px;" onclick="showPage('shop')">
-            <i class="fas fa-store"></i> Browse
-          </button>
+          <button class="btn btn-primary" onclick="showPage('shop')">Browse Marketplace</button>
         </div>`;
       updateCartSummary();
       return;
@@ -592,9 +451,7 @@ document.addEventListener('DOMContentLoaded', () => {
       el.className = 'cart-item';
       el.innerHTML = `
         <div class="cart-item-img">
-          ${firstImage
-            ? `<img src="${firstImage}" alt="${item.name}" loading="lazy">`
-            : `<i class="fas ${getCategoryIcon(item.category)}"></i>`}
+          ${firstImage ? `<img src="${firstImage}" alt="${item.name}" loading="lazy">` : `<i class="fas ${getCategoryIcon(item.category)}"></i>`}
         </div>
         <div class="cart-item-info">
           <div class="cart-item-name">${item.name}</div>
@@ -605,9 +462,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <span class="qty-display">${item.qty || 1}</span>
               <button class="qty-btn" onclick="changeQty('${item.id}', 1)">+</button>
             </div>
-            <button class="cart-remove-btn" onclick="removeFromCart('${item.id}')">
-              <i class="fas fa-trash-alt"></i> Remove
-            </button>
+            <button class="cart-remove-btn" onclick="removeFromCart('${item.id}')"><i class="fas fa-trash"></i></button>
           </div>
         </div>
         <div class="cart-item-price">${formatPrice(item.price * (item.qty || 1))}</div>
@@ -653,43 +508,35 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('Cart is empty', '', 'warning');
       return;
     }
-    showToast('Checkout coming soon', 'Payment integration in development.', 'info');
+    showToast('Checkout', 'Payment processing coming soon.', 'info');
   };
 
   /* ================================================================
      SECTION: features/wishlist.js
   ================================================================ */
-  function inWishlist(id) {
-    return wishlist.includes(id);
-  }
-
   window.toggleWishlist = async function (productId, e) {
     if (e) e.stopPropagation();
     if (!currentUser) {
-      showToast('Login Required', 'Please log in to save items.', 'warning');
+      showToast('Login required', 'Please log in to save items.', 'warning');
       showPage('login');
       return;
     }
 
     const idx = wishlist.indexOf(productId);
-    let isWished;
-
     if (idx >= 0) {
       wishlist.splice(idx, 1);
-      isWished = false;
-      showToast('Removed from wishlist', '', 'info', 2000);
       if (DB) await DB.from('wishlists').delete().match({ user_id: currentUser.id, listing_id: productId });
+      showToast('Removed from wishlist', '', 'info', 2000);
     } else {
       wishlist.push(productId);
-      isWished = true;
-      showToast('Added to wishlist', '', 'success', 2000);
       if (DB) await DB.from('wishlists').insert({ user_id: currentUser.id, listing_id: productId });
+      showToast('Added to wishlist', '', 'success', 2000);
     }
     localStorage.setItem('OBTAINUM_wishlist', JSON.stringify(wishlist));
 
     document.querySelectorAll(`.wishlist-btn[data-id="${productId}"]`).forEach(btn => {
-      btn.classList.toggle('active', isWished);
-      btn.querySelector('i').className = isWished ? 'fas fa-heart' : 'far fa-heart';
+      btn.classList.toggle('active', wishlist.includes(productId));
+      btn.querySelector('i').className = wishlist.includes(productId) ? 'fas fa-heart' : 'far fa-heart';
     });
   };
 
@@ -709,7 +556,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const priceInput = document.getElementById('sell-price');
   const msrpInput = document.getElementById('sell-msrp');
   const fairnessEl = document.getElementById('price-fairness-indicator');
-  const fairnessText = document.getElementById('price-fairness-text');
 
   function updatePriceFairness() {
     if (!priceInput || !msrpInput || !fairnessEl) return;
@@ -726,13 +572,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (ratio <= 1.0) {
       fairnessEl.classList.add('fair');
-      fairnessText.textContent = `${Math.round((1-ratio)*100)}% below MSRP — great value!`;
+      fairnessEl.textContent = `${Math.round((1-ratio)*100)}% below MSRP — great value!`;
     } else if (ratio <= 1.2) {
       fairnessEl.classList.add('warning');
-      fairnessText.textContent = `${Math.round((ratio-1)*100)}% above MSRP.`;
+      fairnessEl.textContent = `${Math.round((ratio-1)*100)}% above MSRP.`;
     } else {
       fairnessEl.classList.add('scalp');
-      fairnessText.textContent = `${Math.round((ratio-1)*100)}% above MSRP — may be flagged.`;
+      fairnessEl.textContent = `${Math.round((ratio-1)*100)}% above MSRP — may be flagged.`;
     }
   }
 
@@ -786,9 +632,7 @@ document.addEventListener('DOMContentLoaded', () => {
       wrap.dataset.idx = idx;
       wrap.innerHTML = `
         <img src="${e.target.result}" alt="Preview" class="preview-thumb">
-        <button type="button" class="remove-thumb-btn" onclick="removeThumb(${idx})">
-          <i class="fas fa-times"></i>
-        </button>`;
+        <button type="button" class="remove-thumb-btn" onclick="removeThumb(${idx})"><i class="fas fa-times"></i></button>`;
       imagePreviewRow?.appendChild(wrap);
     };
     reader.readAsDataURL(file);
@@ -809,7 +653,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const btn = document.getElementById('sell-submit-btn');
-      setButtonLoading(btn, true);
+      btn.disabled = true;
 
       try {
         const activeFiles = uploadedFiles.filter(Boolean);
@@ -826,10 +670,6 @@ document.addEventListener('DOMContentLoaded', () => {
           imageUrls.push(urlData.publicUrl);
         }
 
-        const price = parseFloat(document.getElementById('sell-price').value);
-        const msrp = parseFloat(document.getElementById('sell-msrp').value) || null;
-        const isFair = msrp ? price <= msrp * 1.1 : true;
-
         const listingData = {
           seller_id: currentUser.id,
           name: document.getElementById('sell-name').value.trim(),
@@ -837,20 +677,19 @@ document.addEventListener('DOMContentLoaded', () => {
           description: document.getElementById('sell-description').value.trim(),
           condition: document.getElementById('sell-condition').value,
           location: document.getElementById('sell-location').value.trim() || null,
-          price: price,
-          msrp: msrp,
-          type: document.getElementById('sell-type').value,
-          shipping: document.getElementById('sell-shipping').value,
+          price: parseFloat(document.getElementById('sell-price').value),
+          msrp: parseFloat(document.getElementById('sell-msrp').value) || null,
+          type: 'buy-now',
+          shipping: 'paid',
           payment_methods: [...document.querySelectorAll('.payment-method-check:checked')].map(e => e.value),
-          tags: document.getElementById('sell-tags').value.split(',').map(t => t.trim()).filter(Boolean),
+          tags: [],
           images: imageUrls,
-          is_fair: isFair,
-          is_featured: false,
-          is_sold: false,
+          is_fair: true,
         };
 
         if (!listingData.name) throw new Error('Item name is required.');
         if (listingData.price <= 0) throw new Error('Enter a valid price.');
+        if (listingData.payment_methods.length === 0) throw new Error('Select at least one payment method.');
 
         const { data: newListing, error: dbError } = await DB
           .from('listings')
@@ -861,29 +700,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (dbError) throw dbError;
 
         const formattedListing = {
-          id: newListing.id,
-          name: newListing.name,
-          category: newListing.category,
-          description: newListing.description,
-          condition: newListing.condition,
-          location: newListing.location,
-          price: parseFloat(newListing.price),
-          msrp: newListing.msrp ? parseFloat(newListing.msrp) : null,
-          type: newListing.type,
-          shipping: newListing.shipping,
-          payment_methods: newListing.payment_methods || [],
-          tags: newListing.tags || [],
+          ...newListing,
           images: normalizeImages(newListing.images),
-          is_fair: newListing.is_fair,
-          is_featured: newListing.is_featured,
-          is_sold: newListing.is_sold,
-          seller_id: newListing.seller_id,
           seller: newListing.profiles?.username || 'You',
           seller_rating: newListing.profiles?.rating || 0,
-          view_count: 0,
-          favorite_count: 0,
-          created_at: newListing.created_at,
-          updated_at: newListing.updated_at,
         };
 
         products.unshift(formattedListing);
@@ -901,7 +721,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Publishing error:', err);
         showToast('Failed to publish', err.message || 'Check your form and try again.', 'error');
       } finally {
-        setButtonLoading(btn, false);
+        btn.disabled = false;
       }
     });
   }
@@ -925,7 +745,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function applyFilters() {
     const searchVal = (document.getElementById('shop-search')?.value || '').toLowerCase().trim();
-    const categoryVal = document.querySelector('input[name="category-filter"]:checked')?.value || '';
+    const categoryVal = document.querySelector('input[name="category-filter"]:checked')?.value || 'all';
     const priceMax = parseFloat(priceSlider?.value || 5000);
     const checkedCond = [...document.querySelectorAll('.condition-filter:checked')].map(e => e.value);
     const antiScalp = document.getElementById('anti-scalp-filter')?.checked || false;
@@ -933,7 +753,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let result = products.filter(p => {
       if (searchVal && !p.name.toLowerCase().includes(searchVal) && !p.description.toLowerCase().includes(searchVal)) return false;
-      if (categoryVal && p.category !== categoryVal) return false;
+      if (categoryVal !== 'all' && p.category !== categoryVal) return false;
       if (p.price > priceMax) return false;
       if (checkedCond.length > 0 && !checkedCond.includes(p.condition)) return false;
       if (antiScalp && !p.is_fair) return false;
@@ -943,8 +763,6 @@ document.addEventListener('DOMContentLoaded', () => {
     switch (sortVal) {
       case 'price-asc': result.sort((a, b) => a.price - b.price); break;
       case 'price-desc': result.sort((a, b) => b.price - a.price); break;
-      case 'name-asc': result.sort((a, b) => a.name.localeCompare(b.name)); break;
-      case 'oldest': result.sort((a, b) => new Date(a.created_at) - new Date(b.created_at)); break;
       default: result.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)); break;
     }
 
@@ -1000,7 +818,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
         html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
       } else if (i === currentPage - 2 || i === currentPage + 2) {
-        html += `<span class="page-ellipsis">…</span>`;
+        html += `<span>…</span>`;
       }
     }
     html += `<button class="page-btn" onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}><i class="fas fa-chevron-right"></i></button>`;
@@ -1012,7 +830,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (page < 1 || page > totalPages) return;
     currentPage = page;
     renderCurrentPage();
-    document.querySelector('#page-shop .shop-products')?.scrollIntoView({ behavior: 'smooth' });
+    document.querySelector('.shop-products')?.scrollIntoView({ behavior: 'smooth' });
   };
 
   /* ================================================================
@@ -1024,15 +842,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const recent = [...products].slice(0, 4);
     renderProductGrid(recent, 'recent-products');
-
-    const counts = {};
-    products.forEach(p => {
-      counts[p.category] = (counts[p.category] || 0) + 1;
-    });
-    Object.keys(counts).forEach(cat => {
-      const el = document.getElementById(`cat-count-${cat}`);
-      if (el) el.textContent = `${counts[cat]} item${counts[cat] !== 1 ? 's' : ''}`;
-    });
   }
 
   /* ================================================================
@@ -1043,127 +852,35 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!currentUser) {
       container.innerHTML = `
         <div style="text-align:center;padding:60px 20px;">
-          <i class="fas fa-user-lock" style="font-size:3rem;color:var(--text-muted);margin-bottom:16px;display:block;"></i>
+          <i class="fas fa-user-lock" style="font-size:3rem;color:var(--text-muted);display:block;margin-bottom:16px;"></i>
           <h2>Login to view your profile</h2>
           <button class="btn btn-primary" style="margin-top:16px;" onclick="showPage('login')">Sign In</button>
         </div>`;
       return;
     }
 
-    const { data: profile, error } = await DB.from('profiles').select('*').eq('id', currentUser.id).single();
-    if (error) return showToast('Error', 'Could not fetch profile.', 'error');
-
+    const { data: profile } = await DB.from('profiles').select('*').eq('id', currentUser.id).single();
     const userListings = products.filter(p => p.seller_id === currentUser.id);
-    const joinDate = new Date(currentUser.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
     container.innerHTML = `
       <div class="profile-header">
-        <div class="profile-avatar">${(profile.username[0] || 'U').toUpperCase()}</div>
+        <div class="profile-avatar">${(profile?.username[0] || 'U').toUpperCase()}</div>
         <div class="profile-info">
-          <div class="profile-name">${profile.username}</div>
-          <div class="profile-joined"><i class="fas fa-calendar-alt"></i> Member since ${joinDate}</div>
-        </div>
-        <div class="profile-stats-row">
-          <div class="pstat"><span>${userListings.length}</span><small>Listings</small></div>
-          <div class="pstat"><span>${wishlist.length}</span><small>Saved</small></div>
-          <div class="pstat"><span>${profile.rating.toFixed(1)}</span><small>Rating</small></div>
+          <div class="profile-name">${profile?.username}</div>
+          <div class="profile-stats-row">
+            <div class="pstat"><span>${userListings.length}</span><small>Listings</small></div>
+            <div class="pstat"><span>${wishlist.length}</span><small>Saved</small></div>
+            <div class="pstat"><span>${(profile?.rating || 0).toFixed(1)}</span><small>Rating</small></div>
+          </div>
         </div>
       </div>
-      <div class="profile-tabs">
-        <button class="profile-tab active" onclick="switchProfileTab(this, 'listings')">
-          <i class="fas fa-tag"></i> My Listings
-        </button>
-        <button class="profile-tab" onclick="switchProfileTab(this, 'saved')">
-          <i class="fas fa-heart"></i> Saved Items
-        </button>
-      </div>
-      <div id="profile-tab-content"></div>`;
-
-    switchProfileTab(container.querySelector('.profile-tab.active'), 'listings');
+      <h3 style="margin-top:32px;margin-bottom:16px;">My Listings</h3>
+      <div class="product-grid">${userListings.length > 0 ? userListings.map(buildProductCard).join('') : '<p style="grid-column:1/-1;text-align:center;color:var(--text-muted);">No listings yet</p>'}</div>
+    `;
   }
 
-  window.switchProfileTab = function (btn, tab) {
-    document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
-    btn.classList.add('active');
-    const content = document.getElementById('profile-tab-content');
-
-    switch (tab) {
-      case 'listings':
-        const userListings = products.filter(p => p.seller_id === currentUser.id);
-        content.innerHTML = userListings.length > 0
-          ? `<div class="product-grid">${userListings.map(buildProductCard).join('')}</div>`
-          : `<div style="text-align:center;padding:40px;color:var(--text-muted);">
-              <i class="fas fa-tag" style="font-size:2rem;opacity:0.3;margin-bottom:12px;display:block;"></i>
-              <h3>No listings yet</h3>
-              <button class="btn btn-primary" style="margin-top:12px;" onclick="showPage('sell')">List an Item</button>
-            </div>`;
-        break;
-      case 'saved':
-        const saved = products.filter(p => wishlist.includes(p.id));
-        content.innerHTML = saved.length > 0
-          ? `<div class="product-grid">${saved.map(buildProductCard).join('')}</div>`
-          : `<div style="text-align:center;padding:40px;color:var(--text-muted);">
-              <i class="fas fa-heart" style="font-size:2rem;opacity:0.3;margin-bottom:12px;display:block;"></i>
-              <h3>No saved items</h3>
-              <p>Click the heart on any item to save it.</p>
-            </div>`;
-        break;
-    }
-  };
-
   /* ================================================================
-     SECTION: features/ai-analysis.js
-  ================================================================ */
-  window.showAPIKeySetup = function () {
-    const modal = document.getElementById('gemini-key-setup');
-    modal.style.display = modal.style.display === 'none' ? 'block' : 'none';
-    document.getElementById('gemini-api-key-input').value = geminiApiKey;
-    document.getElementById('maps-api-key-input').value = mapsApiKey;
-  };
-
-  window.saveGeminiKey = function () {
-    const key = document.getElementById('gemini-api-key-input').value.trim();
-    if (!key) {
-      showToast('Invalid key', 'Please enter a valid API key.', 'error');
-      return;
-    }
-    geminiApiKey = key;
-    localStorage.setItem('OBTAINUM_gemini_key', key);
-    showToast('API Key saved', 'Gemini AI is now enabled.', 'success', 2000);
-  };
-
-  window.saveMapsKey = function () {
-    const key = document.getElementById('maps-api-key-input').value.trim();
-    if (!key) {
-      showToast('Invalid key', 'Please enter a valid API key.', 'error');
-      return;
-    }
-    mapsApiKey = key;
-    localStorage.setItem('OBTAINUM_maps_key', key);
-    showToast('API Key saved', 'Google Maps is now enabled.', 'success', 2000);
-  };
-
-  window.analyzeProductWithAI = async function (productId) {
-    const product = products.find(p => p.id === productId);
-    if (!product) return;
-
-    if (!geminiApiKey) {
-      showToast('API key required', 'Please set up your Gemini API key in settings.', 'warning');
-      showPage('assistant');
-      showAPIKeySetup();
-      return;
-    }
-
-    showToast('AI analysis feature coming soon', 'Feature is under development.', 'info');
-  };
-
-  window.switchAITab = function (btn, tab) {
-    document.querySelectorAll('.ai-tab').forEach(t => t.classList.remove('active'));
-    if (btn) btn.classList.add('active');
-  };
-
-  /* ================================================================
-     SECTION: app.js
+     SECTION: app.js — Main Initialization & Navigation
   ================================================================ */
   window.openProductModal = function (productId) {
     const product = products.find(p => p.id === productId);
@@ -1179,47 +896,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     content.innerHTML = `
       <div class="modal-img-col">
-        ${firstImage
-          ? `<img src="${firstImage}" alt="${product.name}" loading="lazy">`
-          : `<i class="fas ${getCategoryIcon(product.category)}"></i>`}
+        ${firstImage ? `<img src="${firstImage}" alt="${product.name}">` : `<i class="fas ${getCategoryIcon(product.category)}"></i>`}
       </div>
       <div class="modal-info-col">
-        <div class="modal-badges">
-          ${product.is_fair
-            ? `<span class="badge badge-fair"><i class="fas fa-shield-alt"></i> Fair Price</span>`
-            : `<span class="badge badge-scalp"><i class="fas fa-exclamation-triangle"></i> Above MSRP</span>`}
-        </div>
         <h2 class="modal-title">${product.name}</h2>
-        <div class="modal-price-row">
-          <span class="modal-price">${formatPrice(product.price)}</span>
-          ${product.msrp ? `<span style="color:var(--text-muted);text-decoration:line-through;">MSRP ${formatPrice(product.msrp)}</span>` : ''}
+        <div class="modal-price">${formatPrice(product.price)}</div>
+        ${product.msrp ? `<small style="color:var(--text-muted);">MSRP ${formatPrice(product.msrp)}</small>` : ''}
+        <div style="margin-top:16px;">
+          <strong>Condition:</strong> ${conditionLabel}<br>
+          <strong>Seller:</strong> ${product.seller} ${starsHTML(product.seller_rating)}<br>
+          ${product.location ? `<strong>Location:</strong> ${product.location}` : ''}
         </div>
-        <div class="modal-seller-info">
-          <div class="seller-avatar">${(product.seller[0] || 'U').toUpperCase()}</div>
-          <div>
-            <div style="color:var(--text);font-weight:700;font-size:0.9rem;">${product.seller}</div>
-            <div style="font-size:0.78rem;color:var(--text-muted);">${starsHTML(product.seller_rating)}</div>
-          </div>
-        </div>
-        <div class="modal-desc">${product.description}</div>
-        <div class="modal-actions">
-          <button class="btn btn-primary btn-block" onclick="addToCart('${product.id}', null); closeProductModal();">
-            <i class="fas fa-cart-plus"></i> Add to Cart
-          </button>
-          <button class="btn btn-outline btn-block" onclick="toggleWishlist('${product.id}', null)">
-            <i class="fas fa-heart"></i> Save Item
-          </button>
-          <button class="btn btn-outline btn-block" onclick="closeProductModal(); analyzeProductWithAI('${product.id}');">
-            <i class="fas fa-brain"></i> AI Analysis
-          </button>
+        <p style="margin-top:16px;color:var(--text-muted);font-size:0.9rem;line-height:1.6;">${product.description}</p>
+        <div style="display:flex;gap:10px;margin-top:20px;">
+          <button class="btn btn-primary btn-block" onclick="addToCart('${product.id}', null); closeProductModal();">Add to Cart</button>
+          <button class="btn btn-outline" onclick="toggleWishlist('${product.id}', null);"><i class="fas fa-heart"></i></button>
         </div>
       </div>
     `;
 
     modal.style.display = 'flex';
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) closeProductModal();
-    });
   };
 
   window.closeProductModal = function () {
@@ -1235,77 +931,21 @@ document.addEventListener('DOMContentLoaded', () => {
       link.classList.toggle('active', link.dataset.page === pageId);
     });
 
-    closeMobileMenu();
+    document.getElementById('nav-links').classList.remove('open');
 
     if (pageId === 'profile') renderProfilePage();
     if (pageId === 'cart') renderCartPage();
     if (pageId === 'shop') applyFilters();
-  };
-
-  window.filterAndGoShop = function (category) {
-    const radio = document.querySelector(`input[name="category-filter"][value="${category}"]`);
-    if (radio) radio.checked = true;
-    applyFilters();
-    showPage('shop');
+    if (pageId === 'home') populateHomePage();
   };
 
   const mobileMenuBtn = document.getElementById('mobile-menu-btn');
   const navLinks = document.getElementById('nav-links');
   mobileMenuBtn?.addEventListener('click', () => navLinks.classList.toggle('open'));
 
-  function closeMobileMenu() {
-    navLinks?.classList.remove('open');
-  }
-
-  window.clearChat = function () {
-    document.getElementById('chat-history').innerHTML = `
-      <div class="chat-msg bot-msg">
-        <div class="chat-msg-avatar bot-avatar"><i class="fas fa-robot"></i></div>
-        <div class="chat-msg-bubble">
-          <p>Chat cleared. What can I help you with?</p>
-        </div>
-        <span class="chat-msg-time">Just now</span>
-      </div>
-    `;
-  };
-
-  window.sendMessageToBot = function () {
-    const input = document.getElementById('chat-input');
-    const msg = input.value.trim();
-    if (!msg) return;
-
-    const history = document.getElementById('chat-history');
-    const userMsg = document.createElement('div');
-    userMsg.className = 'chat-msg user-msg';
-    userMsg.innerHTML = `
-      <div class="chat-msg-avatar user-avatar"><i class="fas fa-user"></i></div>
-      <div class="chat-msg-bubble">${msg}</div>
-      <span class="chat-msg-time">Just now</span>
-    `;
-    history.appendChild(userMsg);
-    input.value = '';
-
-    setTimeout(() => {
-      const botMsg = document.createElement('div');
-      botMsg.className = 'chat-msg bot-msg';
-      botMsg.innerHTML = `
-        <div class="chat-msg-avatar bot-avatar"><i class="fas fa-robot"></i></div>
-        <div class="chat-msg-bubble">
-          <p>That's a great question! I can help with pricing analysis, shipping estimates, or finding safe meetup spots. What would you like to know?</p>
-        </div>
-        <span class="chat-msg-time">Just now</span>
-      `;
-      history.appendChild(botMsg);
-      history.scrollTop = history.scrollHeight;
-    }, 600);
-
-    history.scrollTop = history.scrollHeight;
-  };
-
-  window.sendSuggestedPrompt = function (btn) {
-    document.getElementById('chat-input').value = btn.textContent;
-    sendMessageToBot();
-  };
+  document.getElementById('close-banner').addEventListener('click', () => {
+    document.getElementById('announcement-banner').style.display = 'none';
+  });
 
   async function init() {
     await checkAuthSession();
@@ -1315,10 +955,6 @@ document.addEventListener('DOMContentLoaded', () => {
     updateCartCount();
     updateNavUI();
     populateHomePage();
-    applyFilters();
-
-    const initialPage = window.location.hash.replace('#', '') || 'home';
-    showPage(initialPage);
 
     document.getElementById('footer-year').textContent = new Date().getFullYear();
 
