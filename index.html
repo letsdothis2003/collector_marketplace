@@ -12,7 +12,7 @@
 
   <!-- Error Banner -->
   <div id="error-banner">
-    ⚠ OBTAINUM IS EXPERIENCING ISSUES — PLEASE WAIT WHILE WE RESTORE SERVICE
+    &#9888; OBTAINUM IS EXPERIENCING ISSUES — PLEASE WAIT WHILE WE RESTORE SERVICE
   </div>
 
   <!-- Toast Container -->
@@ -23,15 +23,15 @@
     <div class="logo glitch" data-text="OBTAINUM" onclick="navigate('shop')">OBTAINUM</div>
 
     <div class="header-search">
-      <span class="search-icon">⌕</span>
+      <span class="search-icon">&#9906;</span>
       <input type="text" id="search-input" placeholder="Search collectibles, electronics, gear..." />
     </div>
 
     <nav class="nav-menu">
-      <button class="nav-btn active" id="nav-shop" onclick="navigate('shop')">⬢ SHOP</button>
+      <button class="nav-btn active" id="nav-shop" onclick="navigate('shop')">&#11042; SHOP</button>
       <button class="nav-btn" id="nav-create" onclick="navigate('create')">+ CREATE</button>
-      <button class="nav-btn" id="nav-wishlist" onclick="navigate('wishlist')">♡ WISHLIST</button>
-      <button class="nav-btn" id="nav-profile" onclick="navigate('profile')">⚙ PROFILE</button>
+      <button class="nav-btn" id="nav-wishlist" onclick="navigate('wishlist')">&#9825; WISHLIST</button>
+      <button class="nav-btn" id="nav-profile" onclick="navigate('profile')">&#9881; PROFILE</button>
     </nav>
 
     <div class="header-actions">
@@ -54,10 +54,10 @@
 
   <!-- Mobile Nav Drawer -->
   <nav class="mobile-nav" id="mobile-nav">
-    <button class="nav-btn" onclick="navigate('shop'); closeMobileNav()">⬢ SHOP</button>
+    <button class="nav-btn" onclick="navigate('shop'); closeMobileNav()">&#11042; SHOP</button>
     <button class="nav-btn" onclick="navigate('create'); closeMobileNav()">+ CREATE</button>
-    <button class="nav-btn" onclick="navigate('wishlist'); closeMobileNav()">♡ WISHLIST</button>
-    <button class="nav-btn" onclick="navigate('profile'); closeMobileNav()">⚙ PROFILE</button>
+    <button class="nav-btn" onclick="navigate('wishlist'); closeMobileNav()">&#9825; WISHLIST</button>
+    <button class="nav-btn" onclick="navigate('profile'); closeMobileNav()">&#9881; PROFILE</button>
   </nav>
 
   <!-- ===================== APP PAGES ===================== -->
@@ -69,7 +69,7 @@
 
         <!-- Sidebar Filters -->
         <aside class="sidebar" id="sidebar">
-          <h3 class="sidebar-title">⚙ FILTERS</h3>
+          <h3 class="sidebar-title">&#9881; FILTERS</h3>
 
           <!-- Category -->
           <div class="filter-section">
@@ -82,6 +82,8 @@
               <button class="chip" data-cat="Toys & Figures" onclick="selectCategory(this, 'Toys & Figures')">Toys</button>
               <button class="chip" data-cat="Sports & Outdoors" onclick="selectCategory(this, 'Sports & Outdoors')">Sports</button>
               <button class="chip" data-cat="Books & Media" onclick="selectCategory(this, 'Books & Media')">Books</button>
+              <button class="chip" data-cat="Home & Garden" onclick="selectCategory(this, 'Home & Garden')">Home</button>
+              <button class="chip" data-cat="Tools & Equipment" onclick="selectCategory(this, 'Tools & Equipment')">Tools</button>
               <button class="chip" data-cat="Other" onclick="selectCategory(this, 'Other')">Other</button>
             </div>
           </div>
@@ -96,6 +98,17 @@
               <button class="chip" data-cond="good" onclick="selectCondition(this, 'good')">Good</button>
               <button class="chip" data-cond="fair" onclick="selectCondition(this, 'fair')">Fair</button>
               <button class="chip" data-cond="poor" onclick="selectCondition(this, 'poor')">Poor</button>
+            </div>
+          </div>
+
+          <!-- Listing Type -->
+          <div class="filter-section">
+            <div class="filter-title">Listing Type</div>
+            <div class="filter-chips" id="type-chips">
+              <button class="chip active" data-type="all" onclick="selectType(this, 'all')">All</button>
+              <button class="chip" data-type="buy-now" onclick="selectType(this, 'buy-now')">Buy Now</button>
+              <button class="chip" data-type="offers" onclick="selectType(this, 'offers')">Offers</button>
+              <button class="chip" data-type="auction" onclick="selectType(this, 'auction')">Auction</button>
             </div>
           </div>
 
@@ -133,14 +146,15 @@
         <div class="shop-main">
           <div class="shop-header">
             <div class="results-info">
-              <span class="results-count" id="results-count">—</span> listings found
+              <span class="results-count" id="results-count">&#8212;</span> listings found
             </div>
-            <button class="btn btn-outline btn-sm" id="mobile-filter-toggle" onclick="toggleMobileSidebar()" style="display: none;">⚙ Filters</button>
+            <button class="btn btn-outline btn-sm" id="mobile-filter-toggle" onclick="toggleMobileSidebar()" style="display: none;">&#9881; Filters</button>
             <select class="sort-select" id="sort-select" onchange="applyFilters()">
               <option value="newest">Newest First</option>
               <option value="price-asc">Price: Low to High</option>
               <option value="price-desc">Price: High to Low</option>
               <option value="popular">Most Viewed</option>
+              <option value="favorites">Most Favorited</option>
             </select>
           </div>
           <div class="listings-grid" id="listings-grid"></div>
@@ -154,19 +168,19 @@
         <button class="back-btn" onclick="navigate('shop')">&larr; Back to Marketplace</button>
         <div id="detail-content"></div>
         <div class="similar-section" id="similar-section">
-          <h3 class="section-title">⚎ Similar Items</h3>
+          <h3 class="section-title">&#9998; Similar Items</h3>
           <div class="similar-scroll" id="similar-scroll"></div>
         </div>
       </div>
     </section>
 
-    <!-- ====== CREATE PAGE ====== -->
+    <!-- ====== CREATE / EDIT PAGE ====== -->
     <section class="page" id="page-create">
       <div class="create-container">
         <h1 class="page-title" id="create-page-title">+ Create New Listing</h1>
 
         <div id="create-auth-notice" class="empty-state hidden">
-          <div class="empty-icon">🔒</div>
+          <div class="empty-icon">&#128274;</div>
           <div class="empty-title">LOGIN REQUIRED</div>
           <div class="empty-sub">You need to be logged in to create listings.</div>
           <br />
@@ -177,7 +191,13 @@
 
           <!-- Images -->
           <div class="form-group">
-            <label class="form-label" for="image-input">&#128247; Images (up to 10)</label>
+            <label class="form-label">&#128247; Images (up to 10)</label>
+            <!-- Existing images (edit mode) -->
+            <div id="existing-images-section" class="hidden">
+              <div class="form-label" style="margin-bottom:6px;">Current Images</div>
+              <div class="image-preview-grid" id="existing-image-grid"></div>
+              <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">Upload new images below to replace or add to current images.</div>
+            </div>
             <div class="image-upload-zone" id="upload-zone">
               <div class="upload-icon">&#128247;</div>
               <div class="upload-text">
@@ -196,25 +216,34 @@
             </div>
             <div class="form-group">
               <label class="form-label" for="c-category">Category *</label>
-              <select class="form-input" id="c-category" required>
+              <select class="form-input" id="c-category" required onchange="updateSubcategories()">
                 <option value="">Select category...</option>
                 <option value="Collectibles">Collectibles</option>
                 <option value="Electronics">Electronics</option>
-                <option value="Clothing & Accessories">Clothing & Accessories</option>
-                <option value="Toys & Figures">Toys & Figures</option>
-                <option value="Sports & Outdoors">Sports & Outdoors</option>
-                <option value="Books & Media">Books & Media</option>
-                <option value="Home & Garden">Home & Garden</option>
-                <option value="Tools & Equipment">Tools & Equipment</option>
+                <option value="Clothing & Accessories">Clothing &amp; Accessories</option>
+                <option value="Toys & Figures">Toys &amp; Figures</option>
+                <option value="Sports & Outdoors">Sports &amp; Outdoors</option>
+                <option value="Books & Media">Books &amp; Media</option>
+                <option value="Home & Garden">Home &amp; Garden</option>
+                <option value="Tools & Equipment">Tools &amp; Equipment</option>
                 <option value="Other">Other</option>
               </select>
             </div>
+          </div>
+
+          <!-- Subcategory -->
+          <div class="form-group" id="subcategory-group" style="display:none;">
+            <label class="form-label" for="c-subcategory">Subcategory</label>
+            <select class="form-input" id="c-subcategory">
+              <option value="">Select subcategory...</option>
+            </select>
           </div>
 
           <!-- Description -->
           <div class="form-group">
             <label class="form-label" for="c-desc">Description *</label>
             <textarea class="form-input" id="c-desc" placeholder="Describe your item — condition, history, what's included..." required minlength="10" maxlength="2000" rows="5"></textarea>
+            <div style="font-size:0.75rem;color:var(--text-muted);text-align:right;" id="desc-char-count">0 / 2000</div>
           </div>
 
           <!-- Price, MSRP, Condition -->
@@ -267,17 +296,50 @@
             </div>
           </div>
 
+          <!-- Payment Methods -->
+          <div class="form-group">
+            <label class="form-label">Payment Methods Accepted</label>
+            <div class="payment-methods-grid" id="payment-methods-grid">
+              <label class="payment-method-item">
+                <input type="checkbox" name="payment" value="cash" checked /> Cash
+              </label>
+              <label class="payment-method-item">
+                <input type="checkbox" name="payment" value="card" /> Card
+              </label>
+              <label class="payment-method-item">
+                <input type="checkbox" name="payment" value="paypal" /> PayPal
+              </label>
+              <label class="payment-method-item">
+                <input type="checkbox" name="payment" value="venmo" /> Venmo
+              </label>
+              <label class="payment-method-item">
+                <input type="checkbox" name="payment" value="zelle" /> Zelle
+              </label>
+              <label class="payment-method-item">
+                <input type="checkbox" name="payment" value="crypto" /> Crypto
+              </label>
+              <label class="payment-method-item">
+                <input type="checkbox" name="payment" value="trade" /> Trade
+              </label>
+            </div>
+          </div>
+
           <!-- Tags -->
           <div class="form-group">
-            <label class="form-label" for="c-tags">Tags (comma separated)</label>
+            <label class="form-label" for="c-tags">Tags (comma separated, up to 10)</label>
             <input class="form-input" id="c-tags" type="text" placeholder="transformer, g1, vintage, sealed..." />
           </div>
 
           <!-- Submit -->
           <div id="create-error" class="auth-error"></div>
-          <button type="submit" class="btn btn-primary btn-lg" id="create-submit">
-            PUBLISH LISTING
-          </button>
+          <div class="form-row" style="margin-top:8px;">
+            <button type="submit" class="btn btn-primary btn-lg" id="create-submit">
+              PUBLISH LISTING
+            </button>
+            <button type="button" class="btn btn-ghost btn-lg" id="create-cancel" onclick="cancelEdit()" style="display:none;">
+              CANCEL
+            </button>
+          </div>
         </form>
       </div>
     </section>
@@ -292,18 +354,20 @@
             <div class="profile-username" id="profile-username">LOADING...</div>
             <div class="profile-email" id="profile-email"></div>
             <p class="profile-bio" id="profile-bio"></p>
+            <div class="profile-location" id="profile-location"></div>
           </div>
           <div class="profile-stats">
             <div class="stat-item"><div class="stat-value" id="stat-listings">0</div><div class="stat-label">Listings</div></div>
-            <div class="stat-item"><div class="stat-value" id="stat-views">0</div><div class="stat-label">Total Views</div></div>
+            <div class="stat-item"><div class="stat-value" id="stat-views">0</div><div class="stat-label">Views</div></div>
             <div class="stat-item"><div class="stat-value" id="stat-favorites">0</div><div class="stat-label">Favorites</div></div>
+            <div class="stat-item"><div class="stat-value" id="stat-sold">0</div><div class="stat-label">Sold</div></div>
           </div>
-          <button class="btn btn-outline btn-sm" onclick="openEditProfile()">&#9998; Edit</button>
+          <button class="btn btn-outline btn-sm" onclick="openEditProfile()">&#9998; Edit Profile</button>
         </div>
 
         <div class="profile-tabs">
-          <button class="profile-tab active" data-ptab="my-listings" onclick="switchProfileTab(this)">My Listings</button>
-          <button class="profile-tab" data-ptab="sold" onclick="switchProfileTab(this)">Sold</button>
+          <button class="profile-tab active" data-ptab="my-listings" onclick="switchProfileTab(this)">Active Listings</button>
+          <button class="profile-tab" data-ptab="sold" onclick="switchProfileTab(this)">Sold Items</button>
           <button class="profile-tab" data-ptab="settings" onclick="switchProfileTab(this)">Settings</button>
         </div>
 
@@ -316,19 +380,33 @@
         </div>
 
         <div id="ptab-settings" class="hidden">
-          <form class="create-form" onsubmit="saveProfile(event)">
-            <div class="form-group">
-              <label class="form-label" for="s-username">Username</label>
-              <input class="form-input" id="s-username" type="text" maxlength="30" minlength="3" />
+          <form class="create-form" onsubmit="saveProfile(event)" style="max-width:600px;">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="s-username">Username</label>
+                <input class="form-input" id="s-username" type="text" maxlength="30" minlength="3"
+                  pattern="[a-zA-Z0-9_]+" title="Letters, numbers and underscores only" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="s-phone">Phone Number</label>
+                <input class="form-input" id="s-phone" type="tel" placeholder="+1 555 000 0000" />
+              </div>
             </div>
             <div class="form-group">
               <label class="form-label" for="s-bio">Bio</label>
-              <textarea class="form-input" id="s-bio" rows="3" maxlength="500"></textarea>
+              <textarea class="form-input" id="s-bio" rows="3" maxlength="500" placeholder="Tell buyers about yourself..."></textarea>
             </div>
-            <div class="form-group">
-              <label class="form-label" for="s-location">Location</label>
-              <input class="form-input" id="s-location" type="text" />
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label" for="s-location">Location</label>
+                <input class="form-input" id="s-location" type="text" placeholder="City, State" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="s-website">Website</label>
+                <input class="form-input" id="s-website" type="url" placeholder="https://yoursite.com" />
+              </div>
             </div>
+            <div id="profile-save-error" class="auth-error"></div>
             <button type="submit" class="btn btn-primary">SAVE PROFILE</button>
             <button type="button" class="btn btn-danger" onclick="signOut()" style="margin-top:12px;">SIGN OUT</button>
           </form>
@@ -394,7 +472,8 @@
             <div class="auth-divider"><span>OR</span></div>
             <div class="form-group">
               <label class="form-label" for="reg-username">Username</label>
-              <input class="form-input" id="reg-username" type="text" required minlength="3" maxlength="30" autocomplete="username" />
+              <input class="form-input" id="reg-username" type="text" required minlength="3" maxlength="30"
+                pattern="[a-zA-Z0-9_]+" title="Letters, numbers and underscores only" autocomplete="username" />
             </div>
             <div class="form-group">
               <label class="form-label" for="reg-email">Email</label>
@@ -413,6 +492,22 @@
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ===================== MARK SOLD MODAL ===================== -->
+  <div class="modal-overlay" id="mark-sold-modal" onclick="closeOnOverlay(event, 'mark-sold-modal')">
+    <div class="modal" style="max-width:380px;">
+      <button class="modal-close" onclick="closeModal('mark-sold-modal')">&times;</button>
+      <div class="modal-logo" style="font-size:1.1rem;margin-bottom:8px;">MARK AS SOLD</div>
+      <p style="font-size:0.88rem;color:var(--text-muted);text-align:center;margin-bottom:20px;">
+        This will mark the listing as sold and remove it from the marketplace.
+      </p>
+      <input type="hidden" id="mark-sold-listing-id" />
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <button class="btn btn-primary btn-lg w-full" onclick="confirmMarkSold()">YES, MARK AS SOLD</button>
+        <button class="btn btn-ghost w-full" onclick="closeModal('mark-sold-modal')">CANCEL</button>
+      </div>
     </div>
   </div>
 
