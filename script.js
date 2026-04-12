@@ -31,11 +31,13 @@ document.addEventListener('DOMContentLoaded', () => {
   let DB = null;
 
   // Simple Supabase initialization
+  const SUPABASE_URL = 'REPLACE_URL';
+  const SUPABASE_API_KEY = 'REPLACE_KEY';
   try {
     if (typeof supabase !== 'undefined' && supabase?.createClient) {
       DB = supabase.createClient(
-        'https://gotzmuobwuubsugnowxq.supabase.co',
-        'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs',
+        SUPABASE_URL,
+        SUPABASE_API_KEY,
         {
           auth: {
             persistSession: true,
@@ -81,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!DB) return [];
     let { data, error } = await DB
       .from('listings')
-      .select('*, profiles(username, rating)');
+      .select('*, profiles(username)');
 
     if (error) {
       console.warn('Primary listings fetch failed, retrying without profile join:', error.message || error);
@@ -95,11 +97,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     return (data || []).map(item => ({
       ...item,
-      images: normalizeImages(item.images),
+      name: item.title,
+      images: item.image_url ? JSON.parse(item.image_url) : [],
       seller: item.profiles?.username || item.seller || 'Unknown Seller',
-      seller_rating: parseFloat(item.profiles?.rating || item.rating || 5.0),
-      views: item.view_count || 0,
-      likes: item.favorite_count || 0
+      seller_rating: 5.0,
+      views: 0,
+      likes: 0
     }));
   }
 
@@ -255,16 +258,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const email    = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
 
-    if (!DB) {
-      // Demo mode: simulate login
-      currentUser = { email, user_metadata: { username: email.split('@')[0] } };
-      updateNavUI();
-      showPage('home');
-      showToast('Logged in!', `Welcome back, ${currentUser.user_metadata.username}`, 'success');
-      setButtonLoading(btn, false);
-      return;
-    }
-
     const { data, error } = await DB.auth.signInWithPassword({ email, password });
     setButtonLoading(btn, false);
     if (error) {
@@ -345,7 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const { data, error } = await DB.auth.signUp({
       email, password,
-      options: { data: { username, first_name: firstName, last_name: lastName } }
+      options: { data: { username, full_name: `${firstName} ${lastName}`.trim(), first_name: firstName, last_name: lastName } }
     });
 
     setButtonLoading(btn, false);
@@ -372,7 +365,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // GOOGLE OAUTH
   window.loginWithGoogle = async function () {
-    if (!DB) { showToast('Demo mode', 'Google login requires Supabase config.', 'warning'); return; }
     const { error } = await DB.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: window.location.href }
@@ -386,11 +378,6 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     const email = document.getElementById('forgot-email').value.trim();
     const msgEl = document.getElementById('forgot-msg');
-    if (!DB) {
-      msgEl.textContent = 'Demo mode — password reset requires Supabase config.';
-      msgEl.style.display = 'block';
-      return;
-    }
     const { error } = await DB.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
     if (error) {
       msgEl.textContent = error.message;
@@ -432,20 +419,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!DB || !user?.id) return;
 
     const username = user.user_metadata?.username || user.email?.split('@')[0] || `user_${user.id.slice(0, 8)}`;
+    const full_name = user.user_metadata?.full_name || `${user.user_metadata?.first_name || ''} ${user.user_metadata?.last_name || ''}`.trim() || username;
     const profileRow = {
       id: user.id,
       username,
-      email: user.email,
-      rating: 5.00,
-      bio: '',
-      location: '',
+      full_name,
       avatar_url: '',
-      phone: '',
-      website: '',
-      social_links: {},
-      preferences: { notifications: true, email_updates: true, theme: localStorage.getItem('OBTAINUM_theme') || 'light' },
-      is_verified: Boolean(user.email_confirmed_at),
-      updated_at: new Date().toISOString()
+      location: ''
     };
 
     const { error } = await DB.from('profiles').upsert(profileRow);
@@ -1449,11 +1429,6 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
         return;
       }
 
-      if (!DB) {
-        showToast('Supabase not configured', 'Listing upload requires Supabase.', 'error');
-        return;
-      }
-
       const btn = document.getElementById('sell-submit-btn');
       const originalBtnText = btn.innerHTML;
       btn.disabled = true;
@@ -1517,37 +1492,39 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
         }
 
         const listingData = {
-          seller_id: currentUser.id,
-          seller_profile_id: currentUser.id,
-          name,
-          category,
-          description,
-          condition,
-          location,
+          user_id: currentUser.id,
+          title: name,
           price,
           msrp,
-          type: listingType,
-          shipping,
-          payment_methods,
-          tags,
-          images: imageUrls,
-          is_fair
+          description,
+          category,
+          condition,
+          image_url: JSON.stringify(imageUrls),
+          location,
+          shipping: rawShipping === 'free',
+          trade: payment_methods.includes('trade'),
+          local_pickup: rawShipping === 'local',
+          is_featured: false,
+          seller: currentUser.user_metadata?.username || username || 'Unknown',
+          source: 'user'
         };
 
         const { data: newListing, error: dbError } = await DB
           .from('listings')
           .insert([listingData])
-          .select('*, profiles!fk_listings_seller_profiles(username, rating)')
+          .select('*, profiles(username)')
           .single();
 
         if (dbError) throw dbError;
 
         const formattedListing = {
           ...newListing,
-          seller: newListing.profiles?.username || 'You',
-          seller_rating: parseFloat(newListing.profiles?.rating || 5.0),
-          views: newListing.view_count || 0,
-          likes: newListing.favorite_count || 0
+          name: newListing.title,
+          images: newListing.image_url ? JSON.parse(newListing.image_url) : [],
+          seller: newListing.profiles?.username || newListing.seller || 'You',
+          seller_rating: 5.0,
+          views: 0,
+          likes: 0
         };
 
         products.unshift(formattedListing);
@@ -1579,20 +1556,6 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
   ============================================================== */
 
   async function renderProfilePage() {
-    if (!DB) {
-      // Demo mode
-      if (!currentUser) {
-        document.getElementById('profile-content').innerHTML = `
-          <div style="text-align:center;padding:80px 0;">
-            <i class="fas fa-user-lock" style="font-size:4rem;color:var(--text-subtle);margin-bottom:20px;display:block;"></i>
-            <h2>Login to view your profile</h2>
-            <p style="color:var(--text-muted);margin-bottom:20px;">Create an account or log in to access your profile.</p>
-            <button class="btn btn-primary" onclick="showPage('login')">Sign In</button>
-          </div>`;
-        return;
-      }
-    }
-
     if (!currentUser) {
       document.getElementById('profile-content').innerHTML = `
         <div style="text-align:center;padding:80px 0;">
@@ -1609,7 +1572,7 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
     const joinDate  = new Date(currentUser.created_at || Date.now()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     const sellerId  = currentUser.id;
 
-    const userListings = products.filter(p => p.seller_id === sellerId || p.seller_profile_id === sellerId);
+    const userListings = products.filter(p => p.user_id === sellerId);
 
     document.getElementById('profile-content').innerHTML = `
       <div class="profile-header">
@@ -1660,7 +1623,7 @@ Format responses with markdown-like plain text. Keep responses under 300 words.`
 
     switch (tab) {
       case 'listings':
-        content.innerHTML = renderProfileListings(products.filter(p => p.seller_id === sellerId || p.seller_profile_id === sellerId));
+        content.innerHTML = renderProfileListings(products.filter(p => p.user_id === sellerId));
         break;
       case 'purchases':
         content.innerHTML = `<div style="text-align:center;padding:60px 0;color:var(--text-muted);">
@@ -2190,64 +2153,6 @@ Return ONLY valid JSON (no markdown, no code fences) in this exact format:
      SECTION: features/sell.js — Payment Method Toggle Handlers
      Bug Fix: Corrected selectors to match HTML (name="payment_methods",
      class="payment-method-check") and correct wrap IDs
-     (cash-details-wrap / trade-details-wrap).
-  ============================================================== */
-
-  function initPaymentMethodToggles() {
-    const cashCheck  = document.querySelector('.payment-method-check[value="cash"]');
-    const tradeCheck = document.querySelector('.payment-method-check[value="trade"]');
-    const cashFields  = document.getElementById('cash-details-wrap');
-    const tradeFields = document.getElementById('trade-details-wrap');
-
-    function updateFields() {
-      if (cashFields)  cashFields.style.display = cashCheck?.checked  ? 'block' : 'none';
-      if (tradeFields) tradeFields.style.display = tradeCheck?.checked ? 'block' : 'none';
-    }
-
-    cashCheck?.addEventListener('change', updateFields);
-    tradeCheck?.addEventListener('change', updateFields);
-    updateFields();
-  }
-
-  initPaymentMethodToggles();
-
-
-  /* ==============================================================
-     SECTION: App Initialization
-  ============================================================== */
-  async function init() {
-    await checkAuthSession();
-
-    // Load Real Products
-    products = await fetchListings();
-    filteredItems = products.slice();
-
-    updateCartCount();
-    updateNavUI();
-    populateHomePage();
-    applyFilters();
-
-    // Check if storage bucket exists
-    if (DB) {
-      try {
-        const { data, error } = await DB.storage.listBuckets();
-        if (error) throw error;
-        const bucketExists = data.some(bucket => bucket.name === STORAGE_BUCKET);
-        if (!bucketExists) {
-          console.warn(`Storage bucket '${STORAGE_BUCKET}' not found. Please create it in Supabase Dashboard > Storage.`);
-          showToast('Storage setup needed', `Create '${STORAGE_BUCKET}' bucket in Supabase to upload images.`, 'warning', 8000);
-        }
-      } catch (e) {
-        console.warn('Could not check storage buckets:', e);
-      }
-    }
-
-    console.log(`OBTAINUM Live: ${products.length} listings loaded from DB.`);
-  }
-
-  init().catch(console.error);
-});
-
      (cash-details-wrap / trade-details-wrap).
   ============================================================== */
 
