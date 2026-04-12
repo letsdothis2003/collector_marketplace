@@ -31,8 +31,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let DB = null;
 
   // Simple Supabase initialization
-  const SUPABASE_URL = 'REPLACE_URL';
-  const SUPABASE_API_KEY = 'REPLACE_KEY';
+  const SUPABASE_URL = 'https://ofvwpzdhuugyexdcroya.supabase.co';
+  const SUPABASE_API_KEY = 'sb_publishable_f9UqvNZVLitIS4Ysm6YWxQ_qwMpbwKL';
   try {
     if (typeof supabase !== 'undefined' && supabase?.createClient) {
       DB = supabase.createClient(
