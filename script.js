@@ -144,6 +144,19 @@ async function initAuth() {
   });
 }
 
+async function handleUser(user) {
+  // 🔒 Require email verification
+  const verified =
+    user.email_confirmed_at ||
+    user.confirmed_at ||
+    user.user_metadata.email_verified;
+
+  if (!verified) {
+    State.user = null;
+    showToast?.("Please verify your email to continue.");
+    return;
+  }
+
 async function onAuthChange(user) {
   State.user = user;
 
