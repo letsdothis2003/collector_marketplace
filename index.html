@@ -479,6 +479,9 @@
 <!-- ============================================================
      SECTION: AUTH MODAL — Login & Register
      ============================================================ -->
+<!-- ============================================================
+     SECTION: AUTH MODAL — Login & Register
+     ============================================================ -->
 <div class="modal-overlay" id="auth-modal" onclick="closeOnOverlay(event, 'auth-modal')">
   <div class="modal" role="dialog" aria-modal="true" aria-label="Authentication">
     <button class="modal-close" onclick="closeModal('auth-modal')" aria-label="Close">&times;</button>
@@ -494,51 +497,79 @@
 
     <!-- Login Form -->
     <div id="auth-login">
-      <form class="auth-form" onsubmit="handleLogin(event)">
-        <div class="auth-error" id="login-error"></div>
-        <div class="form-group">
-          <label class="form-label" for="login-email">Email</label>
-          <input class="form-input" id="login-email" type="email" placeholder="your@email.com" required autocomplete="email" />
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="login-pass">Password</label>
-          <input class="form-input" id="login-pass" type="password" placeholder="••••••••" required autocomplete="current-password" />
-        </div>
-        <button type="submit" class="btn btn-primary w-full" id="login-btn">
-          LOGIN TO OBTAINUM
+      <div class="auth-form">
+        <!-- Google OAuth -->
+        <button type="button" class="btn-google" onclick="signInWithGoogle()">
+          <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          </svg>
+          CONTINUE WITH GOOGLE
         </button>
-        <div style="font-size:0.8rem;text-align:center;color:var(--text-muted);">
-          Don't have an account?
-          <a href="#" onclick="switchAuthTab('register'); return false;" style="color:var(--neon);">Register</a>
-        </div>
-      </form>
+        <div class="auth-divider">OR</div>
+        <!-- Email / Password -->
+        <form onsubmit="handleLogin(event)" style="display:contents;">
+          <div class="auth-error" id="login-error"></div>
+          <div class="form-group">
+            <label class="form-label" for="login-email">Email</label>
+            <input class="form-input" id="login-email" type="email" placeholder="your@email.com" required autocomplete="email" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="login-pass">Password</label>
+            <input class="form-input" id="login-pass" type="password" placeholder="••••••••" required autocomplete="current-password" />
+          </div>
+          <button type="submit" class="btn btn-primary w-full" id="login-btn">
+            LOGIN TO OBTAINUM
+          </button>
+          <div style="font-size:0.8rem;text-align:center;color:var(--text-muted);">
+            Don't have an account?
+            <a href="#" onclick="switchAuthTab('register'); return false;" style="color:var(--neon);">Register</a>
+          </div>
+        </form>
+      </div>
     </div>
 
     <!-- Register Form -->
     <div id="auth-register" class="hidden">
-      <form class="auth-form" onsubmit="handleRegister(event)">
-        <div class="auth-error" id="register-error"></div>
-        <div class="form-group">
-          <label class="form-label" for="reg-username">Username</label>
-          <input class="form-input" id="reg-username" type="text" placeholder="your_handle" required minlength="3" maxlength="30"
-            pattern="[a-zA-Z0-9_]+" title="Letters, numbers and underscores only" />
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="reg-email">Email</label>
-          <input class="form-input" id="reg-email" type="email" placeholder="your@email.com" required autocomplete="email" />
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="reg-pass">Password</label>
-          <input class="form-input" id="reg-pass" type="password" placeholder="Min 8 characters" required minlength="8" autocomplete="new-password" />
-        </div>
-        <button type="submit" class="btn btn-primary w-full" id="register-btn">
-          CREATE ACCOUNT
+      <div class="auth-form" id="register-form-wrap">
+        <!-- Google OAuth -->
+        <button type="button" class="btn-google" onclick="signInWithGoogle()">
+          <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          </svg>
+          CONTINUE WITH GOOGLE
         </button>
-        <div style="font-size:0.8rem;text-align:center;color:var(--text-muted);">
-          Already a member?
-          <a href="#" onclick="switchAuthTab('login'); return false;" style="color:var(--neon);">Login</a>
-        </div>
-      </form>
+        <div class="auth-divider">OR</div>
+        <!-- Email / Password -->
+        <form onsubmit="handleRegister(event)" style="display:contents;">
+          <div class="auth-error" id="register-error"></div>
+          <div class="form-group">
+            <label class="form-label" for="reg-username">Username</label>
+            <input class="form-input" id="reg-username" type="text" placeholder="your_handle" required minlength="3" maxlength="30"
+              pattern="[a-zA-Z0-9_]+" title="Letters, numbers and underscores only" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="reg-email">Email</label>
+            <input class="form-input" id="reg-email" type="email" placeholder="your@email.com" required autocomplete="email" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="reg-pass">Password</label>
+            <input class="form-input" id="reg-pass" type="password" placeholder="Min 8 characters" required minlength="8" autocomplete="new-password" />
+          </div>
+          <button type="submit" class="btn btn-primary w-full" id="register-btn">
+            CREATE ACCOUNT
+          </button>
+          <div style="font-size:0.8rem;text-align:center;color:var(--text-muted);">
+            Already a member?
+            <a href="#" onclick="switchAuthTab('login'); return false;" style="color:var(--neon);">Login</a>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
 </div>
