@@ -9,8 +9,8 @@ document.addEventListener('DOMContentLoaded', () => {
      SECTION: supabase-client.js — Supabase Initialization
   ================================================================ */
   let DB = null;
-  const SUPABASE_URL = 'https://ofvwpzdhuugyexdcroya.supabase.co';
-  const SUPABASE_API_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9mdndwemRodXVneWV4ZGNyb3lhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDk5Njk3MTMsImV4cCI6MTcyNzc0NTcxM30.sb_publishable_f9UqvNZVLitIS4Ysm6YWxQ_qwMpbwKL';
+  const SUPABASE_URL = 'https://gotzmuobwuubsugnowxq.supabase.co';
+  const SUPABASE_API_KEY = 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs';
   const STORAGE_BUCKET = 'listing-images';
 
   try {
