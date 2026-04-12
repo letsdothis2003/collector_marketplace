@@ -4,317 +4,202 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="OBTAINUM: The Anti-Scalp Collector Marketplace">
-  <meta property="og:title" content="OBTAINUM | Anti-Scalp Marketplace">
-  <meta property="og:description" content="Buy and sell collectibles without the scalpers.">
-  <title>OBTAINUM | Anti-Scalp Marketplace</title>
-
-  <!-- External CDNs -->
+  <title>OBTAINUM | The Anti-Scalp Marketplace</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <div id="toast-container" aria-live="polite" aria-atomic="true"></div>
-  <div id="mobile-overlay" class="mobile-overlay"></div>
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toast-container" aria-live="polite"></div>
 
-  <!-- NAVBAR -->
+  <!-- NAVIGATION -->
   <nav id="nav-root" role="navigation" aria-label="Main navigation">
     <div class="nav-inner">
-      <a href="#" class="brand" onclick="showPage('home')" aria-label="OBTAINUM Home">
+      <a href="#" class="brand" onclick="showPage('home'); return false;">
         <span class="brand-icon"><i class="fas fa-gem"></i></span>
         <span class="brand-text">OBTAINUM</span>
-        <span class="brand-tagline">Anti-Scalp</span>
       </a>
 
       <div class="nav-search" role="search">
-        <i class="fas fa-search search-icon" aria-hidden="true"></i>
-        <input type="text" id="global-search" placeholder="Search items..." aria-label="Search marketplace">
-        <button id="search-clear-btn" class="search-clear" aria-label="Clear search" style="display:none;"><i class="fas fa-times"></i></button>
+        <i class="fas fa-search search-icon"></i>
+        <input type="text" id="global-search" placeholder="Search items...">
       </div>
 
       <div class="nav-links" id="nav-links">
-        <a href="#" onclick="showPage('home')" class="nav-link active" data-page="home">
+        <a href="#" onclick="showPage('home'); return false;" class="nav-link active" data-page="home">
           <i class="fas fa-home"></i><span>Home</span>
         </a>
-        <a href="#" onclick="showPage('shop')" class="nav-link" data-page="shop">
+        <a href="#" onclick="showPage('shop'); return false;" class="nav-link" data-page="shop">
           <i class="fas fa-store"></i><span>Shop</span>
         </a>
-        <a href="#" onclick="showPage('sell')" class="nav-link" data-page="sell" style="display:none;">
+        <a href="#" onclick="showPage('sell'); return false;" class="nav-link" data-page="sell" style="display:none;">
           <i class="fas fa-tag"></i><span>Sell</span>
         </a>
-        <a href="#" onclick="showPage('about')" class="nav-link" data-page="about">
-          <i class="fas fa-info-circle"></i><span>About</span>
+        <a href="#" onclick="showPage('profile'); return false;" class="nav-link" id="profile-link" data-page="profile" style="display:none;">
+          <i class="fas fa-user"></i><span>Profile</span>
         </a>
-        <a href="#" onclick="showPage('cart')" class="nav-link" data-page="cart">
-          <i class="fas fa-shopping-cart"></i>
-          <span>Cart</span>
-          <span id="cart-count" class="cart-badge" style="display:none;">0</span>
-        </a>
-        <a href="#" onclick="showPage('profile')" class="nav-link" id="profile-link" data-page="profile" style="display:none;">
-          <i class="fas fa-user-circle"></i><span>Profile</span>
-        </a>
-        <a href="#" onclick="showPage('login')" class="nav-link nav-login-btn" id="login-link">
+        <a href="#" onclick="showPage('login'); return false;" class="nav-link nav-login-btn" id="login-link" data-page="login">
           <i class="fas fa-sign-in-alt"></i><span>Login</span>
         </a>
-        <a href="#" id="logout-link" class="nav-link nav-logout-btn" style="display:none;" onclick="logout()">
+        <a href="#" onclick="logout(); return false;" class="nav-link nav-logout-btn" id="logout-link" style="display:none;">
           <i class="fas fa-sign-out-alt"></i><span>Logout</span>
         </a>
-        <button id="theme-toggle" class="theme-toggle-btn" aria-label="Toggle dark/light mode">
+        <button id="theme-toggle" class="theme-toggle-btn" aria-label="Toggle theme">
           <i class="fas fa-moon" id="theme-icon"></i>
         </button>
       </div>
 
-      <button id="mobile-menu-btn" class="mobile-menu-btn" aria-label="Open menu">
+      <button id="mobile-menu-btn" class="mobile-menu-btn" aria-label="Menu">
         <span></span><span></span><span></span>
       </button>
     </div>
   </nav>
 
-  <div id="announcement-banner" class="announcement-banner">
-    <i class="fas fa-shield-alt"></i>
-    <span>OBTAINUM is <strong>anti-scalp</strong> — we flag listings priced above MSRP.</span>
-    <button id="close-banner" aria-label="Close announcement"><i class="fas fa-times"></i></button>
-  </div>
-
+  <!-- MAIN CONTENT -->
   <main id="view-container" role="main">
 
     <!-- HOME PAGE -->
     <section id="page-home" class="page-view active">
-      <div class="hero-section" id="hero">
-        <div class="hero-bg-shapes" aria-hidden="true">
-          <div class="shape shape-1"></div>
-          <div class="shape shape-2"></div>
-          <div class="shape shape-3"></div>
-        </div>
+      <div class="hero-section">
         <div class="hero-content">
-          <div class="hero-badge"><i class="fas fa-shield-alt"></i> Anti-Scalp Verified</div>
           <h1 class="hero-title">The Collector's <span class="hero-highlight">Fair Price</span> Marketplace</h1>
-          <p class="hero-subtitle">Buy and sell collectibles without scalpers. Community-verified fair pricing.</p>
+          <p class="hero-subtitle">Buy and sell at fair prices. No scalpers, no bots.</p>
           <div class="hero-actions">
-            <button class="btn btn-primary btn-lg" onclick="showPage('shop')">
+            <button class="btn btn-primary btn-lg" onclick="showPage('shop'); return false;">
               <i class="fas fa-store"></i> Browse
             </button>
-            <button class="btn btn-outline btn-lg" onclick="showPage('sell')">
-              <i class="fas fa-plus-circle"></i> Sell
+            <button class="btn btn-outline btn-lg" onclick="showPage('sell'); return false;">
+              <i class="fas fa-plus"></i> Sell
             </button>
           </div>
         </div>
       </div>
 
       <div class="container section-block">
-        <h2 class="section-title">Featured Listings</h2>
-        <div id="featured-products" class="product-grid" role="list"></div>
+        <h2 class="section-title">Shop by Category</h2>
+        <div class="category-grid" id="category-grid"></div>
       </div>
 
       <div class="container section-block">
-        <h2 class="section-title">Recently Listed</h2>
-        <div id="recent-products" class="product-grid" role="list"></div>
+        <h2 class="section-title">Featured Items</h2>
+        <div id="featured-products" class="product-grid"></div>
       </div>
     </section>
 
     <!-- SHOP PAGE -->
     <section id="page-shop" class="page-view">
       <div class="container">
-        <div class="shop-header">
-          <h1 class="page-title">Marketplace</h1>
-          <div class="shop-toolbar">
-            <select id="sort-select" class="sort-select">
-              <option value="newest">Newest</option>
-              <option value="oldest">Oldest</option>
-              <option value="price-asc">Price: Low-High</option>
-              <option value="price-desc">Price: High-Low</option>
-            </select>
-            <span id="results-count" class="results-count">0 listings</span>
-          </div>
-        </div>
-
+        <h1 class="page-title">Marketplace</h1>
         <div class="shop-layout">
           <aside class="filters" id="filters-sidebar">
             <div class="filter-sidebar-header">
               <h3><i class="fas fa-sliders-h"></i> Filters</h3>
-              <button class="btn-text" onclick="clearAllFilters()">Clear</button>
             </div>
-
             <div class="filter-group">
-              <h4 class="filter-label">Search</h4>
-              <input type="text" id="shop-search" placeholder="Search..." class="filter-input">
+              <label class="filter-label">Category</label>
+              <div class="filter-checkbox-list" id="category-filter-list"></div>
             </div>
-
             <div class="filter-group">
-              <h4 class="filter-label">Category</h4>
-              <div class="filter-checkbox-list">
-                <label class="filter-checkbox"><input type="radio" name="category-filter" value="all" checked> All</label>
-                <label class="filter-checkbox"><input type="radio" name="category-filter" value="Electronics"> Electronics</label>
-                <label class="filter-checkbox"><input type="radio" name="category-filter" value="Clothing & Accessories"> Apparel</label>
-                <label class="filter-checkbox"><input type="radio" name="category-filter" value="Collectibles"> Collectibles</label>
-                <label class="filter-checkbox"><input type="radio" name="category-filter" value="Books & Media"> Books</label>
-              </div>
-            </div>
-
-            <div class="filter-group">
-              <h4 class="filter-label">Price Range</h4>
+              <label class="filter-label">Price Range</label>
               <input type="range" id="price-slider" min="0" max="5000" value="5000">
               <div class="price-display">Up to <strong id="price-filter-value">$5,000</strong></div>
             </div>
-
             <div class="filter-group">
-              <h4 class="filter-label">Condition</h4>
+              <label class="filter-label">Condition</label>
               <div class="filter-checkbox-list">
-                <label class="filter-checkbox"><input type="checkbox" class="condition-filter" value="new"> New</label>
-                <label class="filter-checkbox"><input type="checkbox" class="condition-filter" value="like-new"> Like New</label>
-                <label class="filter-checkbox"><input type="checkbox" class="condition-filter" value="good"> Good</label>
-                <label class="filter-checkbox"><input type="checkbox" class="condition-filter" value="fair"> Fair</label>
+                <label class="filter-checkbox"><input type="checkbox" class="condition-filter" value="new"> <span>New</span></label>
+                <label class="filter-checkbox"><input type="checkbox" class="condition-filter" value="like-new"> <span>Like New</span></label>
+                <label class="filter-checkbox"><input type="checkbox" class="condition-filter" value="good"> <span>Good</span></label>
+                <label class="filter-checkbox"><input type="checkbox" class="condition-filter" value="fair"> <span>Fair</span></label>
               </div>
             </div>
-
-            <div class="filter-group">
-              <label class="toggle-switch">
-                <input type="checkbox" id="anti-scalp-filter" checked>
-                <span class="toggle-slider"></span>
-                <span class="toggle-label">Fair prices only</span>
-              </label>
-            </div>
+            <button class="btn btn-primary btn-block" onclick="applyFilters()">Apply Filters</button>
           </aside>
 
           <main class="shop-products">
-            <div class="view-toggle-bar">
-              <div class="view-toggle">
-                <button class="view-btn active" id="grid-view-btn" onclick="setView('grid')"><i class="fas fa-th-large"></i></button>
-                <button class="view-btn" id="list-view-btn" onclick="setView('list')"><i class="fas fa-list"></i></button>
-              </div>
+            <div class="shop-header-controls">
+              <select id="sort-select" class="sort-select">
+                <option value="newest">Newest First</option>
+                <option value="price-asc">Price: Low to High</option>
+                <option value="price-desc">Price: High to Low</option>
+              </select>
+              <span id="results-count" class="results-count">0 listings</span>
             </div>
-            <div id="product-grid" class="product-grid grid-view" role="list"></div>
+            <div id="product-grid" class="product-grid"></div>
             <div id="pagination" class="pagination-wrap"></div>
           </main>
         </div>
       </div>
     </section>
 
-    <!-- PRODUCT MODAL -->
-    <div id="product-modal" class="modal-overlay" role="dialog" aria-modal="true" style="display:none;">
-      <div class="modal-box modal-product">
-        <button class="modal-close" onclick="closeProductModal()" aria-label="Close"><i class="fas fa-times"></i></button>
-        <div id="modal-product-content" class="modal-product-inner"></div>
-      </div>
-    </div>
-
     <!-- SELL PAGE -->
     <section id="page-sell" class="page-view">
       <div class="container form-page">
-        <div class="form-page-header">
-          <h1 class="page-title"><i class="fas fa-tag"></i> List an Item</h1>
-          <p class="page-subtitle">Reach collectors. Fair pricing guaranteed.</p>
-        </div>
-
+        <h1 class="page-title"><i class="fas fa-tag"></i> List an Item</h1>
         <div class="form-card">
-          <form id="sell-form" novalidate>
-            <fieldset class="form-fieldset">
-              <legend>Item Details</legend>
-              <div class="form-row">
-                <div class="form-group">
-                  <label for="sell-name">Item Name <span class="required">*</span></label>
-                  <input type="text" id="sell-name" required maxlength="100">
-                  <span class="char-count"><span id="name-char-count">0</span>/100</span>
-                </div>
-                <div class="form-group">
-                  <label for="sell-category">Category <span class="required">*</span></label>
-                  <select id="sell-category" required>
-                    <option value="">Select category</option>
-                    <option value="Electronics">Electronics</option>
-                    <option value="Clothing & Accessories">Apparel</option>
-                    <option value="Collectibles">Collectibles</option>
-                    <option value="Books & Media">Books</option>
-                    <option value="Home & Garden">Home</option>
-                  </select>
-                </div>
+          <form id="sell-form" class="sell-form" novalidate>
+            <div class="form-group">
+              <label for="sell-name">Item Name <span class="required">*</span></label>
+              <input type="text" id="sell-name" placeholder="Item name" required maxlength="100">
+              <span class="char-count"><span id="name-char-count">0</span>/100</span>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="sell-category">Category <span class="required">*</span></label>
+                <select id="sell-category" required></select>
               </div>
               <div class="form-group">
-                <label for="sell-description">Description <span class="required">*</span></label>
-                <textarea id="sell-description" required maxlength="2000" rows="4"></textarea>
-                <span class="char-count"><span id="description-char-count">0</span>/2000</span>
+                <label for="sell-condition">Condition <span class="required">*</span></label>
+                <select id="sell-condition" required>
+                  <option value="">Select condition</option>
+                  <option value="new">New</option>
+                  <option value="like-new">Like New</option>
+                  <option value="good">Good</option>
+                  <option value="fair">Fair</option>
+                  <option value="poor">For Parts</option>
+                </select>
               </div>
-            </fieldset>
+            </div>
 
-            <fieldset class="form-fieldset">
-              <legend>Condition & Pricing</legend>
-              <div class="form-row">
-                <div class="form-group">
-                  <label for="sell-condition">Condition <span class="required">*</span></label>
-                  <select id="sell-condition" required>
-                    <option value="">Select condition</option>
-                    <option value="new">New (Sealed)</option>
-                    <option value="like-new">Like New</option>
-                    <option value="good">Good</option>
-                    <option value="fair">Fair</option>
-                    <option value="poor">For Parts</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label for="sell-location">Location</label>
-                  <input type="text" id="sell-location" placeholder="City, State">
-                </div>
-              </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label for="sell-price">Price ($) <span class="required">*</span></label>
-                  <input type="number" id="sell-price" required min="0.01" step="0.01">
-                </div>
-                <div class="form-group">
-                  <label for="sell-msrp">MSRP ($)</label>
-                  <input type="number" id="sell-msrp" min="0" step="0.01">
-                </div>
-              </div>
-              <div id="price-fairness-indicator" class="price-fairness" style="display:none;"></div>
-            </fieldset>
+            <div class="form-group">
+              <label for="sell-description">Description <span class="required">*</span></label>
+              <textarea id="sell-description" placeholder="Describe the item..." required rows="5" maxlength="2000"></textarea>
+              <span class="char-count"><span id="description-char-count">0</span>/2000</span>
+            </div>
 
-            <fieldset class="form-fieldset">
-              <legend>Payment Methods</legend>
-              <div class="payment-options-grid">
-                <label class="payment-option-card">
-                  <input type="checkbox" class="payment-method-check" value="cash">
-                  <div class="payment-option-inner">
-                    <i class="fas fa-money-bill-wave"></i>
-                    <strong>Cash</strong>
-                  </div>
-                </label>
-                <label class="payment-option-card">
-                  <input type="checkbox" class="payment-method-check" value="card">
-                  <div class="payment-option-inner">
-                    <i class="fas fa-credit-card"></i>
-                    <strong>Card</strong>
-                  </div>
-                </label>
-                <label class="payment-option-card">
-                  <input type="checkbox" class="payment-method-check" value="trade">
-                  <div class="payment-option-inner">
-                    <i class="fas fa-exchange-alt"></i>
-                    <strong>Trade</strong>
-                  </div>
-                </label>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="sell-price">Price ($) <span class="required">*</span></label>
+                <input type="number" id="sell-price" placeholder="0.00" required min="0.01" step="0.01">
               </div>
-            </fieldset>
+              <div class="form-group">
+                <label for="sell-msrp">MSRP ($)</label>
+                <input type="number" id="sell-msrp" placeholder="0.00" min="0" step="0.01">
+              </div>
+            </div>
 
-            <fieldset class="form-fieldset">
-              <legend>Photos</legend>
+            <div id="price-fairness-indicator" class="price-fairness" style="display:none;"></div>
+
+            <div class="form-group">
+              <label>Upload Images <span class="required">*</span></label>
               <div class="image-upload-area" id="image-upload-area">
                 <input type="file" id="sell-images" accept="image/*" multiple style="display:none;">
                 <div class="upload-prompt" onclick="document.getElementById('sell-images').click()">
                   <i class="fas fa-camera"></i>
                   <p>Click to upload photos</p>
-                  <small>Max 10 photos, 5MB each</small>
+                  <small>Max 5MB each, up to 10 images</small>
                 </div>
                 <div id="image-preview-row" class="image-preview-row"></div>
               </div>
-            </fieldset>
+            </div>
 
             <div class="form-actions">
-              <button type="button" class="btn btn-outline" onclick="showPage('home')">Cancel</button>
+              <button type="button" class="btn btn-outline" onclick="showPage('home'); return false;">Cancel</button>
               <button type="submit" class="btn btn-primary btn-lg" id="sell-submit-btn">
                 <i class="fas fa-paper-plane"></i> Publish
               </button>
@@ -324,63 +209,21 @@
       </div>
     </section>
 
-    <!-- CART PAGE -->
-    <section id="page-cart" class="page-view">
-      <div class="container">
-        <h1 class="page-title"><i class="fas fa-shopping-cart"></i> Your Cart</h1>
-        <div class="cart-layout">
-          <div id="cart-items" role="list" aria-label="Cart items"></div>
-          <aside class="cart-summary-col">
-            <div class="cart-summary-card">
-              <h3>Order Summary</h3>
-              <div class="summary-row"><span>Subtotal</span><span id="cart-subtotal">$0.00</span></div>
-              <div class="summary-row"><span>Fee (2%)</span><span id="cart-fee">$0.00</span></div>
-              <div class="summary-divider"></div>
-              <div class="summary-row summary-total"><strong>Total</strong><strong id="cart-total">$0.00</strong></div>
-              <button class="btn btn-primary btn-block btn-lg" onclick="handleCheckout()">
-                <i class="fas fa-lock"></i> Checkout
-              </button>
-            </div>
-          </aside>
-        </div>
-      </div>
-    </section>
-
-    <!-- PROFILE PAGE -->
-    <section id="page-profile" class="page-view">
-      <div class="container">
-        <div id="profile-content"></div>
-      </div>
-    </section>
-
     <!-- LOGIN PAGE -->
     <section id="page-login" class="page-view">
       <div class="auth-container">
         <div class="auth-card">
-          <div class="auth-brand" onclick="showPage('home')"><i class="fas fa-gem"></i> OBTAINUM</div>
-          <h2 class="auth-title">Welcome back</h2>
-          <p class="auth-subtitle">Sign in to your account</p>
-
-          <div class="social-login">
-            <button class="btn btn-social" onclick="loginWithGoogle()">
-              <i class="fab fa-google"></i> Continue with Google
-            </button>
-          </div>
-
+          <h2 class="auth-title">Sign In</h2>
           <form id="login-form" class="auth-form" novalidate>
             <div class="form-group">
               <label for="login-email">Email</label>
-              <div class="input-icon-wrap">
-                <i class="fas fa-envelope input-icon"></i>
-                <input type="email" id="login-email" required autocomplete="email">
-              </div>
+              <input type="email" id="login-email" placeholder="you@example.com" required>
             </div>
             <div class="form-group">
               <label for="login-password">Password</label>
               <div class="input-icon-wrap">
-                <i class="fas fa-lock input-icon"></i>
-                <input type="password" id="login-password" required autocomplete="current-password">
-                <button type="button" class="toggle-password" onclick="togglePasswordVisibility('login-password', this)">
+                <input type="password" id="login-password" placeholder="••••••••" required>
+                <button type="button" class="toggle-password" onclick="togglePasswordVisibility('login-password')">
                   <i class="fas fa-eye"></i>
                 </button>
               </div>
@@ -388,7 +231,9 @@
             <div id="login-error" class="form-error" style="display:none;"></div>
             <button type="submit" class="btn btn-primary btn-block">Sign In</button>
           </form>
-          <p class="auth-switch">Don't have an account? <a href="#" onclick="showPage('register')">Create one</a></p>
+          <p style="text-align:center;margin-top:16px;font-size:0.9rem;color:var(--text-muted);">
+            Don't have an account? <a href="#" onclick="showPage('register'); return false;" style="color:var(--primary);">Register</a>
+          </p>
         </div>
       </div>
     </section>
@@ -397,75 +242,44 @@
     <section id="page-register" class="page-view">
       <div class="auth-container">
         <div class="auth-card">
-          <div class="auth-brand" onclick="showPage('home')"><i class="fas fa-gem"></i> OBTAINUM</div>
-          <h2 class="auth-title">Join OBTAINUM</h2>
-          <p class="auth-subtitle">Create a free account</p>
-
+          <h2 class="auth-title">Create Account</h2>
           <form id="register-form" class="auth-form" novalidate>
             <div class="form-group">
-              <label for="register-username">Username <span class="required">*</span></label>
-              <input type="text" id="register-username" required minlength="3" maxlength="30">
+              <label for="register-username">Username</label>
+              <input type="text" id="register-username" placeholder="username" required minlength="3">
             </div>
             <div class="form-group">
-              <label for="register-email">Email <span class="required">*</span></label>
-              <input type="email" id="register-email" required>
+              <label for="register-email">Email</label>
+              <input type="email" id="register-email" placeholder="you@example.com" required>
             </div>
             <div class="form-group">
-              <label for="register-password">Password <span class="required">*</span></label>
+              <label for="register-password">Password</label>
               <div class="input-icon-wrap">
-                <i class="fas fa-lock input-icon"></i>
-                <input type="password" id="register-password" required minlength="8">
+                <input type="password" id="register-password" placeholder="••••••••" required minlength="8">
+                <button type="button" class="toggle-password" onclick="togglePasswordVisibility('register-password')">
+                  <i class="fas fa-eye"></i>
+                </button>
               </div>
             </div>
             <div class="form-group">
-              <label for="register-confirm">Confirm Password <span class="required">*</span></label>
-              <input type="password" id="register-confirm" required>
-            </div>
-            <div class="form-group">
-              <label class="filter-checkbox">
-                <input type="checkbox" id="register-terms" required>
-                <span>I agree to Terms of Service <span class="required">*</span></span>
-              </label>
+              <label for="register-confirm">Confirm Password</label>
+              <input type="password" id="register-confirm" placeholder="••••••••" required>
             </div>
             <div id="register-error" class="form-error" style="display:none;"></div>
-            <button type="submit" class="btn btn-primary btn-block">Create Account</button>
+            <button type="submit" class="btn btn-primary btn-block">Register</button>
           </form>
-          <p class="auth-switch">Already have an account? <a href="#" onclick="showPage('login')">Sign in</a></p>
+          <p style="text-align:center;margin-top:16px;font-size:0.9rem;color:var(--text-muted);">
+            Already have an account? <a href="#" onclick="showPage('login'); return false;" style="color:var(--primary);">Sign in</a>
+          </p>
         </div>
       </div>
     </section>
 
-    <!-- ABOUT PAGE -->
-    <section id="page-about" class="page-view">
-      <div class="about-hero">
-        <div class="container">
-          <h1 class="page-title">About OBTAINUM</h1>
-          <p class="about-lead">Built by collectors, for collectors. Fair prices. Zero scalpers.</p>
-        </div>
-      </div>
-      <div class="container" style="padding: 60px 0;">
-        <div class="about-grid">
-          <div class="about-card">
-            <div class="about-icon"><i class="fas fa-fist-raised"></i></div>
-            <h3>Anti-Scalp Mission</h3>
-            <p>We flag unfair pricing and empower communities to buy at MSRP-anchored prices.</p>
-          </div>
-          <div class="about-card">
-            <div class="about-icon"><i class="fas fa-users"></i></div>
-            <h3>Community First</h3>
-            <p>Sellers are verified. Listings are community-reviewed. Bad actors are removed.</p>
-          </div>
-          <div class="about-card">
-            <div class="about-icon"><i class="fas fa-shield-alt"></i></div>
-            <h3>Buyer Protection</h3>
-            <p>Every transaction is covered. Money-back guarantee on all purchases.</p>
-          </div>
-          <div class="about-card">
-            <div class="about-icon"><i class="fas fa-lock"></i></div>
-            <h3>Secure Payments</h3>
-            <p>End-to-end encrypted transactions. Your data is never shared.</p>
-          </div>
-        </div>
+    <!-- PROFILE PAGE -->
+    <section id="page-profile" class="page-view">
+      <div class="container">
+        <h1 class="page-title">Your Profile</h1>
+        <div id="profile-content"></div>
       </div>
     </section>
 
@@ -474,46 +288,17 @@
   <!-- FOOTER -->
   <footer class="site-footer" role="contentinfo">
     <div class="container">
-      <div class="footer-grid">
-        <div>
-          <div class="footer-brand"><i class="fas fa-gem"></i> OBTAINUM</div>
-          <p class="footer-tagline">The anti-scalp marketplace for collectors.</p>
-          <div class="footer-social">
-            <a href="#" aria-label="Twitter"><i class="fab fa-twitter"></i></a>
-            <a href="#" aria-label="Discord"><i class="fab fa-discord"></i></a>
-            <a href="#" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
-          </div>
-        </div>
-        <div>
-          <h4>Marketplace</h4>
-          <ul>
-            <li><a href="#" onclick="showPage('shop')">Browse All</a></li>
-            <li><a href="#" onclick="showPage('sell')">Sell Item</a></li>
-            <li><a href="#" onclick="showPage('about')">About Us</a></li>
-          </ul>
-        </div>
-        <div>
-          <h4>Support</h4>
-          <ul>
-            <li><a href="#">Help Center</a></li>
-            <li><a href="#">Contact Us</a></li>
-            <li><a href="#">Privacy Policy</a></li>
-          </ul>
-        </div>
-        <div>
-          <h4>Legal</h4>
-          <ul>
-            <li><a href="#">Terms of Service</a></li>
-            <li><a href="#">Cookie Policy</a></li>
-            <li><a href="#">Refund Policy</a></li>
-          </ul>
-        </div>
-      </div>
-      <div class="footer-bottom">
-        <p>&copy; <span id="footer-year"></span> OBTAINUM. All rights reserved.</p>
-      </div>
+      <p>&copy; <span id="footer-year">2026</span> OBTAINUM. All rights reserved.</p>
     </div>
   </footer>
+
+  <!-- PRODUCT MODAL -->
+  <div id="product-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-box modal-product">
+      <button class="modal-close" onclick="closeProductModal()"><i class="fas fa-times"></i></button>
+      <div id="modal-product-content"></div>
+    </div>
+  </div>
 
   <script src="script.js"></script>
 </body>
