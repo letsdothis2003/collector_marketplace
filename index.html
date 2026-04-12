@@ -1,305 +1,151 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="OBTAINUM: The Anti-Scalp Collector Marketplace">
-  <title>OBTAINUM | The Anti-Scalp Marketplace</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OBTAINUM | Sovereign Marketplace</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=JetBrains+Mono:wght@300;400;700&display=swap" rel="stylesheet">
 </head>
-<body>
+<body class="dark-mode">
 
-  <!-- TOAST NOTIFICATION CONTAINER -->
-  <div id="toast-container" aria-live="polite"></div>
-
-  <!-- NAVIGATION -->
-  <nav id="nav-root" role="navigation" aria-label="Main navigation">
-    <div class="nav-inner">
-      <a href="#" class="brand" onclick="showPage('home'); return false;">
-        <span class="brand-icon"><i class="fas fa-gem"></i></span>
-        <span class="brand-text">OBTAINUM</span>
-      </a>
-
-      <div class="nav-search" role="search">
-        <i class="fas fa-search search-icon"></i>
-        <input type="text" id="global-search" placeholder="Search items...">
-      </div>
-
-      <div class="nav-links" id="nav-links">
-        <a href="#" onclick="showPage('home'); return false;" class="nav-link active" data-page="home">
-          <i class="fas fa-home"></i><span>Home</span>
-        </a>
-        <a href="#" onclick="showPage('shop'); return false;" class="nav-link" data-page="shop">
-          <i class="fas fa-store"></i><span>Shop</span>
-        </a>
-        <a href="#" onclick="showPage('sell'); return false;" class="nav-link" data-page="sell" style="display:none;">
-          <i class="fas fa-tag"></i><span>Sell</span>
-        </a>
-        <a href="#" onclick="showPage('profile'); return false;" class="nav-link" id="profile-link" data-page="profile" style="display:none;">
-          <i class="fas fa-user"></i><span>Profile</span>
-        </a>
-        <a href="#" onclick="showPage('login'); return false;" class="nav-link nav-login-btn" id="login-link" data-page="login">
-          <i class="fas fa-sign-in-alt"></i><span>Login</span>
-        </a>
-        <a href="#" onclick="logout(); return false;" class="nav-link nav-logout-btn" id="logout-link" style="display:none;">
-          <i class="fas fa-sign-out-alt"></i><span>Logout</span>
-        </a>
-        <button id="theme-toggle" class="theme-toggle-btn" aria-label="Toggle theme">
-          <i class="fas fa-moon" id="theme-icon"></i>
-        </button>
-      </div>
-
-      <button id="mobile-menu-btn" class="mobile-menu-btn" aria-label="Menu">
-        <span></span><span></span><span></span>
-      </button>
+    <div id="integrity-shield" class="hidden">
+        <div class="shield-content">
+            <h1 class="glitch" data-text="SYSTEM_HALT">SYSTEM_HALT</h1>
+            <p>> DATA INCONSISTENCY DETECTED</p>
+            <p>> PREVENTING DATABASE CORRUPTION...</p>
+            <div class="progress-bar"><div class="progress-fill"></div></div>
+            <button onclick="location.reload()" class="neon-btn">REBOOT_SYSTEM</button>
+        </div>
     </div>
-  </nav>
 
-  <!-- MAIN CONTENT -->
-  <main id="view-container" role="main">
-
-    <!-- HOME PAGE -->
-    <section id="page-home" class="page-view active">
-      <div class="hero-section">
-        <div class="hero-content">
-          <h1 class="hero-title">The Collector's <span class="hero-highlight">Fair Price</span> Marketplace</h1>
-          <p class="hero-subtitle">Buy and sell at fair prices. No scalpers, no bots.</p>
-          <div class="hero-actions">
-            <button class="btn btn-primary btn-lg" onclick="showPage('shop'); return false;">
-              <i class="fas fa-store"></i> Browse
-            </button>
-            <button class="btn btn-outline btn-lg" onclick="showPage('sell'); return false;">
-              <i class="fas fa-plus"></i> Sell
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div class="container section-block">
-        <h2 class="section-title">Shop by Category</h2>
-        <div class="category-grid" id="category-grid"></div>
-      </div>
-
-      <div class="container section-block">
-        <h2 class="section-title">Featured Items</h2>
-        <div id="featured-products" class="product-grid"></div>
-      </div>
-    </section>
-
-    <!-- SHOP PAGE -->
-    <section id="page-shop" class="page-view">
-      <div class="container">
-        <h1 class="page-title">Marketplace</h1>
-        <div class="shop-layout">
-          <aside class="filters" id="filters-sidebar">
-            <div class="filter-sidebar-header">
-              <h3><i class="fas fa-sliders-h"></i> Filters</h3>
-            </div>
-            <div class="filter-group">
-              <label class="filter-label">Category</label>
-              <div class="filter-checkbox-list" id="category-filter-list"></div>
-            </div>
-            <div class="filter-group">
-              <label class="filter-label">Price Range</label>
-              <input type="range" id="price-slider" min="0" max="5000" value="5000">
-              <div class="price-display">Up to <strong id="price-filter-value">$5,000</strong></div>
-            </div>
-            <div class="filter-group">
-              <label class="filter-label">Condition</label>
-              <div class="filter-checkbox-list">
-                <label class="filter-checkbox"><input type="checkbox" class="condition-filter" value="new"> <span>New</span></label>
-                <label class="filter-checkbox"><input type="checkbox" class="condition-filter" value="like-new"> <span>Like New</span></label>
-                <label class="filter-checkbox"><input type="checkbox" class="condition-filter" value="good"> <span>Good</span></label>
-                <label class="filter-checkbox"><input type="checkbox" class="condition-filter" value="fair"> <span>Fair</span></label>
-              </div>
-            </div>
-            <button class="btn btn-primary btn-block" onclick="applyFilters()">Apply Filters</button>
-          </aside>
-
-          <main class="shop-products">
-            <div class="shop-header-controls">
-              <select id="sort-select" class="sort-select">
-                <option value="newest">Newest First</option>
-                <option value="price-asc">Price: Low to High</option>
-                <option value="price-desc">Price: High to Low</option>
-              </select>
-              <span id="results-count" class="results-count">0 listings</span>
-            </div>
-            <div id="product-grid" class="product-grid"></div>
-            <div id="pagination" class="pagination-wrap"></div>
-          </main>
-        </div>
-      </div>
-    </section>
-
-    <!-- SELL PAGE -->
-    <section id="page-sell" class="page-view">
-      <div class="container form-page">
-        <h1 class="page-title"><i class="fas fa-tag"></i> List an Item</h1>
-        <div class="form-card">
-          <form id="sell-form" class="sell-form" novalidate>
-            <div class="form-group">
-              <label for="sell-name">Item Name <span class="required">*</span></label>
-              <input type="text" id="sell-name" placeholder="Item name" required maxlength="100">
-              <span class="char-count"><span id="name-char-count">0</span>/100</span>
+    <nav class="cyber-nav">
+        <div class="nav-container">
+            <div class="brand-zone">
+                <div class="logo-glitch">OBTAINUM</div>
+                <div class="status-indicator"><span class="pulse"></span> LIVE_NODE</div>
             </div>
 
-            <div class="form-row">
-              <div class="form-group">
-                <label for="sell-category">Category <span class="required">*</span></label>
-                <select id="sell-category" required></select>
-              </div>
-              <div class="form-group">
-                <label for="sell-condition">Condition <span class="required">*</span></label>
-                <select id="sell-condition" required>
-                  <option value="">Select condition</option>
-                  <option value="new">New</option>
-                  <option value="like-new">Like New</option>
-                  <option value="good">Good</option>
-                  <option value="fair">Fair</option>
-                  <option value="poor">For Parts</option>
-                </select>
-              </div>
+            <div class="nav-center">
+                <button class="nav-link active" data-page="shop">/MARKET</button>
+                <button class="nav-link" data-page="sell">/OFFLOAD</button>
+                <button class="nav-link" data-page="vault">/MY_VAULT</button>
             </div>
 
-            <div class="form-group">
-              <label for="sell-description">Description <span class="required">*</span></label>
-              <textarea id="sell-description" placeholder="Describe the item..." required rows="5" maxlength="2000"></textarea>
-              <span class="char-count"><span id="description-char-count">0</span>/2000</span>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label for="sell-price">Price ($) <span class="required">*</span></label>
-                <input type="number" id="sell-price" placeholder="0.00" required min="0.01" step="0.01">
-              </div>
-              <div class="form-group">
-                <label for="sell-msrp">MSRP ($)</label>
-                <input type="number" id="sell-msrp" placeholder="0.00" min="0" step="0.01">
-              </div>
-            </div>
-
-            <div id="price-fairness-indicator" class="price-fairness" style="display:none;"></div>
-
-            <div class="form-group">
-              <label>Upload Images <span class="required">*</span></label>
-              <div class="image-upload-area" id="image-upload-area">
-                <input type="file" id="sell-images" accept="image/*" multiple style="display:none;">
-                <div class="upload-prompt" onclick="document.getElementById('sell-images').click()">
-                  <i class="fas fa-camera"></i>
-                  <p>Click to upload photos</p>
-                  <small>Max 5MB each, up to 10 images</small>
+            <div class="nav-right">
+                <button id="theme-toggle" class="utility-btn">THEME_SWAP</button>
+                <div id="user-display" class="user-chip">
+                    <button id="login-trigger" class="neon-border">INIT_AUTH</button>
                 </div>
-                <div id="image-preview-row" class="image-preview-row"></div>
-              </div>
             </div>
-
-            <div class="form-actions">
-              <button type="button" class="btn btn-outline" onclick="showPage('home'); return false;">Cancel</button>
-              <button type="submit" class="btn btn-primary btn-lg" id="sell-submit-btn">
-                <i class="fas fa-paper-plane"></i> Publish
-              </button>
-            </div>
-          </form>
         </div>
-      </div>
-    </section>
+    </nav>
 
-    <!-- LOGIN PAGE -->
-    <section id="page-login" class="page-view">
-      <div class="auth-container">
-        <div class="auth-card">
-          <h2 class="auth-title">Sign In</h2>
-          <form id="login-form" class="auth-form" novalidate>
-            <div class="form-group">
-              <label for="login-email">Email</label>
-              <input type="email" id="login-email" placeholder="you@example.com" required>
-            </div>
-            <div class="form-group">
-              <label for="login-password">Password</label>
-              <div class="input-icon-wrap">
-                <input type="password" id="login-password" placeholder="••••••••" required>
-                <button type="button" class="toggle-password" onclick="togglePasswordVisibility('login-password')">
-                  <i class="fas fa-eye"></i>
-                </button>
-              </div>
-            </div>
-            <div id="login-error" class="form-error" style="display:none;"></div>
-            <button type="submit" class="btn btn-primary btn-block">Sign In</button>
-          </form>
-          <p style="text-align:center;margin-top:16px;font-size:0.9rem;color:var(--text-muted);">
-            Don't have an account? <a href="#" onclick="showPage('register'); return false;" style="color:var(--primary);">Register</a>
-          </p>
-        </div>
-      </div>
-    </section>
+    <div class="app-shell">
+        <main id="view-port">
+            
+            <section id="page-shop" class="page-view">
+                <header class="view-header">
+                    <h2>GLOBAL_LISTINGS</h2>
+                    <div class="filter-bar">
+                        <input type="text" id="market-search" placeholder="SCAN BY NAME/TAGS...">
+                        <select id="sort-logic">
+                            <option value="created_at">NEWEST_FIRST</option>
+                            <option value="price_asc">PRICE_LOW</option>
+                            <option value="price_desc">PRICE_HIGH</option>
+                        </select>
+                    </div>
+                </header>
+                <div id="listing-grid" class="grid-layout">
+                    </div>
+            </section>
 
-    <!-- REGISTER PAGE -->
-    <section id="page-register" class="page-view">
-      <div class="auth-container">
-        <div class="auth-card">
-          <h2 class="auth-title">Create Account</h2>
-          <form id="register-form" class="auth-form" novalidate>
-            <div class="form-group">
-              <label for="register-username">Username</label>
-              <input type="text" id="register-username" placeholder="username" required minlength="3">
-            </div>
-            <div class="form-group">
-              <label for="register-email">Email</label>
-              <input type="email" id="register-email" placeholder="you@example.com" required>
-            </div>
-            <div class="form-group">
-              <label for="register-password">Password</label>
-              <div class="input-icon-wrap">
-                <input type="password" id="register-password" placeholder="••••••••" required minlength="8">
-                <button type="button" class="toggle-password" onclick="togglePasswordVisibility('register-password')">
-                  <i class="fas fa-eye"></i>
-                </button>
-              </div>
-            </div>
-            <div class="form-group">
-              <label for="register-confirm">Confirm Password</label>
-              <input type="password" id="register-confirm" placeholder="••••••••" required>
-            </div>
-            <div id="register-error" class="form-error" style="display:none;"></div>
-            <button type="submit" class="btn btn-primary btn-block">Register</button>
-          </form>
-          <p style="text-align:center;margin-top:16px;font-size:0.9rem;color:var(--text-muted);">
-            Already have an account? <a href="#" onclick="showPage('login'); return false;" style="color:var(--primary);">Sign in</a>
-          </p>
-        </div>
-      </div>
-    </section>
+            <section id="page-sell" class="page-view hidden">
+                <div class="form-wrapper">
+                    <div class="form-header">
+                        <h2>GENERATE_ASSET_NODE</h2>
+                        <p>Input data for peer-to-peer exchange.</p>
+                    </div>
+                    <form id="listing-form" class="cyber-form">
+                        <div class="input-row">
+                            <div class="field">
+                                <label>ITEM_NAME</label>
+                                <input type="text" id="item_name" required maxlength="100">
+                            </div>
+                            <div class="field">
+                                <label>CATEGORY</label>
+                                <select id="item_category">
+                                    <option value="Transformers">TRANSFORMERS</option>
+                                    <option value="Marvel">MARVEL</option>
+                                    <option value="Electronics">ELECTRONICS</option>
+                                    <option value="Apparel">APPAREL</option>
+                                </select>
+                            </div>
+                        </div>
 
-    <!-- PROFILE PAGE -->
-    <section id="page-profile" class="page-view">
-      <div class="container">
-        <h1 class="page-title">Your Profile</h1>
-        <div id="profile-content"></div>
-      </div>
-    </section>
+                        <div class="input-row">
+                            <div class="field">
+                                <label>PRICE (USD)</label>
+                                <input type="number" id="item_price" step="0.01" required>
+                            </div>
+                            <div class="field">
+                                <label>MSRP (FOR AI ANALYSIS)</label>
+                                <input type="number" id="item_msrp" step="0.01">
+                            </div>
+                        </div>
 
-  </main>
+                        <div class="field">
+                            <label>DESCRIPTION_LOG</label>
+                            <textarea id="item_desc" rows="4" minlength="10"></textarea>
+                        </div>
 
-  <!-- FOOTER -->
-  <footer class="site-footer" role="contentinfo">
-    <div class="container">
-      <p>&copy; <span id="footer-year">2026</span> OBTAINUM. All rights reserved.</p>
+                        <button type="submit" id="deploy-btn" class="neon-btn-fill">DEPLOY_TO_MARKET</button>
+                    </form>
+                </div>
+            </section>
+
+            <section id="page-ai-full" class="page-view hidden">
+                <div class="ai-intel-center">
+                    <div class="intel-header">
+                        <h1>INTEL_CENTER_v4</h1>
+                        <button id="minimize-ai" class="close-btn">MINIMIZE_SIDEBAR</button>
+                    </div>
+                    <div class="intel-grid">
+                        <div class="intel-card">
+                            <h3>MARKET_INFLATION_INDEX</h3>
+                            <canvas id="inflationChart"></canvas>
+                        </div>
+                        <div class="intel-card" id="ai-deep-analysis">
+                            <h3>NEURAL_ADVISORY</h3>
+                            <div id="ai-full-text">Select an asset to begin deep scan...</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <aside id="ai-sidebar" class="sidebar-active">
+            <div class="sidebar-nav">
+                <span class="neon-text">AI_CO_PILOT</span>
+                <button id="maximize-ai" title="Enter Intel Center">⤢</button>
+            </div>
+            <div id="ai-context-window">
+                <div class="ai-thought-bubble">
+                    <p id="ai-dynamic-msg">Standing by. I will analyze your listings for fairness and market trends as you type.</p>
+                </div>
+                <div id="ai-live-bullets" class="bullet-container"></div>
+            </div>
+            <div class="sidebar-footer">
+                <small>ENGINE: OBTAINUM_NEURAL_v1</small>
+            </div>
+        </aside>
     </div>
-  </footer>
 
-  <!-- PRODUCT MODAL -->
-  <div id="product-modal" class="modal-overlay" style="display:none;">
-    <div class="modal-box modal-product">
-      <button class="modal-close" onclick="closeProductModal()"><i class="fas fa-times"></i></button>
-      <div id="modal-product-content"></div>
-    </div>
-  </div>
+    <div id="toast-notif" class="toast-hidden"></div>
 
-  <script src="script.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
