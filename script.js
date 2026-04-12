@@ -1,4 +1,4 @@
-/* ============================================================
+ /* ============================================================
    OBTAINUM MARKETPLACE — script.js
    Vanilla JS, no frameworks. Connects to Supabase.
    Sections: CONFIG | STATE | THEME | ROUTER | AUTH |
@@ -147,23 +147,36 @@ async function initAuth() {
 async function onAuthChange(user) {
   State.user = user;
 
-  // Fetch profile — create one if the DB trigger didn't fire or doesn't exist yet
-  let { data: profile } = await db
+  // Fetch profile — create one if it doesn't exist
+  let { data: profile, error: profileError } = await db
     .from('profiles')
     .select('*')
     .eq('id', user.id)
     .single();
 
+  // PGRST116 is the PostgREST code for "exactly one row was requested, but 0 were found"
+  if (profileError && profileError.code !== 'PGRST116') { 
+      console.error("Error fetching profile:", profileError);
+  }
+
   if (!profile) {
-    // Derive a clean username from signup metadata or email prefix
-    const raw = (user.user_metadata?.username || user.email.split('@')[0])
+    // This is a new user, so create a profile.
+    const newUsername = (user.user_metadata?.username || user.user_metadata?.name || user.email.split('@')[0])
       .replace(/[^a-zA-Z0-9_]/g, '_')
       .slice(0, 30);
-    const username = raw.length >= 3 ? raw : raw + '_usr';
+    
+    const finalUsername = newUsername.length >= 3 ? newUsername : `${newUsername}_usr`;
+
+    const newProfileData = {
+      id: user.id,
+      email: user.email,
+      username: finalUsername,
+      avatar_url: user.user_metadata?.picture || user.user_metadata?.avatar_url
+    };
 
     const { data: created, error: createErr } = await db
       .from('profiles')
-      .insert({ id: user.id, email: user.email, username })
+      .insert(newProfileData)
       .select()
       .single();
 
@@ -171,6 +184,11 @@ async function onAuthChange(user) {
       console.error('[OBTAINUM] Could not create profile:', createErr.message);
     } else {
       profile = created;
+      // Show a welcome toast only for brand new users (created within the last 5s)
+      // This covers both email signup and OAuth sign-in.
+      if (new Date(user.created_at) > new Date(Date.now() - 5000)) {
+           showToast(`Welcome, ${finalUsername}! Your profile is ready.`, 'success');
+      }
     }
   }
 
@@ -259,9 +277,9 @@ async function handleRegister(e) {
     if (error) throw error;
 
     if (data.session) {
-      // Email confirmation is disabled — user is immediately signed in
+      // If email confirmation is disabled, user is immediately signed in.
+      // onAuthChange will handle profile creation and welcome toast.
       closeModal('auth-modal');
-      showToast('Account created! Welcome to OBTAINUM.', 'success');
     } else {
       // Email confirmation required — swap form for a confirmation panel
       document.getElementById('register-form-wrap').innerHTML = `
@@ -671,7 +689,9 @@ async function uploadImages(userId) {
       .from('listing-images')
       .upload(path, file, { cacheControl: '3600', upsert: false });
 
-    if (!error) {
+    if (error) {
+        console.error('Error uploading image:', error);
+    } else {
       const { data: { publicUrl } } = db.storage
         .from('listing-images')
         .getPublicUrl(path);
@@ -683,7 +703,10 @@ async function uploadImages(userId) {
 
 async function submitListing(e) {
   e.preventDefault();
-  if (!State.user) { openAuthModal(); return; }
+  if (!State.user) {
+    openAuthModal();
+    return;
+  }
 
   const errEl = document.getElementById('create-error');
   const btn = document.getElementById('create-submit');
@@ -691,45 +714,73 @@ async function submitListing(e) {
   setLoading(btn, true, 'PUBLISHING...');
 
   try {
-    // Upload images first
+    // 1. Upload images
     let imageUrls = [];
     if (State.imageFiles.length > 0) {
       imageUrls = await uploadImages(State.user.id);
+      if (imageUrls.length !== State.imageFiles.length) {
+        showToast('Warning: Some images failed to upload.', 'warning');
+      }
     }
 
+    // 2. Gather and prepare data
+    const price = parseFloat(document.getElementById('c-price').value);
+    const msrp = parseFloat(document.getElementById('c-msrp').value) || null;
     const tagsRaw = document.getElementById('c-tags').value;
-    const tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean);
+    const isFair = msrp ? price <= msrp * 1.2 : false; // AI determines fair price
 
-    const listing = {
+    const listingData = {
       seller_id: State.user.id,
       name: document.getElementById('c-name').value.trim(),
       category: document.getElementById('c-category').value,
       description: document.getElementById('c-desc').value.trim(),
-      price: parseFloat(document.getElementById('c-price').value),
-      msrp: parseFloat(document.getElementById('c-msrp').value) || null,
+      price: price,
+      msrp: msrp,
       condition: document.getElementById('c-condition').value,
       type: document.getElementById('c-type').value,
       shipping: document.getElementById('c-shipping').value,
       location: document.getElementById('c-location').value.trim() || null,
-      tags: tags.slice(0, 10),
+      tags: tagsRaw.split(',').map(t => t.trim()).filter(Boolean).slice(0, 10),
       images: imageUrls,
-      is_fair: document.getElementById('c-fair').checked
+      is_fair: isFair,
     };
 
-    const { error } = await db.from('listings').insert(listing);
-    if (error) throw error;
+    // 3. Validate required fields before sending to the database
+    if (!listingData.name || !listingData.category || !listingData.description || !listingData.price) {
+      throw new Error("Please fill out all required fields: Name, Category, Description, and Price.");
+    }
 
-    // Reset form
+    // 4. Insert into Supabase and select the new row back to confirm
+    const { data: newListing, error } = await db
+      .from('listings')
+      .insert(listingData)
+      .select('*, profiles:seller_id(*)')
+      .single();
+
+    if (error) {
+      // This will catch any database-level errors, like RLS policy violations or CHECK constraints.
+      throw error;
+    }
+
+    // 5. Reset form, update UI, and navigate
+    if (newListing) {
+      State.listings.unshift(newListing); // Optimistically add to local state
+    }
+    
     e.target.reset();
     State.imageFiles = [];
     document.getElementById('image-preview-grid').innerHTML = '';
 
     showToast('Listing published successfully!', 'success');
-    navigate('shop');
+    navigate('shop'); // Rerenders the shop page with the new listing
+
   } catch (err) {
-    errEl.textContent = err.message || 'Failed to publish listing.';
+    // 6. Detailed error handling
+    console.error('Error publishing listing:', err);
+    errEl.textContent = err.message || 'An unknown error occurred. Please check the console for details.';
     errEl.classList.add('show');
   } finally {
+    // 7. Always reset the button state
     setLoading(btn, false, 'PUBLISH LISTING');
   }
 }
@@ -965,7 +1016,7 @@ function renderDetail(listing) {
         <span class="badge badge-condition">${CONDITION_LABELS[listing.condition] || listing.condition}</span>
         <span class="badge badge-type">${listing.type.replace('-', ' ').toUpperCase()}</span>
         <span class="badge badge-shipping">&#9992; ${listing.shipping.toUpperCase()}</span>
-        ${listing.is_fair ? '<span class="badge" style="border-color:var(--neon);color:var(--neon);">&#10003; FAIR PRICE</span>' : ''}
+        ${listing.is_fair ? '<span class="badge" style="border-color:var(--neon);color:var(--neon);">&#10003; AI FAIR PRICE</span>' : ''}
         ${listing.is_featured ? '<span class="badge" style="border-color:var(--warning);color:var(--warning);">&#9733; FEATURED</span>' : ''}
       </div>
 
@@ -1065,12 +1116,12 @@ function generateAIInsights(listing) {
   const msrp = parseFloat(listing.msrp) || null;
 
   // Price fairness
-  if (msrp && price <= msrp * 1.1) {
-    insights.push({ type: 'positive', text: `Price Fairness: Listing is at or below retail MSRP ($${msrp.toFixed(2)}). This appears to be a fair, non-scalped price.` });
+  if (listing.is_fair) {
+      insights.push({ type: 'positive', text: `AI Fair Price: Our model has determined this listing is priced fairly, within a reasonable margin of its MSRP ($${msrp.toFixed(2)}).` });
   } else if (msrp && price > msrp * 1.5) {
-    insights.push({ type: 'warning', text: `Price Alert: This item is priced ${Math.round((price/msrp - 1)*100)}% above MSRP. Consider checking local retailers before purchasing.` });
+    insights.push({ type: 'warning', text: `Price Alert: This item is priced ${Math.round((price/msrp - 1)*100)}% above MSRP. Consider checking other retailers before purchasing.` });
   } else if (!msrp) {
-    insights.push({ type: 'neutral', text: `Price Verification: No MSRP listed. Research similar items on retail sites to verify fair market value before buying.` });
+    insights.push({ type: 'neutral', text: `Price Verification: No MSRP was provided. Research similar items on retail sites to verify fair market value before buying.` });
   }
 
   // Condition assessment
@@ -1106,8 +1157,8 @@ function generateAIInsights(listing) {
 
   // Recommendation
   const rec = listing.is_fair
-    ? 'Recommendation: This listing is marked Fair Price by the seller. Combined with the data above, this appears to be a trustworthy deal worth considering.'
-    : 'Recommendation: Research comparable sold listings on eBay or COMC to benchmark this price before purchasing.';
+    ? 'AI Recommendation: This listing is marked as a Fair Price by our model. This appears to be a trustworthy deal worth considering.'
+    : 'Recommendation: Research comparable sold listings on other platforms to benchmark this price before purchasing.';
   insights.push({ type: 'info', text: rec });
 
   const iconMap = { positive: '&#9679;', warning: '&#9651;', info: '&#9670;', neutral: '&#9632;' };
@@ -1165,13 +1216,13 @@ function createListingCard(listing) {
 
   const isWished = State.wishlistIds.has(listing.id);
   const img = listing.images && listing.images.length > 0
-    ? `<img src="${listing.images[0]}" alt="${escHtml(listing.name)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'card-no-image\\'>${categoryIcon(listing.category)}</div>'" />`
+    ? `<img src="${listing.images[0]}" alt="${escHtml(listing.name)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\'card-no-image\'>${categoryIcon(listing.category)}</div>'" />`
     : `<div class="card-no-image">${categoryIcon(listing.category)}</div>`;
 
   card.innerHTML = `
     <div class="card-image-wrap">
       ${img}
-      ${listing.is_fair ? '<span class="card-badge fair">FAIR</span>' : ''}
+      ${listing.is_fair ? '<span class="card-badge fair">AI FAIR</span>' : ''}
       ${listing.is_featured ? '<span class="card-badge featured" style="left:auto;right:40px;">&#9733;</span>' : ''}
       <button class="wishlist-btn ${isWished ? 'active' : ''}"
         onclick="toggleWishlist(event, '${listing.id}')"
@@ -1206,16 +1257,23 @@ function renderListings(listings) {
         <div class="empty-icon">&#128269;</div>
         <div class="empty-title">NO LISTINGS FOUND</div>
         <div class="empty-sub">
-          ${State.listings.length === 0
-            ? 'Be the first to list something for sale!'
-            : 'Try adjusting your search or filters.'}
+          ${
+            State.listings && State.listings.length === 0
+              ? 'Be the first to list something for sale!'
+              : 'Try adjusting your search or filters.'
+          }
         </div>
-        ${State.user ? '<br/><button class="btn btn-primary" onclick="navigate(\'create\')" style="margin-top:12px;">+ LIST AN ITEM</button>' : ''}
+  
+        ${
+          State.user
+            ? `<br/><button class="btn btn-primary" onclick="navigate('create')" style="margin-top:12px;">+ LIST AN ITEM</button>`
+            : ''
+        }
       </div>
     `;
     return;
   }
-
+  
   grid.innerHTML = '';
   grid.classList.add('stagger');
   listings.forEach(l => grid.appendChild(createListingCard(l)));
