@@ -9,12 +9,11 @@
 // --- SECTION: DATABASE CONFIG ---
 // IMPORTANT: Replace these with your actual Supabase credentials
 const SUPABASE_URL = "https://gotzmuobwuubsugnowxq.supabase.co";
-const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY_HERE"; // Must start with 'eyJh...'
-
+const SUPABASE_PUBLIC_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";  
 // db is declared with let so it stays accessible even if createClient throws
 let db;
 try {
-  db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  db = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLIC_KEY);
   console.log('[OBTAINUM] Supabase client initialized successfully');
 } catch (e) {
   console.error('[OBTAINUM] Supabase init failed — check your URL and key:', e);
@@ -1088,7 +1087,7 @@ function renderDetail(listing) {
             }
           </div>
           <div>
-            <div class="seller-name">${escHtml(seller.username || 'Anonymous')}</div>
+            <div class="seller-name">${escHtml(seller.username || 'PUBLICymous')}</div>
             ${seller.location ? `<div class="seller-location">📍 ${escHtml(seller.location)}</div>` : ''}
             ${seller.rating ? `<div class="seller-rating">${'★'.repeat(Math.round(seller.rating))} ${parseFloat(seller.rating).toFixed(1)}</div>` : ''}
           </div>
