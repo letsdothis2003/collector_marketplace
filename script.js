@@ -1,5 +1,5 @@
 /* ================================================================
-   OBTAINUM MARKETPLACE — script.js (COMPLETE WITH ANIMATIONS)
+   OBTAINUM MARKETPLACE — script.js
    
    ORGANIZATION:
    1. supabase-client.js
@@ -8,28 +8,26 @@
    4. utils/dom.js
    5. features/theme.js
    6. features/auth.js
-   7. api/products.js
-   8. features/cart.js
-   9. features/wishlist.js
-   10. features/sell.js
-   11. features/filters.js
-   12. features/pagination.js
-   13. pages/home.js
-   14. pages/shop.js
-   15. pages/profile.js
-   16. features/ai-analysis.js
-   17. animations.js
-   18. app.js
+   7. features/cart.js
+   8. features/wishlist.js
+   9. features/sell.js
+   10. features/filters.js
+   11. features/pagination.js
+   12. pages/home.js
+   13. pages/shop.js
+   14. pages/profile.js
+   15. features/ai-analysis.js
+   16. app.js
 ================================================================ */
 
 document.addEventListener('DOMContentLoaded', () => {
 
   /* ================================================================
-     SECTION: supabase-client.js — Supabase Initialization
+     SECTION: supabase-client.js
   ================================================================ */
   let DB = null;
-  const SUPABASE_URL = 'https://gotzmuobwuubsugnowxq.supabase.co';
-  const SUPABASE_API_KEY = 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs';
+  const SUPABASE_URL = 'https://ofvwpzdhuugyexdcroya.supabase.co';
+  const SUPABASE_API_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9mdndwemRodXVneWV4ZGNyb3lhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDk5Njk3MTMsImV4cCI6MTcyNzc0NTcxM30.sb_publishable_f9UqvNZVLitIS4Ysm6YWxQ_qwMpbwKL';
   const STORAGE_BUCKET = 'listing-images';
 
   try {
@@ -52,7 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* ================================================================
-     SECTION: state.js — Global App State
+     SECTION: state.js
   ================================================================ */
   let products = [];
   let filteredItems = [];
@@ -64,24 +62,17 @@ document.addEventListener('DOMContentLoaded', () => {
   let activeCategory = '';
   let currentUser = null;
   let sessionInterval = null;
-  let lastAnalyzedProduct = null;
   let geminiApiKey = localStorage.getItem('OBTAINUM_gemini_key') || '';
   let mapsApiKey = localStorage.getItem('OBTAINUM_maps_key') || '';
 
   /* ================================================================
-     SECTION: utils/toast.js — Toast Notification Helpers
+     SECTION: utils/toast.js
   ================================================================ */
   function showToast(title, message = '', type = 'info', duration = 4000) {
     const container = document.getElementById('toast-container');
-    const icons = { 
-      success: 'fa-check-circle', 
-      error: 'fa-times-circle', 
-      warning: 'fa-exclamation-triangle', 
-      info: 'fa-info-circle' 
-    };
-
+    const icons = { success: 'fa-check-circle', error: 'fa-times-circle', warning: 'fa-exclamation-triangle', info: 'fa-info-circle' };
     const toast = document.createElement('div');
-    toast.className = `toast ${type} animate-fade-in-left`;
+    toast.className = `toast ${type}`;
     toast.innerHTML = `
       <i class="fas ${icons[type] || icons.info} toast-icon"></i>
       <div class="toast-content">
@@ -90,31 +81,29 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
       <button class="toast-close" aria-label="Close notification"><i class="fas fa-times"></i></button>
     `;
-
     container.appendChild(toast);
     toast.querySelector('.toast-close').addEventListener('click', () => removeToast(toast));
     setTimeout(() => removeToast(toast), duration);
   }
 
   function removeToast(toast) {
-    toast.classList.remove('animate-fade-in-left');
-    toast.classList.add('animate-fade-in-right');
     toast.style.animation = 'fadeOutToast 0.3s ease forwards';
     setTimeout(() => toast.remove(), 300);
   }
 
   /* ================================================================
-     SECTION: utils/dom.js — DOM Utility Helpers
+     SECTION: utils/dom.js
   ================================================================ */
   function getCategoryIcon(category) {
     const map = {
       'Electronics': 'fa-microchip',
       'Clothing & Accessories': 'fa-tshirt',
-      'Collectibles': 'fa-gem',
+      'Home & Garden': 'fa-home',
       'Sports & Outdoors': 'fa-futbol',
       'Books & Media': 'fa-book',
-      'Home & Garden': 'fa-home',
       'Vehicles': 'fa-car',
+      'Collectibles': 'fa-gem',
+      'Tools & Equipment': 'fa-tools',
       'Other': 'fa-box-open'
     };
     return map[category] || 'fa-tag';
@@ -159,70 +148,31 @@ document.addEventListener('DOMContentLoaded', () => {
     return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
   }
 
-  function addAnimation(element, animationName, duration = 600, callback) {
-    if (!element) return;
-    element.classList.add(`animate-${animationName}`);
-    setTimeout(() => {
-      element.classList.remove(`animate-${animationName}`);
-      if (callback) callback();
-    }, duration);
-  }
-
-  function addStaggerAnimation(elements, animationName, baseDelay = 100) {
-    elements.forEach((el, index) => {
-      setTimeout(() => {
-        el.classList.add(`animate-${animationName}`);
-        setTimeout(() => el.classList.remove(`animate-${animationName}`), 600);
-      }, index * baseDelay);
-    });
-  }
-
   /* ================================================================
-     SECTION: features/theme.js — Dark/Light Mode Toggle with Animations
+     SECTION: features/theme.js
   ================================================================ */
   const themeToggleBtn = document.getElementById('theme-toggle');
   const themeIcon = document.getElementById('theme-icon');
-  const htmlElement = document.documentElement;
   const savedTheme = localStorage.getItem('OBTAINUM_theme') || 'light';
-
-  htmlElement.setAttribute('data-theme', savedTheme);
+  document.documentElement.setAttribute('data-theme', savedTheme);
   updateThemeIcon(savedTheme);
 
   themeToggleBtn.addEventListener('click', () => {
-    const current = htmlElement.getAttribute('data-theme');
+    const current = document.documentElement.getAttribute('data-theme');
     const next = current === 'dark' ? 'light' : 'dark';
-
-    htmlElement.style.opacity = '0.95';
-
-    setTimeout(() => {
-      htmlElement.setAttribute('data-theme', next);
-      localStorage.setItem('OBTAINUM_theme', next);
-      updateThemeIcon(next);
-
-      themeIcon.classList.add('animate-spin');
-      setTimeout(() => themeIcon.classList.remove('animate-spin'), 600);
-
-      htmlElement.style.opacity = '1';
-
-      const themeName = next === 'dark' ? '🌙 Dark Mode' : '☀️ Light Mode';
-      showToast('Theme Changed', `Switched to ${themeName}`, 'info', 2000);
-    }, 100);
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('OBTAINUM_theme', next);
+    updateThemeIcon(next);
+    showToast(next === 'dark' ? 'Dark mode' : 'Light mode', '', 'info', 2000);
   });
 
   function updateThemeIcon(theme) {
-    themeIcon.className = theme === 'dark'
-      ? 'fas fa-sun'
-      : 'fas fa-moon';
-    themeToggleBtn.title = theme === 'dark'
-      ? 'Switch to light mode (☀️)'
-      : 'Switch to dark mode (🌙)';
-
-    themeIcon.classList.add('animate-fade-in');
-    setTimeout(() => themeIcon.classList.remove('animate-fade-in'), 600);
+    themeIcon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+    themeToggleBtn.title = theme === 'dark' ? 'Light mode' : 'Dark mode';
   }
 
   /* ================================================================
-     SECTION: features/auth.js — Authentication with Animations
+     SECTION: features/auth.js
   ================================================================ */
   if (DB) {
     DB.auth.onAuthStateChange(async (event, session) => {
@@ -232,7 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await ensureProfileExists(currentUser);
         updateNavUI();
         if (event === 'SIGNED_IN') {
-          showToast('Welcome! 👋', `Logged in as ${currentUser.email}`, 'success', 3000);
+          showToast('Welcome!', `Logged in as ${currentUser.email}`, 'success');
           showPage('home');
         }
         const loginTime = Date.now();
@@ -277,7 +227,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       errEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${err.message}`;
       errEl.style.display = 'flex';
-      addAnimation(errEl, 'bounce');
     } finally {
       setButtonLoading(btn, false);
     }
@@ -302,14 +251,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!terms) {
       errEl.innerHTML = '<i class="fas fa-exclamation-circle"></i> Accept the Terms.';
       errEl.style.display = 'flex';
-      addAnimation(errEl, 'bounce');
       setButtonLoading(btn, false);
       return;
     }
     if (password !== confirm) {
       errEl.innerHTML = '<i class="fas fa-exclamation-circle"></i> Passwords do not match.';
       errEl.style.display = 'flex';
-      addAnimation(errEl, 'bounce');
       setButtonLoading(btn, false);
       return;
     }
@@ -321,11 +268,10 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       if (error) throw error;
       showPage('login');
-      showToast('Account created! 🎉', 'Check your email to confirm.', 'success', 6000);
+      showToast('Account created!', 'Check your email to confirm.', 'success', 6000);
     } catch (err) {
       errEl.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${err.message}`;
       errEl.style.display = 'flex';
-      addAnimation(errEl, 'bounce');
     } finally {
       setButtonLoading(btn, false);
     }
@@ -336,7 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
     currentUser = null;
     updateNavUI();
     showPage('home');
-    showToast('Logged out', 'See you next time! 👋', 'info');
+    showToast('Logged out', 'See you next time!', 'info');
   };
 
   window.loginWithGoogle = async function () {
@@ -366,14 +312,13 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const { error } = await DB.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
       if (error) throw error;
-      msgEl.textContent = 'Reset link sent! Check your email. ✉️';
+      msgEl.textContent = 'Reset link sent! Check your email.';
       msgEl.className = 'form-success';
     } catch (err) {
       msgEl.textContent = err.message;
       msgEl.className = 'form-error';
     }
     msgEl.style.display = 'block';
-    addAnimation(msgEl, 'fade-in-up');
   });
 
   function updateNavUI() {
@@ -404,6 +349,7 @@ document.addEventListener('DOMContentLoaded', () => {
         id: user.id,
         email: user.email,
         username: username,
+        rating: 0.00
       });
     }
   }
@@ -466,7 +412,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* ================================================================
-     SECTION: api/products.js — Product Fetching & Rendering
+     SECTION: api/products.js - Fetch & Build Products
   ================================================================ */
   async function fetchListings() {
     if (!DB) return [];
@@ -482,12 +428,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     return (data || []).map(item => ({
-      ...item,
+      id: item.id,
+      name: item.name,
+      category: item.category,
+      description: item.description,
+      condition: item.condition,
+      location: item.location,
+      price: parseFloat(item.price),
+      msrp: item.msrp ? parseFloat(item.msrp) : null,
+      type: item.type,
+      shipping: item.shipping,
+      payment_methods: item.payment_methods || [],
+      tags: item.tags || [],
       images: normalizeImages(item.images),
+      is_fair: item.is_fair,
+      is_featured: item.is_featured,
+      is_sold: item.is_sold,
+      seller_id: item.seller_id,
       seller: item.profiles?.username || 'Unknown Seller',
       seller_rating: item.profiles?.rating || 0,
-      views: item.view_count || 0,
-      likes: item.favorite_count || 0,
+      view_count: item.view_count || 0,
+      favorite_count: item.favorite_count || 0,
+      created_at: item.created_at,
+      updated_at: item.updated_at,
     }));
   }
 
@@ -503,17 +466,13 @@ document.addEventListener('DOMContentLoaded', () => {
       : `<span class="badge badge-scalp"><i class="fas fa-exclamation-triangle"></i> Above MSRP</span>`;
 
     const conditionLabel = {
-      'new': 'New',
-      'like-new': 'Like New',
-      'good': 'Good',
-      'fair': 'Fair',
-      'poor': 'For Parts'
+      'new': 'New', 'like-new': 'Like New', 'good': 'Good', 'fair': 'Fair', 'poor': 'For Parts'
     }[product.condition] || product.condition;
 
     const firstImage = product.images?.[0] || null;
 
     return `
-      <div class="product-card animate-fade-in-up" role="listitem" onclick="openProductModal('${product.id}')" tabindex="0">
+      <div class="product-card" role="listitem" onclick="openProductModal('${product.id}')" tabindex="0">
         <div class="product-card-img">
           ${firstImage
             ? `<img src="${firstImage}" alt="${product.name}" loading="lazy" decoding="async">`
@@ -556,10 +515,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderProductGrid(items, gridId) {
     const grid = document.getElementById(gridId);
     if (!grid) return;
-    
     if (items.length === 0) {
       grid.innerHTML = `
-        <div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--text-muted);" class="animate-fade-in">
+        <div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--text-muted);">
           <i class="fas fa-search" style="font-size:3rem;opacity:0.3;margin-bottom:16px;display:block;"></i>
           <h3>No listings found</h3>
           <p>Try adjusting your filters or search terms.</p>
@@ -567,16 +525,11 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>`;
       return;
     }
-    
     grid.innerHTML = items.map(buildProductCard).join('');
-    
-    // Stagger animations
-    const cards = grid.querySelectorAll('.product-card');
-    addStaggerAnimation(Array.from(cards), 'fade-in-up', 60);
   }
 
   /* ================================================================
-     SECTION: features/cart.js — Shopping Cart with Animations
+     SECTION: features/cart.js
   ================================================================ */
   window.addToCart = function (productId, e) {
     if (e) e.stopPropagation();
@@ -592,7 +545,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     saveCart();
     updateCartCount();
-    showToast('Added to cart! 🛒', product.name, 'success', 2500);
+    showToast('Added to cart!', product.name, 'success', 2500);
     animateCartBadge();
   };
 
@@ -609,15 +562,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function animateCartBadge() {
     const badge = document.getElementById('cart-count');
-    badge.classList.remove('animate-scale-in', 'animate-bounce');
+    badge.classList.remove('pop');
     void badge.offsetWidth;
-    badge.classList.add('animate-scale-in');
-    
-    setTimeout(() => {
-      badge.classList.remove('animate-scale-in');
-      badge.classList.add('animate-bounce');
-      setTimeout(() => badge.classList.remove('animate-bounce'), 600);
-    }, 400);
+    badge.classList.add('pop');
   }
 
   function renderCartPage() {
@@ -627,7 +574,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (cart.length === 0) {
       itemsEl.innerHTML = `
-        <div class="cart-empty animate-fade-in">
+        <div class="cart-empty">
           <i class="fas fa-shopping-cart"></i>
           <h3>Your cart is empty</h3>
           <p>Browse our marketplace and find something you love.</p>
@@ -639,11 +586,10 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    cart.forEach((item, index) => {
+    cart.forEach((item) => {
       const firstImage = item.images?.[0] || null;
       const el = document.createElement('div');
-      el.className = 'cart-item animate-fade-in-up';
-      el.style.animationDelay = `${index * 50}ms`;
+      el.className = 'cart-item';
       el.innerHTML = `
         <div class="cart-item-img">
           ${firstImage
@@ -711,7 +657,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   /* ================================================================
-     SECTION: features/wishlist.js — Wishlist Management
+     SECTION: features/wishlist.js
   ================================================================ */
   function inWishlist(id) {
     return wishlist.includes(id);
@@ -736,23 +682,19 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       wishlist.push(productId);
       isWished = true;
-      showToast('Added to wishlist ❤️', '', 'success', 2000);
+      showToast('Added to wishlist', '', 'success', 2000);
       if (DB) await DB.from('wishlists').insert({ user_id: currentUser.id, listing_id: productId });
     }
     localStorage.setItem('OBTAINUM_wishlist', JSON.stringify(wishlist));
 
     document.querySelectorAll(`.wishlist-btn[data-id="${productId}"]`).forEach(btn => {
       btn.classList.toggle('active', isWished);
-      btn.querySelector('i').className = isWished ? 'fas fa-heart animate-heartbeat' : 'far fa-heart';
-      
-      if (isWished) {
-        setTimeout(() => btn.querySelector('i').classList.remove('animate-heartbeat'), 1300);
-      }
+      btn.querySelector('i').className = isWished ? 'fas fa-heart' : 'far fa-heart';
     });
   };
 
   /* ================================================================
-     SECTION: features/sell.js — Sell Form with Image Upload
+     SECTION: features/sell.js
   ================================================================ */
   ['sell-name', 'sell-description'].forEach(id => {
     const input = document.getElementById(id);
@@ -780,18 +722,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const ratio = price / msrp;
     fairnessEl.style.display = 'flex';
-    fairnessEl.className = 'price-fairness animate-fade-in';
-    fairnessEl.innerHTML = '';
+    fairnessEl.className = 'price-fairness';
 
     if (ratio <= 1.0) {
       fairnessEl.classList.add('fair');
-      fairnessText.textContent = `✓ ${Math.round((1-ratio)*100)}% below MSRP — great value!`;
+      fairnessText.textContent = `${Math.round((1-ratio)*100)}% below MSRP — great value!`;
     } else if (ratio <= 1.2) {
       fairnessEl.classList.add('warning');
-      fairnessText.textContent = `~ ${Math.round((ratio-1)*100)}% above MSRP.`;
+      fairnessText.textContent = `${Math.round((ratio-1)*100)}% above MSRP.`;
     } else {
       fairnessEl.classList.add('scalp');
-      fairnessText.textContent = `✗ ${Math.round((ratio-1)*100)}% above MSRP — may be flagged.`;
+      fairnessText.textContent = `${Math.round((ratio-1)*100)}% above MSRP — may be flagged.`;
     }
   }
 
@@ -841,7 +782,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const reader = new FileReader();
     reader.onload = e => {
       const wrap = document.createElement('div');
-      wrap.className = 'preview-thumb-wrap animate-scale-in';
+      wrap.className = 'preview-thumb-wrap';
       wrap.dataset.idx = idx;
       wrap.innerHTML = `
         <img src="${e.target.result}" alt="Preview" class="preview-thumb">
@@ -855,11 +796,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   window.removeThumb = function (idx) {
     uploadedFiles[idx] = null;
-    const thumb = document.querySelector(`.preview-thumb-wrap[data-idx="${idx}"]`);
-    if (thumb) {
-      thumb.style.animation = 'fadeOut 0.3s ease forwards';
-      setTimeout(() => thumb.remove(), 300);
-    }
+    document.querySelector(`.preview-thumb-wrap[data-idx="${idx}"]`)?.remove();
   };
 
   const sellForm = document.getElementById('sell-form');
@@ -891,6 +828,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const price = parseFloat(document.getElementById('sell-price').value);
         const msrp = parseFloat(document.getElementById('sell-msrp').value) || null;
+        const isFair = msrp ? price <= msrp * 1.1 : true;
 
         const listingData = {
           seller_id: currentUser.id,
@@ -898,7 +836,7 @@ document.addEventListener('DOMContentLoaded', () => {
           category: document.getElementById('sell-category').value,
           description: document.getElementById('sell-description').value.trim(),
           condition: document.getElementById('sell-condition').value,
-          location: document.getElementById('sell-location').value.trim(),
+          location: document.getElementById('sell-location').value.trim() || null,
           price: price,
           msrp: msrp,
           type: document.getElementById('sell-type').value,
@@ -906,7 +844,9 @@ document.addEventListener('DOMContentLoaded', () => {
           payment_methods: [...document.querySelectorAll('.payment-method-check:checked')].map(e => e.value),
           tags: document.getElementById('sell-tags').value.split(',').map(t => t.trim()).filter(Boolean),
           images: imageUrls,
-          is_fair: msrp ? price <= msrp * 1.1 : true,
+          is_fair: isFair,
+          is_featured: false,
+          is_sold: false,
         };
 
         if (!listingData.name) throw new Error('Item name is required.');
@@ -921,18 +861,35 @@ document.addEventListener('DOMContentLoaded', () => {
         if (dbError) throw dbError;
 
         const formattedListing = {
-          ...newListing,
+          id: newListing.id,
+          name: newListing.name,
+          category: newListing.category,
+          description: newListing.description,
+          condition: newListing.condition,
+          location: newListing.location,
+          price: parseFloat(newListing.price),
+          msrp: newListing.msrp ? parseFloat(newListing.msrp) : null,
+          type: newListing.type,
+          shipping: newListing.shipping,
+          payment_methods: newListing.payment_methods || [],
+          tags: newListing.tags || [],
           images: normalizeImages(newListing.images),
+          is_fair: newListing.is_fair,
+          is_featured: newListing.is_featured,
+          is_sold: newListing.is_sold,
+          seller_id: newListing.seller_id,
           seller: newListing.profiles?.username || 'You',
           seller_rating: newListing.profiles?.rating || 0,
-          views: 0,
-          likes: 0,
+          view_count: 0,
+          favorite_count: 0,
+          created_at: newListing.created_at,
+          updated_at: newListing.updated_at,
         };
 
         products.unshift(formattedListing);
         filteredItems.unshift(formattedListing);
 
-        showToast('Listing published! 🎉', `"${formattedListing.name}" is now live.`, 'success', 5000);
+        showToast('Listing published!', `"${formattedListing.name}" is now live.`, 'success', 5000);
         showPage('shop');
 
         sellForm.reset();
@@ -950,7 +907,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* ================================================================
-     SECTION: features/filters.js — Shop Filtering with Animations
+     SECTION: features/filters.js
   ================================================================ */
   const priceSlider = document.getElementById('price-slider');
   const priceFilterVal = document.getElementById('price-filter-value');
@@ -1028,7 +985,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   /* ================================================================
-     SECTION: features/pagination.js — Pagination Logic
+     SECTION: features/pagination.js
   ================================================================ */
   function renderPagination() {
     const totalPages = Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
@@ -1059,7 +1016,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   /* ================================================================
-     SECTION: pages/home.js — Home Page with Animations
+     SECTION: pages/home.js
   ================================================================ */
   function populateHomePage() {
     const featured = [...products].sort(() => Math.random() - 0.5).slice(0, 8);
@@ -1072,34 +1029,20 @@ document.addEventListener('DOMContentLoaded', () => {
     products.forEach(p => {
       counts[p.category] = (counts[p.category] || 0) + 1;
     });
-    
     Object.keys(counts).forEach(cat => {
       const el = document.getElementById(`cat-count-${cat}`);
       if (el) el.textContent = `${counts[cat]} item${counts[cat] !== 1 ? 's' : ''}`;
     });
-
-    // Animate home page elements
-    setTimeout(() => {
-      const heroContent = document.querySelector('.hero-content');
-      const categoryCards = document.querySelectorAll('.category-card');
-      const trustItems = document.querySelectorAll('.trust-item');
-      const stepCards = document.querySelectorAll('.step-card');
-
-      if (heroContent) addAnimation(heroContent, 'fade-in-left');
-      if (categoryCards.length) addStaggerAnimation(Array.from(categoryCards), 'fade-in-up', 80);
-      if (trustItems.length) addStaggerAnimation(Array.from(trustItems), 'fade-in-up', 100);
-      if (stepCards.length) addStaggerAnimation(Array.from(stepCards), 'fade-in-up', 120);
-    }, 300);
   }
 
   /* ================================================================
-     SECTION: pages/profile.js — Profile Page with Animations
+     SECTION: pages/profile.js
   ================================================================ */
   async function renderProfilePage() {
     const container = document.getElementById('profile-content');
     if (!currentUser) {
       container.innerHTML = `
-        <div style="text-align:center;padding:60px 20px;" class="animate-fade-in">
+        <div style="text-align:center;padding:60px 20px;">
           <i class="fas fa-user-lock" style="font-size:3rem;color:var(--text-muted);margin-bottom:16px;display:block;"></i>
           <h2>Login to view your profile</h2>
           <button class="btn btn-primary" style="margin-top:16px;" onclick="showPage('login')">Sign In</button>
@@ -1114,7 +1057,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const joinDate = new Date(currentUser.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
     container.innerHTML = `
-      <div class="profile-header animate-fade-in-down">
+      <div class="profile-header">
         <div class="profile-avatar">${(profile.username[0] || 'U').toUpperCase()}</div>
         <div class="profile-info">
           <div class="profile-name">${profile.username}</div>
@@ -1126,7 +1069,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="pstat"><span>${profile.rating.toFixed(1)}</span><small>Rating</small></div>
         </div>
       </div>
-      <div class="profile-tabs animate-fade-in-up">
+      <div class="profile-tabs">
         <button class="profile-tab active" onclick="switchProfileTab(this, 'listings')">
           <i class="fas fa-tag"></i> My Listings
         </button>
@@ -1144,185 +1087,83 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.classList.add('active');
     const content = document.getElementById('profile-tab-content');
 
-    content.style.animation = 'fadeOut 0.2s ease-out';
-
-    setTimeout(() => {
-      switch (tab) {
-        case 'listings':
-          const userListings = products.filter(p => p.seller_id === currentUser.id);
-          content.innerHTML = userListings.length > 0
-            ? `<div class="product-grid animate-fade-in">${userListings.map(buildProductCard).join('')}</div>`
-            : `<div style="text-align:center;padding:40px;color:var(--text-muted);" class="animate-fade-in">
-                <i class="fas fa-tag" style="font-size:2rem;opacity:0.3;margin-bottom:12px;display:block;"></i>
-                <h3>No listings yet</h3>
-                <button class="btn btn-primary" style="margin-top:12px;" onclick="showPage('sell')">List an Item</button>
-              </div>`;
-          break;
-        case 'saved':
-          const saved = products.filter(p => wishlist.includes(p.id));
-          content.innerHTML = saved.length > 0
-            ? `<div class="product-grid animate-fade-in">${saved.map(buildProductCard).join('')}</div>`
-            : `<div style="text-align:center;padding:40px;color:var(--text-muted);" class="animate-fade-in">
-                <i class="fas fa-heart" style="font-size:2rem;opacity:0.3;margin-bottom:12px;display:block;"></i>
-                <h3>No saved items</h3>
-                <p>Click the heart on any item to save it.</p>
-              </div>`;
-          break;
-      }
-      content.style.animation = 'fadeIn 0.4s ease-out';
-    }, 150);
+    switch (tab) {
+      case 'listings':
+        const userListings = products.filter(p => p.seller_id === currentUser.id);
+        content.innerHTML = userListings.length > 0
+          ? `<div class="product-grid">${userListings.map(buildProductCard).join('')}</div>`
+          : `<div style="text-align:center;padding:40px;color:var(--text-muted);">
+              <i class="fas fa-tag" style="font-size:2rem;opacity:0.3;margin-bottom:12px;display:block;"></i>
+              <h3>No listings yet</h3>
+              <button class="btn btn-primary" style="margin-top:12px;" onclick="showPage('sell')">List an Item</button>
+            </div>`;
+        break;
+      case 'saved':
+        const saved = products.filter(p => wishlist.includes(p.id));
+        content.innerHTML = saved.length > 0
+          ? `<div class="product-grid">${saved.map(buildProductCard).join('')}</div>`
+          : `<div style="text-align:center;padding:40px;color:var(--text-muted);">
+              <i class="fas fa-heart" style="font-size:2rem;opacity:0.3;margin-bottom:12px;display:block;"></i>
+              <h3>No saved items</h3>
+              <p>Click the heart on any item to save it.</p>
+            </div>`;
+        break;
+    }
   };
 
   /* ================================================================
-     SECTION: features/ai-analysis.js — AI Product Analysis
+     SECTION: features/ai-analysis.js
   ================================================================ */
+  window.showAPIKeySetup = function () {
+    const modal = document.getElementById('gemini-key-setup');
+    modal.style.display = modal.style.display === 'none' ? 'block' : 'none';
+    document.getElementById('gemini-api-key-input').value = geminiApiKey;
+    document.getElementById('maps-api-key-input').value = mapsApiKey;
+  };
+
+  window.saveGeminiKey = function () {
+    const key = document.getElementById('gemini-api-key-input').value.trim();
+    if (!key) {
+      showToast('Invalid key', 'Please enter a valid API key.', 'error');
+      return;
+    }
+    geminiApiKey = key;
+    localStorage.setItem('OBTAINUM_gemini_key', key);
+    showToast('API Key saved', 'Gemini AI is now enabled.', 'success', 2000);
+  };
+
+  window.saveMapsKey = function () {
+    const key = document.getElementById('maps-api-key-input').value.trim();
+    if (!key) {
+      showToast('Invalid key', 'Please enter a valid API key.', 'error');
+      return;
+    }
+    mapsApiKey = key;
+    localStorage.setItem('OBTAINUM_maps_key', key);
+    showToast('API Key saved', 'Google Maps is now enabled.', 'success', 2000);
+  };
+
   window.analyzeProductWithAI = async function (productId) {
     const product = products.find(p => p.id === productId);
     if (!product) return;
 
     if (!geminiApiKey) {
-      showToast('API key required', 'Please set up your Gemini API key.', 'warning');
+      showToast('API key required', 'Please set up your Gemini API key in settings.', 'warning');
       showPage('assistant');
+      showAPIKeySetup();
       return;
     }
 
-    lastAnalyzedProduct = product;
-    showPage('assistant');
-
-    const placeholder = document.getElementById('analysis-placeholder');
-    const resultEl = document.getElementById('analysis-result');
-    placeholder.style.display = 'flex';
-    resultEl.style.display = 'none';
-
-    try {
-      const analysis = await getProductAnalysisFromAI(product);
-      placeholder.style.animation = 'fadeOut 0.3s ease-out';
-      setTimeout(() => {
-        placeholder.style.display = 'none';
-        resultEl.style.display = 'flex';
-        resultEl.style.animation = 'fadeIn 0.4s ease-out';
-        resultEl.innerHTML = analysis;
-      }, 300);
-    } catch (err) {
-      showToast('Analysis failed', err.message, 'error');
-    }
+    showToast('AI analysis feature coming soon', 'Feature is under development.', 'info');
   };
 
-  async function getProductAnalysisFromAI(product) {
-    const marketValue = product.msrp || estimateMarketValue(product);
-    const priceRatio = product.price / marketValue;
-    let dealScore = 100;
-    let dealClass = 'deal-great';
-
-    if (priceRatio > 1.5) {
-      dealScore = 30;
-      dealClass = 'deal-poor';
-    } else if (priceRatio > 1.2) {
-      dealScore = 50;
-      dealClass = 'deal-fair';
-    } else if (priceRatio > 1.0) {
-      dealScore = 70;
-      dealClass = 'deal-good';
-    }
-
-    const conditionLabel = {
-      'new': 'Brand new',
-      'like-new': 'Like new',
-      'good': 'Good condition',
-      'fair': 'Fair condition',
-      'poor': 'For parts only'
-    }[product.condition] || product.condition;
-
-    return `
-      <div class="analysis-product-header animate-fade-in-down">
-        <div class="analysis-product-thumb" style="background:var(--primary-bg);color:var(--primary);">
-          <i class="fas ${getCategoryIcon(product.category)}"></i>
-        </div>
-        <div class="analysis-product-title">
-          <h3>${product.name}</h3>
-          <p>${product.category}</p>
-        </div>
-        <div class="deal-score-badge ${dealClass} animate-scale-in">
-          <span class="score-num">${dealScore}</span>
-          SCORE
-        </div>
-      </div>
-      <div class="analysis-sections animate-fade-in-up">
-        <div class="analysis-section">
-          <div class="analysis-section-title">
-            <i class="fas fa-tag"></i> Market Value
-          </div>
-          <div class="analysis-body">
-            <strong>Market Value:</strong> ${formatPrice(marketValue)}<br>
-            <strong>Listed Price:</strong> ${formatPrice(product.price)}<br>
-            <strong>Comparison:</strong> 
-            ${priceRatio < 1 
-              ? `<span class="highlight-good">✓ ${Math.round((1 - priceRatio) * 100)}% BELOW</span>` 
-              : `<span class="highlight-bad">✗ ${Math.round((priceRatio - 1) * 100)}% ABOVE</span>`}
-          </div>
-        </div>
-        <div class="analysis-section">
-          <div class="analysis-section-title">
-            <i class="fas fa-info-circle"></i> Details
-          </div>
-          <div class="analysis-body">
-            <strong>Condition:</strong> ${conditionLabel}<br>
-            <strong>Location:</strong> ${product.location || 'Not specified'}<br>
-            <strong>Seller:</strong> ${product.seller} ${starsHTML(product.seller_rating)}
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  function estimateMarketValue(product) {
-    const baseValues = {
-      'Electronics': 500,
-      'Clothing & Accessories': 80,
-      'Collectibles': 120,
-      'Sports & Outdoors': 150,
-      'Books & Media': 30,
-      'Home & Garden': 100,
-      'Vehicles': 5000,
-      'Other': 100
-    };
-
-    let base = baseValues[product.category] || 100;
-    const conditionMultiplier = {
-      'new': 1.0,
-      'like-new': 0.85,
-      'good': 0.7,
-      'fair': 0.55,
-      'poor': 0.3
-    }[product.condition] || 0.5;
-
-    if (product.msrp) {
-      base = product.msrp * conditionMultiplier;
-    } else {
-      base = base * conditionMultiplier;
-    }
-
-    return Math.round(base * 100) / 100;
-  }
-
-  window.switchAITab = function (tab) {
+  window.switchAITab = function (btn, tab) {
     document.querySelectorAll('.ai-tab').forEach(t => t.classList.remove('active'));
-    event.target.classList.add('active');
-
-    const chatContainer = document.getElementById('chat-container');
-    const analysisPanel = document.getElementById('product-analysis-panel');
-
-    if (tab === 'chat') {
-      chatContainer.style.display = 'block';
-      analysisPanel.style.display = 'none';
-    } else {
-      chatContainer.style.display = 'none';
-      analysisPanel.style.display = 'block';
-    }
+    if (btn) btn.classList.add('active');
   };
 
   /* ================================================================
-     SECTION: app.js — Main App Navigation & Modal Functions
+     SECTION: app.js
   ================================================================ */
   window.openProductModal = function (productId) {
     const product = products.find(p => p.id === productId);
@@ -1330,11 +1171,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const firstImage = product.images?.[0] || null;
     const conditionLabel = {
-      'new': 'New',
-      'like-new': 'Like New',
-      'good': 'Good',
-      'fair': 'Fair',
-      'poor': 'For Parts'
+      'new': 'New', 'like-new': 'Like New', 'good': 'Good', 'fair': 'Fair', 'poor': 'For Parts'
     }[product.condition] || product.condition;
 
     const modal = document.getElementById('product-modal');
@@ -1347,25 +1184,25 @@ document.addEventListener('DOMContentLoaded', () => {
           : `<i class="fas ${getCategoryIcon(product.category)}"></i>`}
       </div>
       <div class="modal-info-col">
-        <div class="modal-badges animate-fade-in-down">
+        <div class="modal-badges">
           ${product.is_fair
             ? `<span class="badge badge-fair"><i class="fas fa-shield-alt"></i> Fair Price</span>`
             : `<span class="badge badge-scalp"><i class="fas fa-exclamation-triangle"></i> Above MSRP</span>`}
         </div>
-        <h2 class="modal-title animate-fade-in-down">${product.name}</h2>
-        <div class="modal-price-row animate-fade-in-down">
+        <h2 class="modal-title">${product.name}</h2>
+        <div class="modal-price-row">
           <span class="modal-price">${formatPrice(product.price)}</span>
           ${product.msrp ? `<span style="color:var(--text-muted);text-decoration:line-through;">MSRP ${formatPrice(product.msrp)}</span>` : ''}
         </div>
-        <div class="modal-seller-info animate-fade-in-up">
+        <div class="modal-seller-info">
           <div class="seller-avatar">${(product.seller[0] || 'U').toUpperCase()}</div>
           <div>
             <div style="color:var(--text);font-weight:700;font-size:0.9rem;">${product.seller}</div>
             <div style="font-size:0.78rem;color:var(--text-muted);">${starsHTML(product.seller_rating)}</div>
           </div>
         </div>
-        <div class="modal-desc animate-fade-in-up">${product.description}</div>
-        <div class="modal-actions animate-fade-in-up">
+        <div class="modal-desc">${product.description}</div>
+        <div class="modal-actions">
           <button class="btn btn-primary btn-block" onclick="addToCart('${product.id}', null); closeProductModal();">
             <i class="fas fa-cart-plus"></i> Add to Cart
           </button>
@@ -1380,39 +1217,19 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
 
     modal.style.display = 'flex';
-    modal.classList.add('animate-fade-in');
     modal.addEventListener('click', (e) => {
       if (e.target === modal) closeProductModal();
     });
   };
 
   window.closeProductModal = function () {
-    const modal = document.getElementById('product-modal');
-    modal.classList.remove('animate-fade-in');
-    modal.classList.add('animate-fade-out');
-    setTimeout(() => {
-      modal.style.display = 'none';
-      modal.classList.remove('animate-fade-out');
-    }, 300);
+    document.getElementById('product-modal').style.display = 'none';
   };
 
   window.showPage = function (pageId) {
-    const currentActive = document.querySelector('.page-view.active');
-    const nextPage = document.getElementById('page-' + pageId);
-
-    if (currentActive && nextPage && currentActive !== nextPage) {
-      currentActive.classList.remove('active');
-      currentActive.style.animation = 'fadeOut 0.3s ease-out forwards';
-
-      setTimeout(() => {
-        nextPage.classList.add('active');
-        nextPage.style.animation = 'fadeIn 0.4s ease-out';
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }, 150);
-    } else if (nextPage) {
-      nextPage.classList.add('active');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+    document.querySelectorAll('.page-view').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-' + pageId)?.classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 
     document.querySelectorAll('.nav-link[data-page]').forEach(link => {
       link.classList.toggle('active', link.dataset.page === pageId);
@@ -1442,7 +1259,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   window.clearChat = function () {
     document.getElementById('chat-history').innerHTML = `
-      <div class="chat-msg bot-msg animate-fade-in">
+      <div class="chat-msg bot-msg">
         <div class="chat-msg-avatar bot-avatar"><i class="fas fa-robot"></i></div>
         <div class="chat-msg-bubble">
           <p>Chat cleared. What can I help you with?</p>
@@ -1459,7 +1276,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const history = document.getElementById('chat-history');
     const userMsg = document.createElement('div');
-    userMsg.className = 'chat-msg user-msg animate-fade-in-up';
+    userMsg.className = 'chat-msg user-msg';
     userMsg.innerHTML = `
       <div class="chat-msg-avatar user-avatar"><i class="fas fa-user"></i></div>
       <div class="chat-msg-bubble">${msg}</div>
@@ -1470,7 +1287,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setTimeout(() => {
       const botMsg = document.createElement('div');
-      botMsg.className = 'chat-msg bot-msg animate-fade-in-up';
+      botMsg.className = 'chat-msg bot-msg';
       botMsg.innerHTML = `
         <div class="chat-msg-avatar bot-avatar"><i class="fas fa-robot"></i></div>
         <div class="chat-msg-bubble">
@@ -1490,9 +1307,6 @@ document.addEventListener('DOMContentLoaded', () => {
     sendMessageToBot();
   };
 
-  /* ================================================================
-     SECTION: App Initialization & Setup
-  ================================================================ */
   async function init() {
     await checkAuthSession();
     products = await fetchListings();
@@ -1508,7 +1322,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('footer-year').textContent = new Date().getFullYear();
 
-    console.log(`✨ Obtainum Marketplace: ${products.length} listings loaded.`);
+    console.log(`Obtainum: ${products.length} listings loaded.`);
   }
 
   init().catch(console.error);
