@@ -4,8 +4,8 @@
 ================================================================ */
 
 // --- 1. SUPABASE CLIENT ---
-const DB_URL = 'https://YOUR_PROJECT.supabase.co';
-const DB_KEY = 'YOUR_ANON_KEY';
+const DB_URL = 'https://gotzmuobwuubsugnowxq.supabase.co';
+const DB_KEY = 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs';
 const db = supabase.createClient(DB_URL, DB_KEY);
 
 // --- 2. GLOBAL STATE ---
