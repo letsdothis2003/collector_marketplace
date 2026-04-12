@@ -1336,7 +1336,7 @@ function renderDetail(listing) {
           </div>
           <div style="flex:1;">
             <div class="seller-name">${escHtml(seller.username || 'Anonymous')}</div>
-            ${seller.location ? `<div class="seller-location">&#128205; ${escHtml(seller.location)}</div>` : ''}
+            ${seller.location ? `<div class="seller-location">; ${escHtml(seller.location)}</div>` : ''}
             ${seller.rating > 0 ? `<div class="seller-rating">${'&#9733;'.repeat(Math.round(seller.rating))} ${parseFloat(seller.rating).toFixed(1)}</div>` : ''}
             ${seller.bio ? `<div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">${escHtml(seller.bio.slice(0, 100))}${seller.bio.length > 100 ? '...' : ''}</div>` : ''}
           </div>
