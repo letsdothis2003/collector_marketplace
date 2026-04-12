@@ -1,4 +1,4 @@
- /* ============================================================
+/* ============================================================
    OBTAINUM MARKETPLACE — script.js
    Vanilla JS, no frameworks. Connects to Supabase.
    Sections: CONFIG | STATE | THEME | ROUTER | AUTH |
@@ -764,7 +764,9 @@ async function submitListing(e) {
 
     // 5. Reset form, update UI, and navigate
     if (newListing) {
-      State.listings.unshift(newListing); // Optimistically add to local state
+        // The returned `newListing` has the profile data nested. We need to flatten it for consistency.
+        newListing.profiles = newListing.profiles ? newListing.profiles : State.profile;
+        State.listings.unshift(newListing);
     }
     
     e.target.reset();
@@ -1251,29 +1253,22 @@ function renderListings(listings) {
   const grid = document.getElementById('listings-grid');
   if (!grid) return;
 
-  if (listings.length === 0) {
+  if (!listings || listings.length === 0) {
     grid.innerHTML = `
       <div class="empty-state">
         <div class="empty-icon">&#128269;</div>
         <div class="empty-title">NO LISTINGS FOUND</div>
         <div class="empty-sub">
-          ${
-            State.listings && State.listings.length === 0
-              ? 'Be the first to list something for sale!'
-              : 'Try adjusting your search or filters.'
-          }
+          ${State.listings.length === 0
+            ? 'Be the first to list something for sale!'
+            : 'Try adjusting your search or filters.'}
         </div>
-  
-        ${
-          State.user
-            ? `<br/><button class="btn btn-primary" onclick="navigate('create')" style="margin-top:12px;">+ LIST AN ITEM</button>`
-            : ''
-        }
+        ${State.user ? '<br/><button class="btn btn-primary" onclick="navigate(\'create\')" style="margin-top:12px;">+ LIST AN ITEM</button>' : ''}
       </div>
     `;
     return;
   }
-  
+
   grid.innerHTML = '';
   grid.classList.add('stagger');
   listings.forEach(l => grid.appendChild(createListingCard(l)));
@@ -1523,4 +1518,4 @@ document.addEventListener('DOMContentLoaded', async () => {
     '%c OBTAINUM INITIALIZED ',
     'background:#00ff41;color:#001a07;font-family:monospace;font-weight:bold;font-size:14px;padding:4px 8px;'
   );
-});
+});  
