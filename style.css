@@ -1,103 +1,167 @@
 /* ================================================================
-   OBTAINUM MARKETPLACE — style.css
-   Style: FB Marketplace structure + Cyber-Dark theme
-================================================================ */
+   FILE: style.css
+   THEME: Modern Professional with Cyber Accents
+   COMPATIBILITY: index.html, shop.html, sell.html, profile.html
+================================================================
+*/
 
 :root {
-    --bg-main: #18191a;
-    --bg-nav: #242526;
-    --bg-hover: #3a3b3c;
-    --text-primary: #e4e6eb;
-    --text-secondary: #b0b3b8;
-    --accent-neon: #39FF14;
-    --border: #3e4042;
-    --fb-blue: #2d88ff;
-    --card-shadow: 0 12px 28px 0 rgba(0,0,0,0.2);
+    /* Dark Mode Palette (Default) */
+    --bg: #0b0e11;
+    --surface: #15191c;
+    --border: #2d3339;
+    --text-main: #ffffff;
+    --text-dim: #9ba3af;
+    --primary: #00d97e; /* Green from your reference */
+    --primary-glow: rgba(0, 217, 126, 0.2);
+    --accent: #007bff;
+    --error: #ff4d4d;
+    --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-body.light-mode {
-    --bg-main: #f0f2f5;
-    --bg-nav: #ffffff;
-    --bg-hover: #e4e6e9;
-    --text-primary: #050505;
-    --text-secondary: #65676b;
-    --accent-neon: #16a34a;
-    --border: #ced0d4;
+.light-mode {
+    --bg: #f8f9fa;
+    --surface: #ffffff;
+    --border: #e9ecef;
+    --text-main: #1a1d21;
+    --text-dim: #6c757d;
 }
 
-body {
-    margin: 0; font-family: 'Inter', sans-serif;
-    background: var(--bg-main); color: var(--text-primary);
-    overflow: hidden;
+/* Reset & Base */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { 
+    font-family: 'Inter', sans-serif; 
+    background-color: var(--bg); 
+    color: var(--text-main);
+    line-height: 1.6;
+    transition: background var(--transition), color var(--transition);
 }
 
-/* NAVBAR */
-.fb-nav {
-    height: 56px; background: var(--bg-nav);
+/* Navigation System */
+.main-nav {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    height: 70px;
+    display: flex;
+    align-items: center;
+    position: sticky;
+    top: 0; z-index: 1000;
+}
+
+.nav-container {
+    width: 90%; max-width: 1400px; margin: 0 auto;
     display: flex; justify-content: space-between; align-items: center;
-    padding: 0 16px; border-bottom: 1px solid var(--border);
-    position: sticky; top: 0; z-index: 100;
 }
 
-.logo-text { font-family: 'Orbitron'; font-size: 1.2rem; color: var(--accent-neon); }
-
-.search-wrapper input {
-    background: var(--bg-hover); border: none; border-radius: 20px;
-    padding: 10px 20px; color: var(--text-primary); width: 240px;
+.logo-icon {
+    background: var(--primary); color: white;
+    width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Orbitron'; font-weight: bold; cursor: pointer;
 }
 
-.nav-tab {
-    background: none; border: none; font-size: 1.5rem; 
-    padding: 10px 30px; cursor: pointer; border-radius: 8px;
-    transition: 0.2s;
-}
-.nav-tab.active { color: var(--accent-neon); border-bottom: 3px solid var(--accent-neon); border-radius: 0; }
-.nav-tab:hover { background: var(--bg-hover); }
+.nav-links { display: flex; gap: 20px; align-items: center; }
 
-/* LAYOUT */
-.main-container { display: flex; height: calc(100vh - 56px); }
-
-.sidebar {
-    width: 360px; padding: 16px; 
-    overflow-y: auto; background: var(--bg-nav);
+.n-link {
+    background: none; border: none; color: var(--text-dim);
+    font-weight: 500; cursor: pointer; transition: var(--transition);
 }
 
-.feed-area { flex: 1; padding: 20px; overflow-y: auto; }
+.n-link.active, .n-link:hover { color: var(--primary); }
 
-.fb-grid {
-    display: grid; 
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 12px;
+.login-pill {
+    background: var(--primary); color: white; border: none;
+    padding: 8px 20px; border-radius: 20px; font-weight: 600; cursor: pointer;
 }
 
-/* CARDS */
-.item-card {
-    background: var(--bg-nav); border-radius: 8px; overflow: hidden;
-    cursor: pointer; transition: transform 0.1s;
+/* Page Visibility & Animations (Router) */
+.page-view {
+    padding: 40px 5%;
+    min-height: calc(100vh - 70px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
 }
-.item-card:hover { transform: scale(1.02); }
 
-.card-img { height: 220px; background: #333; width: 100%; object-fit: cover; }
-.card-info { padding: 12px; }
-.card-price { font-weight: 700; font-size: 1.1rem; margin-bottom: 4px; }
-.card-title { font-size: 0.95rem; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.card-loc { font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px; }
+.hidden { display: none; opacity: 0; transform: translateY(10px); }
+.active { display: block; opacity: 1; transform: translateY(0); }
 
-/* AI SIDEBAR */
-.ai-right-pane {
-    width: 300px; background: var(--bg-nav); border-left: 1px solid var(--border);
-    display: flex; flex-direction: column;
+/* Hero Section (Matches Screenshot) */
+.hero {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 50px; padding: 60px 0;
 }
-.ai-header {
-    padding: 16px; border-bottom: 1px solid var(--border);
-    font-family: 'JetBrains Mono'; color: var(--accent-neon);
-    display: flex; justify-content: space-between;
-}
-.ai-body { padding: 16px; font-size: 0.9rem; }
-.ai-list { list-style: none; padding: 0; }
-.ai-list li { margin-bottom: 12px; padding-left: 15px; position: relative; }
-.ai-list li::before { content: "»"; position: absolute; left: 0; color: var(--accent-neon); }
 
-/* UTILS */
-.hidden { display: none !important; }
-.neon-text { color: var(--accent-neon); text-shadow: 0 0 5px var(--accent-neon); }
+.hero h1 { font-size: 3.5rem; line-height: 1.1; margin-bottom: 20px; }
+.highlight { border-bottom: 6px solid var(--primary); }
+
+.btn-primary {
+    background: var(--primary); color: white; border: none;
+    padding: 16px 32px; border-radius: 8px; font-weight: bold;
+    font-size: 1rem; cursor: pointer; transition: var(--transition);
+}
+
+.btn-primary:hover { box-shadow: 0 0 20px var(--primary-glow); transform: translateY(-2px); }
+
+/* Marketplace Grid */
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 25px; margin-top: 30px;
+}
+
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    transition: var(--transition);
+    cursor: pointer;
+}
+
+.card:hover { border-color: var(--primary); transform: translateY(-5px); }
+
+.badge {
+    display: inline-block; padding: 4px 10px; border-radius: 4px;
+    font-size: 0.75rem; font-weight: bold; margin-top: 10px;
+}
+
+.badge.fair { background: rgba(0, 217, 126, 0.1); color: var(--primary); }
+.badge.warn { background: rgba(255, 77, 77, 0.1); color: var(--error); }
+
+/* Forms (Sell Page) */
+.form-card {
+    max-width: 600px; margin: 0 auto;
+    background: var(--surface); padding: 40px;
+    border-radius: 16px; border: 1px solid var(--border);
+}
+
+form input, form select, form textarea {
+    width: 100%; padding: 12px; margin: 10px 0;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text-main);
+}
+
+.row { display: flex; gap: 15px; }
+
+/* AI Sidebar */
+#ai-companion {
+    position: fixed; right: 20px; bottom: 20px;
+    width: 300px; background: var(--surface);
+    border: 1px solid var(--primary); border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    overflow: hidden; z-index: 1001;
+}
+
+.ai-head {
+    background: var(--primary); color: white;
+    padding: 10px 15px; display: flex; justify-content: space-between;
+    font-family: 'Orbitron'; font-size: 0.8rem;
+}
+
+.ai-body { padding: 15px; font-size: 0.9rem; max-height: 200px; overflow-y: auto; }
+
+/* Non-functional Requirements / Polish */
+.shimmer { animation: shimmer 1.5s infinite linear; opacity: 0.5; }
+@keyframes shimmer { 0% { opacity: 0.3; } 50% { opacity: 0.7; } 100% { opacity: 0.3; } }
+
+.blink { animation: blink 1s infinite; }
+@keyframes blink { 50% { opacity: 0; } }
