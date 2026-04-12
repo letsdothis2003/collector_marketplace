@@ -1,150 +1,130 @@
-<!DOCTYPE html>
+<<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OBTAINUM | Sovereign Marketplace</title>
-    
+    <title>OBTAINUM | Collectibles Hub</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=JetBrains+Mono:wght@300;400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@700&family=JetBrains+Mono&display=swap" rel="stylesheet">
 </head>
 <body class="dark-mode">
 
-    <div id="integrity-shield" class="hidden">
-        <div class="shield-content">
-            <h1 class="glitch" data-text="SYSTEM_HALT">SYSTEM_HALT</h1>
-            <p>> DATA INCONSISTENCY DETECTED</p>
-            <p>> PREVENTING DATABASE CORRUPTION...</p>
-            <div class="progress-bar"><div class="progress-fill"></div></div>
-            <button onclick="location.reload()" class="neon-btn">REBOOT_SYSTEM</button>
+    <div id="status-lock" class="hidden">
+        <div class="lock-panel">
+            <h2 class="neon-text">SYSTEM_PAUSED</h2>
+            <p>Data consistency check in progress. Please wait for synchronization...</p>
         </div>
     </div>
 
-    <nav class="cyber-nav">
-        <div class="nav-container">
-            <div class="brand-zone">
-                <div class="logo-glitch">OBTAINUM</div>
-                <div class="status-indicator"><span class="pulse"></span> LIVE_NODE</div>
+    <nav class="fb-nav">
+        <div class="nav-left">
+            <h1 class="logo-text">OBTAINUM</h1>
+            <div class="search-wrapper">
+                <input type="text" id="global-search" placeholder="Search Listings...">
             </div>
-
-            <div class="nav-center">
-                <button class="nav-link active" data-page="shop">/MARKET</button>
-                <button class="nav-link" data-page="sell">/OFFLOAD</button>
-                <button class="nav-link" data-page="vault">/MY_VAULT</button>
-            </div>
-
-            <div class="nav-right">
-                <button id="theme-toggle" class="utility-btn">THEME_SWAP</button>
-                <div id="user-display" class="user-chip">
-                    <button id="login-trigger" class="neon-border">INIT_AUTH</button>
-                </div>
+        </div>
+        <div class="nav-center">
+            <button class="nav-tab active" data-page="shop" title="Marketplace">🏛️</button>
+            <button class="nav-tab" data-page="sell" title="Create Listing">➕</button>
+            <button class="nav-tab" data-page="vault" title="Your Wishlist">❤️</button>
+        </div>
+        <div class="nav-right">
+            <button id="theme-toggle">🌓</button>
+            <div id="profile-pill">
+                <button id="login-btn" class="login-trigger">Sign In</button>
             </div>
         </div>
     </nav>
 
-    <div class="app-shell">
-        <main id="view-port">
+    <div class="main-container">
+        <aside class="sidebar">
+            <h2 class="section-title">Marketplace</h2>
+            
+            <div class="filter-group">
+                <h3>Filters</h3>
+                <div class="filter-item">
+                    <label>Location</label>
+                    <input type="text" id="loc-filter" placeholder="City, Zip...">
+                </div>
+                <div class="filter-item">
+                    <label>Price Range</label>
+                    <div class="price-inputs">
+                        <input type="number" id="min-p" placeholder="Min">
+                        <input type="number" id="max-p" placeholder="Max">
+                    </div>
+                </div>
+            </div>
+
+            <div class="category-list">
+                <h3>Categories</h3>
+                <button class="cat-btn active" data-cat="all">All Items</button>
+                <button class="cat-btn" data-cat="Collectibles">Collectibles</button>
+                <button class="cat-btn" data-cat="Electronics">Electronics</button>
+                <button class="cat-btn" data-cat="Clothing">Clothing</button>
+            </div>
+        </aside>
+
+        <main class="feed-area">
             
             <section id="page-shop" class="page-view">
-                <header class="view-header">
-                    <h2>GLOBAL_LISTINGS</h2>
-                    <div class="filter-bar">
-                        <input type="text" id="market-search" placeholder="SCAN BY NAME/TAGS...">
-                        <select id="sort-logic">
-                            <option value="created_at">NEWEST_FIRST</option>
-                            <option value="price_asc">PRICE_LOW</option>
-                            <option value="price_desc">PRICE_HIGH</option>
-                        </select>
-                    </div>
-                </header>
-                <div id="listing-grid" class="grid-layout">
+                <div class="feed-header">
+                    <h3>Today's Picks</h3>
+                </div>
+                <div id="listing-grid" class="fb-grid">
                     </div>
             </section>
 
             <section id="page-sell" class="page-view hidden">
-                <div class="form-wrapper">
-                    <div class="form-header">
-                        <h2>GENERATE_ASSET_NODE</h2>
-                        <p>Input data for peer-to-peer exchange.</p>
-                    </div>
-                    <form id="listing-form" class="cyber-form">
-                        <div class="input-row">
-                            <div class="field">
-                                <label>ITEM_NAME</label>
-                                <input type="text" id="item_name" required maxlength="100">
-                            </div>
-                            <div class="field">
-                                <label>CATEGORY</label>
-                                <select id="item_category">
-                                    <option value="Transformers">TRANSFORMERS</option>
-                                    <option value="Marvel">MARVEL</option>
-                                    <option value="Electronics">ELECTRONICS</option>
-                                    <option value="Apparel">APPAREL</option>
-                                </select>
-                            </div>
+                <div class="fb-card-form">
+                    <h2>Create New Listing</h2>
+                    <form id="listing-form">
+                        <input type="text" id="form-name" placeholder="Title" required>
+                        <select id="form-cat">
+                            <option value="Collectibles">Collectibles</option>
+                            <option value="Electronics">Electronics</option>
+                            <option value="Clothing">Clothing</option>
+                        </select>
+                        <div class="row">
+                            <input type="number" id="form-price" placeholder="Price" required>
+                            <input type="number" id="form-msrp" placeholder="Retail MSRP (for AI Fairness)">
                         </div>
-
-                        <div class="input-row">
-                            <div class="field">
-                                <label>PRICE (USD)</label>
-                                <input type="number" id="item_price" step="0.01" required>
-                            </div>
-                            <div class="field">
-                                <label>MSRP (FOR AI ANALYSIS)</label>
-                                <input type="number" id="item_msrp" step="0.01">
-                            </div>
-                        </div>
-
-                        <div class="field">
-                            <label>DESCRIPTION_LOG</label>
-                            <textarea id="item_desc" rows="4" minlength="10"></textarea>
-                        </div>
-
-                        <button type="submit" id="deploy-btn" class="neon-btn-fill">DEPLOY_TO_MARKET</button>
+                        <select id="form-condition">
+                            <option value="new">New</option>
+                            <option value="like-new">Like New</option>
+                            <option value="good">Good</option>
+                            <option value="fair">Fair</option>
+                            <option value="poor">Poor</option>
+                        </select>
+                        <textarea id="form-desc" placeholder="Description (min 10 chars)"></textarea>
+                        <button type="submit" class="submit-btn">Post Listing</button>
                     </form>
                 </div>
             </section>
 
             <section id="page-ai-full" class="page-view hidden">
-                <div class="ai-intel-center">
-                    <div class="intel-header">
-                        <h1>INTEL_CENTER_v4</h1>
-                        <button id="minimize-ai" class="close-btn">MINIMIZE_SIDEBAR</button>
+                <div class="intel-dashboard">
+                    <div class="intel-nav">
+                        <h2>AI Market Analysis Dashboard</h2>
+                        <button id="minimize-ai">Back to Marketplace</button>
                     </div>
-                    <div class="intel-grid">
-                        <div class="intel-card">
-                            <h3>MARKET_INFLATION_INDEX</h3>
-                            <canvas id="inflationChart"></canvas>
+                    <div id="deep-stats">
                         </div>
-                        <div class="intel-card" id="ai-deep-analysis">
-                            <h3>NEURAL_ADVISORY</h3>
-                            <div id="ai-full-text">Select an asset to begin deep scan...</div>
-                        </div>
-                    </div>
                 </div>
             </section>
-
         </main>
 
-        <aside id="ai-sidebar" class="sidebar-active">
-            <div class="sidebar-nav">
-                <span class="neon-text">AI_CO_PILOT</span>
-                <button id="maximize-ai" title="Enter Intel Center">⤢</button>
+        <aside id="ai-sidebar" class="ai-right-pane">
+            <div class="ai-header">
+                <span>AI_ASSISTANT</span>
+                <button id="maximize-ai">⤢ Maximize</button>
             </div>
-            <div id="ai-context-window">
-                <div class="ai-thought-bubble">
-                    <p id="ai-dynamic-msg">Standing by. I will analyze your listings for fairness and market trends as you type.</p>
-                </div>
-                <div id="ai-live-bullets" class="bullet-container"></div>
-            </div>
-            <div class="sidebar-footer">
-                <small>ENGINE: OBTAINUM_NEURAL_v1</small>
+            <div id="ai-context" class="ai-body">
+                <p class="welcome">Select an item to see AI Market Worth and Risk analysis.</p>
+                <ul id="ai-bullets" class="ai-list"></ul>
             </div>
         </aside>
     </div>
-
-    <div id="toast-notif" class="toast-hidden"></div>
 
     <script src="script.js"></script>
 </body>
