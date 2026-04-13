@@ -1927,3 +1927,58 @@ footer .footer-links a:hover { color: var(--neon); }
 }
 
 
+.chat-thread {
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    gap: 4px; /* Tight gaps like Messenger */
+}
+
+.message-wrapper {
+    display: flex;
+    flex-direction: column;
+    max-width: 70%;
+    margin-bottom: 8px;
+}
+
+/* IDENTITY: ME (Outgoing) */
+.message-wrapper.outgoing {
+    align-self: flex-end;
+    align-items: flex-end;
+}
+.message-wrapper.outgoing .bubble {
+    background-color: #0084ff; /* Messenger Blue */
+    color: white;
+    border-radius: 18px 18px 4px 18px;
+}
+
+/* IDENTITY: THEM (Incoming) */
+.message-wrapper.incoming {
+    align-self: flex-start;
+    align-items: flex-start;
+}
+.message-wrapper.incoming .bubble {
+    background-color: #e4e6eb; /* Messenger Grey */
+    color: black;
+    border-radius: 18px 18px 18px 4px;
+}
+
+.bubble {
+    padding: 8px 12px;
+    font-size: 0.95rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.chat-time {
+    font-size: 0.7rem;
+    color: #8a8d91;
+    margin-top: 4px;
+}
+
+.chat-img {
+    max-width: 200px;
+    border-radius: 12px;
+    border: 1px solid #ddd;
+    margin-bottom: 4px;
+}
+
