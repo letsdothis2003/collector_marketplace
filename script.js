@@ -7,9 +7,7 @@
 // ==================== DATABASE CONFIG ====================
 const SUPABASE_URL = "https://gotzmuobwuubsugnowxq.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
-
-// Gemini API Key (Replace with your actual key)
-const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE";
+const GEMINI_API_KEY = "AIzaSyDDfZIMVZxkkJlv-WwfX06YPvlhRl9KOZI";
 
 let db;
 let genAI;
