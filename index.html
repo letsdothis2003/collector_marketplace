@@ -56,16 +56,17 @@
     </button>
   </header>
 
-  <!-- Mobile Nav Drawer -->
-  <nav class="mobile-nav" id="mobile-nav">
-  <button class="nav-btn" onclick="navigate('shop'); closeMobileNav()">&#11042; SHOP</button>
-    <button class="nav-btn" onclick="navigate('create'); closeMobileNav()">+ CREATE</button>
-    <button class="nav-btn" onclick="navigate('wishlist'); closeMobileNav()">&#9825; WISHLIST</button>
-    <button class="nav-btn" onclick="navigate('profile'); closeMobileNav()">&#9881; PROFILE</button>
-    <button class="nav-btn" onclick="navigate('Ai Assistant'); closeMobileNav()">&#9881; Assistant</button>
-    <button class="nav-btn" onclick="navigate('Messages');"closeMobileNav('Messages')">&#9881; MESSAGES</button>
-    <button class="nav-btn" onclick="navigate('Messages');"closeMobileNav('donate')">&#9881; DONATE</button>
-  </nav>
+<nav class="nav-menu">
+  <button class="nav-btn active" id="nav-shop" onclick="navigate('shop')">🛒 SHOP</button>
+  
+  <!-- These buttons should only show when logged in -->
+  <button class="nav-btn hidden" id="nav-create" onclick="navigate('create')">+ CREATE</button>
+  <button class="nav-btn hidden" id="nav-wishlist" onclick="navigate('wishlist')">❤️ WISHLIST</button>
+  <button class="nav-btn hidden" id="nav-profile" onclick="navigate('profile')">⚙️ PROFILE</button>
+  <button class="nav-btn hidden" id="nav-assistant" onclick="navigate('assistant')">🤖 ASSISTANT</button>
+  <button class="nav-btn hidden" id="nav-messages" onclick="navigate('messages')">💬 MESSAGES</button>
+  <button class="nav-btn hidden" id="nav-donate" onclick="navigate('donate')">🎁 DONATE</button>
+</nav>
 
       <!-- ====== MESSAGES PAGE ====== -->
       <section class="page" id="page-messages">
