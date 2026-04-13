@@ -105,6 +105,24 @@ function toggleTheme() {
   applyTheme(isLight ? 'dark' : 'light');
 }
 
+// Make sure theme toggle button works - Add this to your existing setupEventListeners function
+function setupThemeToggle() {
+  const themeToggleBtn = document.getElementById('theme-toggle');
+  if (themeToggleBtn) {
+    // Remove any existing listeners to avoid duplicates
+    themeToggleBtn.removeEventListener('click', toggleTheme);
+    themeToggleBtn.addEventListener('click', toggleTheme);
+  }
+}
+
+// Call this after DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+  setupThemeToggle();
+});
+
+
+
+
 // ==================== NAVIGATION ====================
 function navigate(page) {
   const pages = ['shop', 'detail', 'create', 'profile', 'wishlist', 'messages', 'assistant', 'donate'];
