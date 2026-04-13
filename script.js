@@ -1,14 +1,7 @@
 /* ============================================================
-   OBTAINUM MARKETPLACE — script.js
-   Vanilla JS, no frameworks. Connects to Supabase.
-   Sections: CONFIG | STATE | THEME | ROUTER | AUTH |
-             LISTINGS | WISHLIST | CREATE | PROFILE |
-             DETAIL + AI | RENDER | ANIMATIONS | EVENTS | INIT | Chat System 
-   ============================================================ */
-/* ============================================================
    FILE: script.js
-   OBTAINUM MARKETPLACE — Full functionality with guest access
-   Shop visible to all, chat/assistant require login
+   OBTAINUM MARKETPLACE — Full functionality with working theme toggle
+   Dark mode (black) <-> Light mode (white)
    ============================================================ */
 
 // ==================== DATABASE CONFIG ====================
@@ -87,41 +80,35 @@ function setLoading(btn, isLoading, text) {
   btn.innerHTML = isLoading ? `<span class="spinner"></span> ${text}` : text;
 }
 
-// ==================== THEME TOGGLE ====================
+// ==================== THEME TOGGLE (FIXED) ====================
 function initTheme() {
   const saved = localStorage.getItem('obtainum-theme') || 'dark';
   applyTheme(saved);
 }
 
 function applyTheme(mode) {
-  document.body.classList.toggle('light-mode', mode === 'light');
+  if (mode === 'light') {
+    document.body.classList.add('light-mode');
+    const themeBtn = document.getElementById('theme-toggle-btn');
+    if (themeBtn) themeBtn.textContent = '☀️';
+  } else {
+    document.body.classList.remove('light-mode');
+    const themeBtn = document.getElementById('theme-toggle-btn');
+    if (themeBtn) themeBtn.textContent = '🌙';
+  }
   localStorage.setItem('obtainum-theme', mode);
-  const label = document.getElementById('theme-label');
-  if (label) label.textContent = mode === 'dark' ? 'DARK' : 'LIGHT';
 }
 
 function toggleTheme() {
   const isLight = document.body.classList.contains('light-mode');
-  applyTheme(isLight ? 'dark' : 'light');
-}
-
-// Make sure theme toggle button works - Add this to your existing setupEventListeners function
-function setupThemeToggle() {
-  const themeToggleBtn = document.getElementById('theme-toggle');
-  if (themeToggleBtn) {
-    // Remove any existing listeners to avoid duplicates
-    themeToggleBtn.removeEventListener('click', toggleTheme);
-    themeToggleBtn.addEventListener('click', toggleTheme);
+  if (isLight) {
+    applyTheme('dark');
+    showToast('Dark mode activated', 'info');
+  } else {
+    applyTheme('light');
+    showToast('Light mode activated', 'info');
   }
 }
-
-// Call this after DOM is loaded
-document.addEventListener('DOMContentLoaded', function() {
-  setupThemeToggle();
-});
-
-
-
 
 // ==================== NAVIGATION ====================
 function navigate(page) {
@@ -136,7 +123,6 @@ function navigate(page) {
   State.currentPage = page;
   updateNavActive(page);
   
-  // Update UI based on login state for restricted pages
   updateRestrictedPageUI();
   
   if (page === 'shop') loadListings();
@@ -154,7 +140,6 @@ function updateNavActive(page) {
 }
 
 function updateRestrictedPageUI() {
-  // Update messages page UI based on login state
   const messagesLoginNotice = document.getElementById('messages-login-notice');
   const chatForm = document.getElementById('chatForm');
   const conversationList = document.getElementById('conversationList');
@@ -171,7 +156,6 @@ function updateRestrictedPageUI() {
     if (messagesLoginNotice) messagesLoginNotice.classList.add('hidden');
   }
   
-  // Update assistant UI
   updateAssistantUI();
 }
 
@@ -1071,13 +1055,13 @@ async function loadProfile() {
   const profileTabs = document.querySelector('.profile-tabs');
   if (profileTabs) profileTabs.style.display = isOwnProfile ? 'flex' : 'none';
   
-  const myListingsTab = document.getElementById('ptab-my-listings');
-  const soldTab = document.getElementById('ptab-sold');
-  const settingsTab = document.getElementById('ptab-settings');
+  const myListingsDiv = document.getElementById('ptab-my-listings');
+  const soldDiv = document.getElementById('ptab-sold');
+  const settingsDiv = document.getElementById('ptab-settings');
   
-  if (myListingsTab) myListingsTab.style.display = 'block';
-  if (soldTab) soldTab.style.display = 'none';
-  if (settingsTab) settingsTab.style.display = 'none';
+  if (myListingsDiv) myListingsDiv.style.display = 'block';
+  if (soldDiv) soldDiv.style.display = 'none';
+  if (settingsDiv) settingsDiv.style.display = 'none';
   
   if (isOwnProfile) {
     const profileTabsBtns = document.querySelectorAll('.profile-tab');
@@ -1148,37 +1132,69 @@ async function loadProfileListings(profileId, isOwnProfile) {
 
 async function saveProfile(e) {
   e.preventDefault();
-  if (!State.user) return;
+  if (!State.user) {
+    openAuthModal();
+    return;
+  }
   
   const errEl = document.getElementById('profile-save-error');
   if (errEl) errEl.classList.remove('show');
   
-  const updates = {
-    username: document.getElementById('s-username')?.value.trim() || '',
-    bio: document.getElementById('s-bio')?.value.trim() || '',
-    location: document.getElementById('s-location')?.value.trim() || null,
-    phone: document.getElementById('s-phone')?.value.trim() || null
-  };
+  const username = document.getElementById('s-username')?.value.trim() || '';
+  const bio = document.getElementById('s-bio')?.value.trim() || '';
+  const location = document.getElementById('s-location')?.value.trim() || null;
+  const phone = document.getElementById('s-phone')?.value.trim() || null;
   
-  if (updates.username.length < 3) {
-    if (errEl) { errEl.textContent = 'Username must be at least 3 characters.'; errEl.classList.add('show'); }
+  if (username.length < 3) {
+    if (errEl) { 
+      errEl.textContent = 'Username must be at least 3 characters.'; 
+      errEl.classList.add('show'); 
+    }
+    showToast('Username must be at least 3 characters.', 'error');
     return;
   }
   
-  const { error } = await db
-    .from('profiles')
-    .update(updates)
-    .eq('id', State.user.id);
+  const saveBtn = e.target.querySelector('button[type="submit"]');
+  const originalText = saveBtn?.textContent || 'SAVE PROFILE';
+  if (saveBtn) setLoading(saveBtn, true, 'SAVING...');
   
-  if (error) {
-    const msg = error.message.includes('unique') ? 'That username is already taken.' : error.message;
-    if (errEl) { errEl.textContent = 'Failed to save profile: ' + msg; errEl.classList.add('show'); }
+  try {
+    const updates = {
+      username: username,
+      bio: bio,
+      location: location,
+      phone: phone,
+      updated_at: new Date().toISOString()
+    };
+    
+    const { error } = await db
+      .from('profiles')
+      .update(updates)
+      .eq('id', State.user.id);
+    
+    if (error) {
+      const msg = error.message.includes('unique') ? 'That username is already taken.' : error.message;
+      if (errEl) { 
+        errEl.textContent = 'Failed to save profile: ' + msg; 
+        errEl.classList.add('show'); 
+      }
+      showToast('Failed to save profile: ' + msg, 'error');
+    } else {
+      State.profile = { ...State.profile, ...updates };
+      updateAuthUI();
+      showToast('Profile updated successfully!', 'success');
+      await loadProfile();
+      if (errEl) errEl.classList.remove('show');
+    }
+  } catch (err) {
+    console.error('Save profile error:', err);
+    if (errEl) {
+      errEl.textContent = 'An unexpected error occurred.';
+      errEl.classList.add('show');
+    }
     showToast('Failed to save profile.', 'error');
-  } else {
-    State.profile = { ...State.profile, ...updates };
-    updateAuthUI();
-    showToast('Profile updated!', 'success');
-    loadProfile();
+  } finally {
+    if (saveBtn) setLoading(saveBtn, false, originalText);
   }
 }
 
@@ -1186,10 +1202,25 @@ function switchProfileTab(btn) {
   const tabName = btn.dataset.ptab;
   document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
-  ['my-listings', 'sold', 'settings'].forEach(t => {
-    const el = document.getElementById('ptab-' + t);
-    if (el) el.classList.toggle('hidden', t !== tabName);
-  });
+  
+  const myListingsDiv = document.getElementById('ptab-my-listings');
+  const soldDiv = document.getElementById('ptab-sold');
+  const settingsDiv = document.getElementById('ptab-settings');
+  
+  if (tabName === 'my-listings') {
+    if (myListingsDiv) myListingsDiv.classList.remove('hidden');
+    if (soldDiv) soldDiv.classList.add('hidden');
+    if (settingsDiv) settingsDiv.classList.add('hidden');
+  } else if (tabName === 'sold') {
+    if (myListingsDiv) myListingsDiv.classList.add('hidden');
+    if (soldDiv) soldDiv.classList.remove('hidden');
+    if (settingsDiv) settingsDiv.classList.add('hidden');
+    if (State.user) loadProfileListings(State.user.id, true);
+  } else if (tabName === 'settings') {
+    if (myListingsDiv) myListingsDiv.classList.add('hidden');
+    if (soldDiv) soldDiv.classList.add('hidden');
+    if (settingsDiv) settingsDiv.classList.remove('hidden');
+  }
 }
 
 function openEditProfile() {
@@ -1405,12 +1436,19 @@ function createListingCard(listing, showOwnerActions = false) {
     ? `<img src="${escHtml(listing.images[0])}" alt="${escHtml(listing.name)}" loading="lazy" style="width:100%;height:100%;object-fit:cover;" />`
     : `<div class="card-no-image">📦</div>`;
   
+  const paymentIcons = {
+    'cash': '💵', 'card': '💳', 'paypal': '🅿️', 'venmo': 'V', 'crypto': '₿', 'trade': '🔄'
+  };
+  const paymentDisplay = listing.payment_methods && listing.payment_methods.length > 0
+    ? listing.payment_methods.slice(0, 3).map(p => paymentIcons[p] || p).join(' ')
+    : '💵';
+  
   let wishlistBtn = '';
   if (State.user && !isOwner) {
     wishlistBtn = `
       <button class="wishlist-btn ${isWished ? 'active' : ''}"
         onclick="toggleWishlist(event, '${listing.id}')"
-        style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;"
+        style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;z-index:10;"
       >${isWished ? '❤️' : '🤍'}</button>
     `;
   }
@@ -1419,25 +1457,34 @@ function createListingCard(listing, showOwnerActions = false) {
   if (showActions && isOwner && !listing.is_sold) {
     ownerActions = `
       <div style="display:flex;gap:8px;margin-top:8px;">
-        <button class="owner-btn" onclick="editListing('${listing.id}')" style="background:var(--neon);color:#001a07;padding:4px 8px;border-radius:4px;border:none;cursor:pointer;">EDIT</button>
-        <button class="owner-btn" onclick="openMarkSoldModal('${listing.id}')" style="background:var(--warning);color:#001a07;padding:4px 8px;border-radius:4px;border:none;cursor:pointer;">SOLD</button>
+        <button class="owner-btn" onclick="event.stopPropagation(); editListing('${listing.id}')" style="background:var(--neon);color:#001a07;padding:4px 8px;border-radius:4px;border:none;cursor:pointer;font-size:11px;">EDIT</button>
+        <button class="owner-btn" onclick="event.stopPropagation(); openMarkSoldModal('${listing.id}')" style="background:var(--warning);color:#001a07;padding:4px 8px;border-radius:4px;border:none;cursor:pointer;font-size:11px;">SOLD</button>
       </div>
     `;
   }
   
-  const soldOverlay = listing.is_sold ? '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.8);padding:8px 16px;border-radius:8px;font-weight:bold;color:var(--danger);">SOLD</div>' : '';
+  const soldOverlay = listing.is_sold ? '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);padding:8px 16px;border-radius:8px;font-weight:bold;color:var(--danger);z-index:5;">SOLD</div>' : '';
+  const locationDisplay = listing.location ? `📍 ${listing.location.substring(0, 20)}` : '';
   
   card.innerHTML = `
-    <div class="card-image-wrap" style="position:relative;">
+    <div class="card-image-wrap" style="position:relative;aspect-ratio:1;background:var(--bg-3);overflow:hidden;">
       ${img}
-      ${listing.is_fair ? '<span style="position:absolute;top:8px;left:8px;background:var(--neon);color:#001a07;padding:2px 6px;border-radius:4px;font-size:10px;">AI FAIR</span>' : ''}
+      ${listing.is_fair ? '<span style="position:absolute;top:8px;left:8px;background:var(--neon);color:#001a07;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:bold;z-index:5;">AI FAIR</span>' : ''}
       ${soldOverlay}
       ${wishlistBtn}
     </div>
     <div class="card-body" style="padding:12px;">
-      <div class="card-title" style="font-weight:600;">${escHtml(listing.name)}</div>
-      <div class="card-price" style="color:var(--neon);font-weight:bold;">$${parseFloat(listing.price).toFixed(2)}</div>
-      <div class="card-meta" style="font-size:12px;color:var(--text-muted);">${listing.condition || 'N/A'} · ${listing.type || 'buy-now'}</div>
+      <div class="card-title" style="font-weight:700;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;">${escHtml(listing.name)}</div>
+      <div class="card-price" style="color:var(--neon);font-weight:bold;font-size:1.1rem;margin-bottom:4px;">$${parseFloat(listing.price).toFixed(2)}</div>
+      <div class="card-meta" style="font-size:0.7rem;color:var(--text-muted);display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px;">
+        <span>🏷️ ${listing.condition || 'N/A'}</span>
+        <span>📦 ${listing.type || 'buy-now'}</span>
+      </div>
+      ${locationDisplay ? `<div class="card-location" style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">${locationDisplay}</div>` : ''}
+      <div class="card-payment" style="font-size:0.7rem;color:var(--text-muted);display:flex;align-items:center;gap:4px;background:rgba(0,255,65,0.05);padding:4px 6px;border-radius:4px;margin-top:4px;">
+        <span>💳 Accepts:</span>
+        <span>${paymentDisplay}</span>
+      </div>
       ${ownerActions}
     </div>
   `;
@@ -1461,7 +1508,7 @@ function renderListings(listings) {
 function showSkeletons() {
   const grid = document.getElementById('listings-grid');
   if (!grid) return;
-  grid.innerHTML = Array(8).fill(0).map(() => `<div class="skeleton-card skeleton" style="height:260px;background:var(--bg-2);border-radius:var(--radius-lg);"></div>`).join('');
+  grid.innerHTML = Array(8).fill(0).map(() => `<div class="skeleton-card skeleton" style="height:280px;background:var(--bg-2);border-radius:var(--radius-lg);"></div>`).join('');
 }
 
 function animateNumber(el, target) {
@@ -1769,8 +1816,8 @@ function hideErrorBanner() {
 
 // ==================== EVENT LISTENERS ====================
 function setupEventListeners() {
-  const themeToggle = document.getElementById('theme-toggle');
-  if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
+  const themeBtn = document.getElementById('theme-toggle-btn');
+  if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
   
   const hamburger = document.getElementById('hamburger');
   if (hamburger) {
@@ -1910,7 +1957,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     ).join('');
   }
   
-  // Populate category dropdown
   const categorySelect = document.getElementById('c-category');
   if (categorySelect) {
     const categories = ['Electronics', 'Clothing & Accessories', 'Collectibles', 'Toys & Figures', 'Sports & Outdoors', 'Books & Media', 'Home & Garden', 'Tools & Equipment', 'Other'];
@@ -1924,5 +1970,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   if (!navigator.onLine) showErrorBanner();
   
-  console.log('%c OBTAINUM INITIALIZED - Guest Access Ready', 'background:#00ff41;color:#001a07;font-family:monospace;padding:4px 8px;');
+  console.log('%c OBTAINUM INITIALIZED - Theme Toggle Working', 'background:#00ff41;color:#001a07;font-family:monospace;padding:4px 8px;');
 });
