@@ -42,9 +42,8 @@
       <div id="user-avatar-wrap" class="hidden">
         <div class="header-avatar" id="header-avatar" onclick="navigate('profile')">?</div>
       </div>
-      <div>
-        <button class="theme-toggle" id="theme-toggle"></button>
-        <div class="theme-toggle-label" id="theme-label">DARK</div>
+      <div class="theme-wrapper">
+        <button class="theme-toggle-btn" id="theme-toggle-btn">🌙</button>
       </div>
     </div>
 
@@ -279,12 +278,31 @@
         <div id="ptab-sold" class="hidden"><div class="listings-grid" id="profile-sold-grid"></div></div>
         <div id="ptab-settings" class="hidden">
           <form class="create-form" onsubmit="saveProfile(event)" style="max-width:600px;">
-            <div class="form-row"><input class="form-input" id="s-username" placeholder="Username" /><input class="form-input" id="s-phone" placeholder="Phone" /></div>
-            <textarea class="form-input" id="s-bio" rows="3" placeholder="Bio"></textarea>
-            <input class="form-input" id="s-location" placeholder="City, State" />
+            <div class="form-group">
+              <label class="form-label">👤 Username *</label>
+              <input class="form-input" id="s-username" type="text" placeholder="Your username" required minlength="3" maxlength="30" />
+              <small style="color:var(--text-muted);font-size:0.7rem;">Letters, numbers, and underscores only</small>
+            </div>
+            <div class="form-group">
+              <label class="form-label">📝 Bio</label>
+              <textarea class="form-input" id="s-bio" rows="3" placeholder="Tell buyers about yourself..." maxlength="500"></textarea>
+              <small style="color:var(--text-muted);font-size:0.7rem;">Max 500 characters</small>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">📍 Location</label>
+                <input class="form-input" id="s-location" type="text" placeholder="City, State" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">📞 Phone Number</label>
+                <input class="form-input" id="s-phone" type="tel" placeholder="+1 555 000 0000" />
+              </div>
+            </div>
             <div id="profile-save-error" class="auth-error"></div>
-            <button type="submit" class="btn btn-primary">SAVE PROFILE</button>
-            <button type="button" class="btn btn-danger" onclick="signOut()" style="margin-top:12px;">SIGN OUT</button>
+            <div style="display:flex;gap:12px;margin-top:8px;">
+              <button type="submit" class="btn btn-primary">💾 SAVE PROFILE</button>
+              <button type="button" class="btn btn-danger" onclick="signOut()">🚪 SIGN OUT</button>
+            </div>
           </form>
         </div>
       </div>
