@@ -1,7 +1,6 @@
 /* ============================================================
    FILE: script.js
-   OBTAINUM MARKETPLACE — FIXED User Registration
-   Proper profile creation for new users
+   OBTAINUM MARKETPLACE — Fixed button visibility + Human-like AI
    ============================================================ */
 
 // ==================== DATABASE CONFIG ====================
@@ -293,15 +292,12 @@ async function onAuthChange(user) {
   if (!profile) {
     console.log("Profile not found, creating fallback profile...");
     
-    // Get username from metadata or generate from email
     let username = user.user_metadata?.username || 
                    user.user_metadata?.preferred_username || 
                    user.email?.split('@')[0] || 
                    'user_' + Math.random().toString(36).substring(2, 10);
     
-    // Clean username (remove special chars, ensure length 3-30)
     username = username.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, 28);
-    // Ensure minimum length
     if (username.length < 3) username = username + '_usr';
     
     const newProfileData = {
@@ -377,12 +373,12 @@ function updateAuthUI() {
   
   if (State.user) {
     // User is logged in - show avatar, hide login button
-    btnWrap.classList.add('hidden');
-    avatarWrap.classList.remove('hidden');
+    if (btnWrap) btnWrap.classList.add('hidden');
+    if (avatarWrap) avatarWrap.classList.remove('hidden');
     const name = State.profile?.username || State.user.email || '?';
-    if (State.profile?.avatar_url) {
+    if (State.profile?.avatar_url && avatar) {
       avatar.innerHTML = `<img src="${State.profile.avatar_url}" alt="${escHtml(name)}" />`;
-    } else {
+    } else if (avatar) {
       avatar.textContent = name.charAt(0).toUpperCase();
     }
     
@@ -398,8 +394,9 @@ function updateAuthUI() {
     
   } else {
     // User is logged out - show login button, hide avatar
-    btnWrap.classList.remove('hidden');
-    avatarWrap.classList.add('hidden');
+    if (btnWrap) btnWrap.classList.remove('hidden');
+    if (avatarWrap) avatarWrap.classList.add('hidden');
+    if (avatar) avatar.innerHTML = '?';
     
     // Hide auth-only navigation buttons
     authNavButtons.forEach(btnId => {
@@ -440,11 +437,18 @@ async function handleLogin(e) {
 
 async function signInWithGoogle() {
   if (!db) return;
-  const { error } = await db.auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo: window.location.origin + window.location.pathname }
-  });
-  if (error) showToast('Google sign-in failed: ' + error.message, 'error');
+  try {
+    const { error } = await db.auth.signInWithOAuth({
+      provider: 'google',
+      options: { 
+        redirectTo: window.location.origin + window.location.pathname
+      }
+    });
+    if (error) throw error;
+  } catch (err) {
+    console.error('Google sign-in error:', err);
+    showToast('Google sign-in failed: ' + err.message, 'error');
+  }
 }
 
 async function handleRegister(e) {
@@ -459,7 +463,6 @@ async function handleRegister(e) {
   if (errEl) errEl.classList.remove('show');
   
   try {
-    // Clean username to meet database constraints
     const cleanUsername = username.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, 28);
     if (cleanUsername.length < 3) {
       throw new Error('Username must be at least 3 characters (letters, numbers, underscores only)');
@@ -479,24 +482,25 @@ async function handleRegister(e) {
     if (error) throw error;
     
     if (data.session) {
-      // User is immediately signed in (if email confirmation is disabled)
       closeModal('auth-modal');
       showToast('Account created! Welcome to OBTAINUM.', 'success');
     } else {
-      // Email confirmation required
-      document.getElementById('register-form-wrap').innerHTML = `
-        <div class="auth-confirm-panel" style="text-align:center;padding:20px;">
-          <div class="confirm-icon" style="font-size:3rem;">✉️</div>
-          <div class="confirm-title" style="font-weight:bold;margin:16px 0;">CHECK YOUR EMAIL</div>
-          <div class="confirm-msg" style="color:var(--text-muted);">
-            We sent a confirmation link to<br>
-            <strong>${escHtml(email)}</strong><br><br>
-            Click it to activate your OBTAINUM account,<br>
-            then come back and log in.
+      const registerFormWrap = document.getElementById('register-form-wrap');
+      if (registerFormWrap) {
+        registerFormWrap.innerHTML = `
+          <div class="auth-confirm-panel" style="text-align:center;padding:20px;">
+            <div class="confirm-icon" style="font-size:3rem;">✉️</div>
+            <div class="confirm-title" style="font-weight:bold;margin:16px 0;">CHECK YOUR EMAIL</div>
+            <div class="confirm-msg" style="color:var(--text-muted);">
+              We sent a confirmation link to<br>
+              <strong>${escHtml(email)}</strong><br><br>
+              Click it to activate your OBTAINUM account,<br>
+              then come back and log in.
+            </div>
+            <button class="btn btn-outline w-full" style="margin-top:20px;" onclick="closeModal('auth-modal')">GOT IT</button>
           </div>
-          <button class="btn btn-outline w-full" style="margin-top:20px;" onclick="closeModal('auth-modal')">GOT IT</button>
-        </div>
-      `;
+        `;
+      }
     }
   } catch (err) {
     if (errEl) {
@@ -535,7 +539,7 @@ function switchAuthTab(tab) {
   }
 }
 
-// ==================== RAG (RETRIEVAL-AUGMENTED GENERATION) FOR AI ====================
+// ==================== HUMAN-LIKE AI RESPONSES ====================
 
 async function initAISession() {
   if (!State.user) return;
@@ -602,7 +606,6 @@ async function saveAIMessage(senderType, content) {
   }
 }
 
-// ========== RAG: RETRIEVE RELEVANT LISTINGS ==========
 async function retrieveRelevantListings(query, limit = 10) {
   try {
     const searchQuery = query.toLowerCase();
@@ -640,7 +643,6 @@ async function retrieveRelevantListings(query, limit = 10) {
   }
 }
 
-// ========== RAG: GET MARKET STATISTICS ==========
 async function getMarketStatistics(category = null) {
   try {
     let query = db.from('listings').select('price, msrp, condition, is_sold');
@@ -665,14 +667,7 @@ async function getMarketStatistics(category = null) {
       avgPrice: prices.length ? prices.reduce((a, b) => a + b, 0) / prices.length : 0,
       minPrice: prices.length ? Math.min(...prices) : 0,
       maxPrice: prices.length ? Math.max(...prices) : 0,
-      avgMsrp: msrpPrices.length ? msrpPrices.reduce((a, b) => a + b, 0) / msrpPrices.length : 0,
-      conditionBreakdown: {
-        new: activeListings.filter(l => l.condition === 'new').length,
-        likeNew: activeListings.filter(l => l.condition === 'like-new').length,
-        good: activeListings.filter(l => l.condition === 'good').length,
-        fair: activeListings.filter(l => l.condition === 'fair').length,
-        poor: activeListings.filter(l => l.condition === 'poor').length
-      }
+      avgMsrp: msrpPrices.length ? msrpPrices.reduce((a, b) => a + b, 0) / msrpPrices.length : 0
     };
   } catch (err) {
     console.error('Market stats error:', err);
@@ -680,7 +675,6 @@ async function getMarketStatistics(category = null) {
   }
 }
 
-// ========== RAG: ANALYZE SPECIFIC LISTING ==========
 async function analyzeListing(listingId) {
   const listing = State.listings.find(l => l.id === listingId);
   if (!listing) return null;
@@ -702,149 +696,111 @@ async function analyzeListing(listingId) {
     const percentOfMsrp = (listing.price / listing.msrp) * 100;
     if (percentOfMsrp <= 80) {
       valueScore = 90;
-      verdict = 'Excellent Deal! Significantly below MSRP';
+      verdict = 'This is actually a really solid deal!';
     } else if (percentOfMsrp <= 100) {
       valueScore = 75;
-      verdict = 'Good Deal - At or slightly below MSRP';
+      verdict = 'Fair price - pretty much what you\'d expect';
     } else if (percentOfMsrp <= 120) {
       valueScore = 60;
-      verdict = 'Fair Price - Slightly above MSRP';
+      verdict = 'A bit above retail, maybe try negotiating';
     } else {
       valueScore = 40;
-      verdict = 'Overpriced - Consider negotiating';
+      verdict = 'Pretty overpriced tbh, I\'d shop around';
     }
   } else if (avgSimilarPrice > 0) {
     const percentOfMarket = (listing.price / avgSimilarPrice) * 100;
     if (percentOfMarket <= 85) {
       valueScore = 85;
-      verdict = 'Below market average - Good value';
+      verdict = 'Actually cheaper than similar listings - nice find!';
     } else if (percentOfMarket <= 110) {
       valueScore = 70;
-      verdict = 'At market average - Fair price';
+      verdict = 'Right around market average';
     } else {
       valueScore = 50;
-      verdict = 'Above market average - Compare alternatives';
+      verdict = 'A bit steep compared to others out there';
     }
   } else {
     valueScore = 50;
-    verdict = 'Limited market data - Use caution';
+    verdict = 'Not much data to go on here, proceed with caution';
   }
-  
-  const conditionMultiplier = {
-    'new': 1.0,
-    'like-new': 0.9,
-    'good': 0.75,
-    'fair': 0.6,
-    'poor': 0.4
-  };
-  
-  const conditionScore = (conditionMultiplier[listing.condition] || 0.5) * 100;
   
   return {
     listing: listing,
     similarListings: similarListings,
     avgSimilarPrice: avgSimilarPrice,
     valueScore: Math.round(valueScore),
-    conditionScore: Math.round(conditionScore),
     verdict: verdict,
     recommendation: valueScore >= 70 ? 
-      '✅ Recommended purchase - Good value for money' : 
-      '⚠️ Consider alternatives or negotiate price'
+      'I\'d say go for it! Seems like a solid buy.' : 
+      'Might wanna think twice or see if they\'ll come down on price'
   };
 }
 
-// ========== GENERATE RAG RESPONSE ==========
-async function generateRAGResponse(userQuestion, retrievedListings, marketStats, listingAnalysis) {
+// HUMAN-LIKE AI RESPONSE GENERATOR
+async function generateHumanLikeResponse(userQuestion, retrievedListings, marketStats, listingAnalysis) {
   if (!genAI) {
-    return getFallbackRAGResponse(userQuestion, retrievedListings, marketStats, listingAnalysis);
+    return getFallbackHumanResponse(userQuestion, retrievedListings, marketStats, listingAnalysis);
   }
   
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });
     
-    let context = `You are OBTAINUM AI, a marketplace assistant focused on CONSISTENCY over availability. 
+    const prompt = `You are a friendly, knowledgeable marketplace assistant named OBTAINUM AI. Talk like a helpful human - use casual language, occasional humor, and be conversational.
 
-CURRENT MARKET STATISTICS:
-- Total active listings: ${marketStats?.totalActive || 0}
-- Average price: $${(marketStats?.avgPrice || 0).toFixed(2)}
-- Price range: $${(marketStats?.minPrice || 0).toFixed(2)} - $${(marketStats?.maxPrice || 0).toFixed(2)}
+CONTEXT FROM OUR MARKETPLACE:
+- ${retrievedListings.length} similar items found
+${marketStats ? `- Average price on platform: $${marketStats.avgPrice.toFixed(2)}` : ''}
+${listingAnalysis ? `- Current item analysis: ${listingAnalysis.verdict}` : ''}
 
-RETRIEVED RELEVANT LISTINGS (${retrievedListings.length} found):
-${retrievedListings.slice(0, 5).map(l => `
-- ${l.name} | $${l.price} | Condition: ${l.condition} | Location: ${l.location || 'N/A'}
-`).join('')}
+USER ASKED: "${userQuestion}"
 
-${listingAnalysis ? `
-LISTING ANALYSIS:
-- Name: ${listingAnalysis.listing?.name}
-- Price: $${listingAnalysis.listing?.price}
-- Value Score: ${listingAnalysis.valueScore}/100
-- Verdict: ${listingAnalysis.verdict}
-` : ''}
+RULES:
+1. Sound like a real person - use phrases like "honestly", "so here's the thing", "good question!"
+2. Be helpful but keep it concise (2-4 sentences usually)
+3. If you don't know something, just say so casually
+4. For price questions, give honest opinions
+5. For safety questions, be direct but friendly
+6. Never sound like a robot - no bullet points unless really needed
 
-USER QUESTION: "${userQuestion}"
+Write a friendly, human-sounding response:`;
 
-Provide a helpful, data-driven response. Be concise and use bullet points when helpful.`;
-    
-    const result = await model.generateContent(context);
+    const result = await model.generateContent(prompt);
     const response = await result.response;
     return response.text();
     
   } catch (err) {
-    console.error('Gemini RAG error:', err);
-    return getFallbackRAGResponse(userQuestion, retrievedListings, marketStats, listingAnalysis);
+    console.error('Gemini error:', err);
+    return getFallbackHumanResponse(userQuestion, retrievedListings, marketStats, listingAnalysis);
   }
 }
 
-function getFallbackRAGResponse(userQuestion, retrievedListings, marketStats, listingAnalysis) {
+function getFallbackHumanResponse(userQuestion, retrievedListings, marketStats, listingAnalysis) {
   const q = userQuestion.toLowerCase();
-  const lines = [];
-  
-  lines.push("📊 **OBTAINUM AI Analysis**\n");
   
   if (q.includes('price') || q.includes('worth') || q.includes('fair') || q.includes('deal')) {
     if (listingAnalysis) {
-      lines.push(`**Current Listing:** ${listingAnalysis.verdict}`);
-      lines.push(`• Value Score: ${listingAnalysis.valueScore}/100`);
-      lines.push(`• ${listingAnalysis.recommendation}\n`);
+      return `Honestly? ${listingAnalysis.verdict} ${listingAnalysis.recommendation}`;
     }
-    
     if (marketStats && marketStats.totalActive > 0) {
-      lines.push(`**Market Overview:**`);
-      lines.push(`• Average price: $${marketStats.avgPrice.toFixed(2)}`);
-      lines.push(`• Price range: $${marketStats.minPrice.toFixed(2)} - $${marketStats.maxPrice.toFixed(2)}\n`);
+      return `So looking at our marketplace, similar items are going for around $${marketStats.avgPrice.toFixed(2)} on average. Prices range from $${marketStats.minPrice.toFixed(2)} to $${marketStats.maxPrice.toFixed(2)}. Hope that helps you gauge what's fair!`;
     }
-    
     if (retrievedListings.length > 0) {
-      lines.push(`**Similar Listings Found:**`);
-      retrievedListings.slice(0, 3).forEach(l => {
-        lines.push(`• ${l.name.substring(0, 40)}: $${l.price} (${l.condition})`);
-      });
+      return `I found ${retrievedListings.length} similar listings. The prices vary, but you've got some options to compare against. Want me to dig into a specific one?`;
     }
+    return `Good question! For the most accurate pricing, I'd recommend checking sold listings on eBay or similar marketplaces. That usually gives you the real market value.`;
   }
   
   if (q.includes('safe') || q.includes('pickup') || q.includes('meet')) {
-    lines.push(`**🛡️ Pickup Safety Guide**`);
-    lines.push(`• Meet at police stations, bank lobbies, or busy retail areas`);
-    lines.push(`• Never go alone - bring a friend`);
-    lines.push(`• Daylight hours only for first-time meetings`);
-    lines.push(`• Inspect item thoroughly before paying`);
-    lines.push(`• Share your location with someone you trust`);
+    return `Safety first! For meetups, I always suggest picking a public spot like a police station parking lot or a busy coffee shop. Bring a friend if you can, and trust your gut - if something feels off, it's totally okay to walk away.`;
   }
   
-  if (lines.length <= 2) {
-    lines.push(`I can help you with:`);
-    lines.push(`• **Price checks** - Compare with market values`);
-    lines.push(`• **Value assessment** - See if it's a good deal`);
-    lines.push(`• **Safety analysis** - Evaluate pickup locations`);
-    lines.push(`• **Condition advice** - Understand quality ratings`);
-    lines.push(`\nWhat would you like to know about a listing?`);
+  if (q.includes('condition') || q.includes('quality')) {
+    return `Condition is everything with secondhand stuff. "Like new" usually means barely touched, "good" means normal wear and tear, "fair" means it's got some visible issues. Always ask for photos of any damage - any reasonable seller won't mind sharing!`;
   }
   
-  return lines.join('\n');
+  return `Hey there! I'm your OBTAINUM assistant. I can help with price checks, safety tips for meetups, or figuring out if something's a good deal. What are you curious about?`;
 }
 
-// ========== MAIN AI ASSISTANT FUNCTION ==========
 async function askAssistant() {
   if (!State.user) {
     openAuthModal();
@@ -869,7 +825,7 @@ async function askAssistant() {
   
   const typingDiv = document.createElement('div');
   typingDiv.className = 'assistant-message bot';
-  typingDiv.innerHTML = '<span class="spinner" style="width:16px;height:16px;"></span> 🔍 Analyzing...';
+  typingDiv.innerHTML = '<span class="spinner" style="width:16px;height:16px;"></span> Thinking...';
   messagesDiv.appendChild(typingDiv);
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
   
@@ -886,9 +842,9 @@ async function askAssistant() {
     
     let aiResponse;
     if (genAI) {
-      aiResponse = await generateRAGResponse(question, relevantListings, marketStats, listingAnalysis);
+      aiResponse = await generateHumanLikeResponse(question, relevantListings, marketStats, listingAnalysis);
     } else {
-      aiResponse = getFallbackRAGResponse(question, relevantListings, marketStats, listingAnalysis);
+      aiResponse = getFallbackHumanResponse(question, relevantListings, marketStats, listingAnalysis);
     }
     
     typingDiv.remove();
@@ -906,7 +862,7 @@ async function askAssistant() {
     
     const errorMsg = document.createElement('div');
     errorMsg.className = 'assistant-message bot';
-    errorMsg.textContent = '⚠️ Sorry, I encountered an error. Please try again later.';
+    errorMsg.textContent = 'Hmm, something went wrong on my end. Mind trying that again?';
     messagesDiv.appendChild(errorMsg);
   }
   
@@ -2497,5 +2453,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   if (!navigator.onLine) showErrorBanner();
   
-  console.log('%c OBTAINUM INITIALIZED - User Registration FIXED', 'background:#00ff41;color:#001a07;font-family:monospace;padding:4px 8px;');
+  console.log('%c OBTAINUM INITIALIZED - Button visibility fixed!', 'background:#00ff41;color:#001a07;font-family:monospace;padding:4px 8px;');
 });
