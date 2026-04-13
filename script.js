@@ -1,7 +1,7 @@
 /* ============================================================
    FILE: script.js
    OBTAINUM MARKETPLACE — Full functionality with working theme toggle
-   Dark mode (black) <-> Light mode (white)
+   Location & payment visible, profile settings & sold items fixed
    ============================================================ */
 
 // ==================== DATABASE CONFIG ====================
@@ -80,34 +80,23 @@ function setLoading(btn, isLoading, text) {
   btn.innerHTML = isLoading ? `<span class="spinner"></span> ${text}` : text;
 }
 
-// ==================== THEME TOGGLE (FIXED) ====================
+// ==================== THEME TOGGLE (RESTORED - TEXT BASED) ====================
 function initTheme() {
   const saved = localStorage.getItem('obtainum-theme') || 'dark';
   applyTheme(saved);
 }
 
 function applyTheme(mode) {
-  if (mode === 'light') {
-    document.body.classList.add('light-mode');
-    const themeBtn = document.getElementById('theme-toggle-btn');
-    if (themeBtn) themeBtn.textContent = '☀️';
-  } else {
-    document.body.classList.remove('light-mode');
-    const themeBtn = document.getElementById('theme-toggle-btn');
-    if (themeBtn) themeBtn.textContent = '🌙';
-  }
+  document.body.classList.toggle('light-mode', mode === 'light');
   localStorage.setItem('obtainum-theme', mode);
+  const label = document.getElementById('theme-label');
+  if (label) label.textContent = mode === 'dark' ? 'DARK' : 'LIGHT';
 }
 
 function toggleTheme() {
   const isLight = document.body.classList.contains('light-mode');
-  if (isLight) {
-    applyTheme('dark');
-    showToast('Dark mode activated', 'info');
-  } else {
-    applyTheme('light');
-    showToast('Light mode activated', 'info');
-  }
+  applyTheme(isLight ? 'dark' : 'light');
+  showToast(isLight ? 'Dark mode activated' : 'Light mode activated', 'info');
 }
 
 // ==================== NAVIGATION ====================
@@ -1055,15 +1044,17 @@ async function loadProfile() {
   const profileTabs = document.querySelector('.profile-tabs');
   if (profileTabs) profileTabs.style.display = isOwnProfile ? 'flex' : 'none';
   
-  const myListingsDiv = document.getElementById('ptab-my-listings');
-  const soldDiv = document.getElementById('ptab-sold');
-  const settingsDiv = document.getElementById('ptab-settings');
+  await loadProfileListings(profileIdToLoad, isOwnProfile);
   
-  if (myListingsDiv) myListingsDiv.style.display = 'block';
-  if (soldDiv) soldDiv.style.display = 'none';
-  if (settingsDiv) settingsDiv.style.display = 'none';
-  
+  // Reset tab visibility based on isOwnProfile
   if (isOwnProfile) {
+    const myListingsDiv = document.getElementById('ptab-my-listings');
+    const soldDiv = document.getElementById('ptab-sold');
+    const settingsDiv = document.getElementById('ptab-settings');
+    if (myListingsDiv) myListingsDiv.style.display = 'block';
+    if (soldDiv) soldDiv.style.display = 'none';
+    if (settingsDiv) settingsDiv.style.display = 'none';
+    
     const profileTabsBtns = document.querySelectorAll('.profile-tab');
     profileTabsBtns.forEach(t => t.classList.remove('active'));
     const firstTab = document.querySelector('.profile-tab[data-ptab="my-listings"]');
@@ -1079,8 +1070,6 @@ async function loadProfile() {
     if (sLocation) sLocation.value = profile?.location || '';
     if (sPhone) sPhone.value = profile?.phone || '';
   }
-  
-  await loadProfileListings(profileIdToLoad, isOwnProfile);
 }
 
 async function loadProfileListings(profileId, isOwnProfile) {
@@ -1310,6 +1299,11 @@ function renderDetail(listing) {
   const isOwner = State.user && State.user.id === listing.seller_id;
   const isWished = State.wishlistIds.has(listing.id);
   
+  // Format payment methods for detail view
+  const paymentMethodsList = listing.payment_methods && listing.payment_methods.length > 0
+    ? listing.payment_methods.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' · ')
+    : 'Cash';
+  
   const imagesHtml = listing.images && listing.images.length > 0
     ? `<img src="${escHtml(listing.images[0])}" alt="${escHtml(listing.name)}" id="main-detail-img" style="max-width:100%;border-radius:var(--radius-lg);" />`
     : `<div class="card-no-image">📦</div>`;
@@ -1343,13 +1337,20 @@ function renderDetail(listing) {
         <h1 class="detail-title">${escHtml(listing.name)}</h1>
         <div class="detail-price-row">
           <span class="detail-price">$${parseFloat(listing.price).toFixed(2)}</span>
-          ${listing.msrp ? `<span class="detail-msrp" style="text-decoration:line-through;color:var(--text-muted);">$${parseFloat(listing.msrp).toFixed(2)} MSRP</span>` : ''}
+          ${listing.msrp ? `<span class="detail-msrp" style="text-decoration:line-through;color:var(--text-muted);margin-left:12px;">$${parseFloat(listing.msrp).toFixed(2)} MSRP</span>` : ''}
+        </div>
+        <div class="detail-meta-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0;">
+          ${listing.location ? `<div class="detail-meta-item"><strong>📍 Location</strong><br>${escHtml(listing.location)}</div>` : ''}
+          <div class="detail-meta-item"><strong>💳 Payment Methods</strong><br>${paymentMethodsList}</div>
+          <div class="detail-meta-item"><strong>📦 Condition</strong><br>${listing.condition || 'N/A'}</div>
+          <div class="detail-meta-item"><strong>🚚 Shipping</strong><br>${listing.shipping || 'paid'}</div>
         </div>
         <div class="detail-description">${escHtml(listing.description)}</div>
         <div class="seller-card">
           <div class="seller-avatar">${seller.username?.charAt(0) || '?'}</div>
           <div><div class="seller-name">${escHtml(seller.username || 'Anonymous')}</div>
-          ${seller.rating > 0 ? `<div class="seller-rating">⭐ ${parseFloat(seller.rating).toFixed(1)}</div>` : ''}</div>
+          ${seller.rating > 0 ? `<div class="seller-rating">⭐ ${parseFloat(seller.rating).toFixed(1)}</div>` : ''}
+          ${seller.location ? `<div class="seller-location">📍 ${escHtml(seller.location)}</div>` : ''}</div>
           <button onclick="viewSellerProfile('${seller.id}')" class="btn btn-outline btn-sm">View Profile</button>
         </div>
         <div class="detail-actions" style="display:flex;flex-direction:column;gap:10px;">${actionsHtml}</div>
@@ -1422,7 +1423,7 @@ async function loadSimilarItems(listing) {
 // ==================== RENDER ENGINE ====================
 function createListingCard(listing, showOwnerActions = false) {
   const card = document.createElement('div');
-  card.className = 'listing-card animate-fade-up';
+  card.className = 'listing-card animate-fade';
   card.onclick = (e) => {
     if (e.target.closest('.wishlist-btn, .owner-btn')) return;
     openListing(listing.id);
@@ -1436,6 +1437,7 @@ function createListingCard(listing, showOwnerActions = false) {
     ? `<img src="${escHtml(listing.images[0])}" alt="${escHtml(listing.name)}" loading="lazy" style="width:100%;height:100%;object-fit:cover;" />`
     : `<div class="card-no-image">📦</div>`;
   
+  // Payment method icons
   const paymentIcons = {
     'cash': '💵', 'card': '💳', 'paypal': '🅿️', 'venmo': 'V', 'crypto': '₿', 'trade': '🔄'
   };
@@ -1448,7 +1450,7 @@ function createListingCard(listing, showOwnerActions = false) {
     wishlistBtn = `
       <button class="wishlist-btn ${isWished ? 'active' : ''}"
         onclick="toggleWishlist(event, '${listing.id}')"
-        style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;z-index:10;"
+        style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;z-index:10;transition:all 0.2s;"
       >${isWished ? '❤️' : '🤍'}</button>
     `;
   }
@@ -1457,14 +1459,14 @@ function createListingCard(listing, showOwnerActions = false) {
   if (showActions && isOwner && !listing.is_sold) {
     ownerActions = `
       <div style="display:flex;gap:8px;margin-top:8px;">
-        <button class="owner-btn" onclick="event.stopPropagation(); editListing('${listing.id}')" style="background:var(--neon);color:#001a07;padding:4px 8px;border-radius:4px;border:none;cursor:pointer;font-size:11px;">EDIT</button>
-        <button class="owner-btn" onclick="event.stopPropagation(); openMarkSoldModal('${listing.id}')" style="background:var(--warning);color:#001a07;padding:4px 8px;border-radius:4px;border:none;cursor:pointer;font-size:11px;">SOLD</button>
+        <button class="owner-btn" onclick="event.stopPropagation(); editListing('${listing.id}')" style="background:var(--neon);color:#001a07;padding:4px 8px;border-radius:4px;border:none;cursor:pointer;font-size:11px;transition:all 0.2s;">EDIT</button>
+        <button class="owner-btn" onclick="event.stopPropagation(); openMarkSoldModal('${listing.id}')" style="background:var(--warning);color:#001a07;padding:4px 8px;border-radius:4px;border:none;cursor:pointer;font-size:11px;transition:all 0.2s;">SOLD</button>
       </div>
     `;
   }
   
   const soldOverlay = listing.is_sold ? '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);padding:8px 16px;border-radius:8px;font-weight:bold;color:var(--danger);z-index:5;">SOLD</div>' : '';
-  const locationDisplay = listing.location ? `📍 ${listing.location.substring(0, 20)}` : '';
+  const locationDisplay = listing.location ? `📍 ${listing.location.substring(0, 25)}` : '';
   
   card.innerHTML = `
     <div class="card-image-wrap" style="position:relative;aspect-ratio:1;background:var(--bg-3);overflow:hidden;">
@@ -1480,8 +1482,8 @@ function createListingCard(listing, showOwnerActions = false) {
         <span>🏷️ ${listing.condition || 'N/A'}</span>
         <span>📦 ${listing.type || 'buy-now'}</span>
       </div>
-      ${locationDisplay ? `<div class="card-location" style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">${locationDisplay}</div>` : ''}
-      <div class="card-payment" style="font-size:0.7rem;color:var(--text-muted);display:flex;align-items:center;gap:4px;background:rgba(0,255,65,0.05);padding:4px 6px;border-radius:4px;margin-top:4px;">
+      ${locationDisplay ? `<div class="card-location" style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;display:flex;align-items:center;gap:4px;">${locationDisplay}</div>` : ''}
+      <div class="card-payment" style="font-size:0.7rem;color:var(--text-muted);display:flex;align-items:center;gap:6px;background:rgba(0,255,65,0.08);padding:4px 8px;border-radius:6px;margin-top:4px;flex-wrap:wrap;">
         <span>💳 Accepts:</span>
         <span>${paymentDisplay}</span>
       </div>
@@ -1770,6 +1772,7 @@ function askAssistant() {
   
   if (input) input.value = '';
   
+  // Simulated AI response (replace with actual API call)
   setTimeout(() => {
     const botMsgDiv = document.createElement('div');
     botMsgDiv.className = 'assistant-message bot';
@@ -1816,7 +1819,7 @@ function hideErrorBanner() {
 
 // ==================== EVENT LISTENERS ====================
 function setupEventListeners() {
-  const themeBtn = document.getElementById('theme-toggle-btn');
+  const themeBtn = document.getElementById('theme-toggle');
   if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
   
   const hamburger = document.getElementById('hamburger');
@@ -1970,5 +1973,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   if (!navigator.onLine) showErrorBanner();
   
-  console.log('%c OBTAINUM INITIALIZED - Theme Toggle Working', 'background:#00ff41;color:#001a07;font-family:monospace;padding:4px 8px;');
+  console.log('%c OBTAINUM INITIALIZED - All Features Working', 'background:#00ff41;color:#001a07;font-family:monospace;padding:4px 8px;');
 });
