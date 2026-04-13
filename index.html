@@ -28,15 +28,16 @@
     </div>
 
     <nav class="nav-menu">
-      <button class="nav-btn active" id="nav-shop" onclick="navigate('shop')">&#11042; SHOP</button>
-      <button class="nav-btn" id="nav-create" onclick="navigate('create')">+ CREATE</button>
-      <button class="nav-btn" id="nav-wishlist" onclick="navigate('wishlist')">&#9825; WISHLIST</button>
-      <button class="nav-btn" id="nav-profile" onclick="navigate('profile')">&#9881; PROFILE</button>
-       <button class="nav-btn" id="nav-assistant" onclick="navigate('Assistant')">&#9825; ASSISTANT</button>
-      <button class="nav-btn" id="nav-messages" onclick="navigate('Messages')">&#9881; MESSAGES</button>
-       <button class="nav-btn" id="nav-donate" onclick="navigate('donate')">&#9881; DONATE</button>
-
-    </nav>
+  <button class="nav-btn active" id="nav-shop" onclick="navigate('shop')">🛒 SHOP</button>
+  
+  <!-- These buttons should only show when logged in -->
+  <button class="nav-btn hidden" id="nav-create" onclick="navigate('create')">+ CREATE</button>
+  <button class="nav-btn hidden" id="nav-wishlist" onclick="navigate('wishlist')">❤️ WISHLIST</button>
+  <button class="nav-btn hidden" id="nav-profile" onclick="navigate('profile')">⚙️ PROFILE</button>
+  <button class="nav-btn hidden" id="nav-assistant" onclick="navigate('assistant')">🤖 ASSISTANT</button>
+  <button class="nav-btn hidden" id="nav-messages" onclick="navigate('messages')">💬 MESSAGES</button>
+  <button class="nav-btn hidden" id="nav-donate" onclick="navigate('donate')">🎁 DONATE</button>
+</nav>
 
     <div class="header-actions">
       <div id="auth-btn-wrap">
