@@ -2027,25 +2027,40 @@ async function handleSendImage(e) {
 
     if (msgError) showToast("Message Error:" + msgError.message, 'error');
 }
-
+// Function to render a message bubble
 function renderMessage(msg, currentUserId) {
     const thread = document.getElementById('chatThread');
-    const isSent = msg.sender_id === currentUserId;
     
-    const div = document.createElement('div');
-    div.className = `msg ${isSent ? 'sent' : 'received'}`;
+    // Determine Identity: Matches SQL sender_id
+    const isMe = msg.sender_id === currentUserId;
+    
+    const messageWrapper = document.createElement('div');
+    messageWrapper.className = `message-wrapper ${isMe ? 'outgoing' : 'incoming'}`;
 
-    let content = '';
+    // Bubble content
+    let innerHTML = '';
+    
+    // Handle image_url from SQL
     if (msg.image_url) {
-        content = `<img src="${escHtml(msg.image_url)}" class="msg-image" onclick="window.open(this.src)">`;
-    } else if (msg.content) {
-        content = escHtml(msg.content);
+        innerHTML += `<img src="${msg.image_url}" class="chat-img" loading="lazy" onclick="window.open(this.src)">`;
     }
-    div.innerHTML = content;
+    
+    // Handle content from SQL
+    if (msg.content) {
+        innerHTML += `<div class="bubble">${escHtml(msg.content)}</div>`;
+    }
 
-    thread.appendChild(div);
+    // Add timestamp (SQL created_at)
+    const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    innerHTML += `<span class="chat-time">${time}</span>`;
+
+    messageWrapper.innerHTML = innerHTML;
+    thread.appendChild(messageWrapper);
+    
+    // Auto-scroll to bottom
     thread.scrollTop = thread.scrollHeight;
 }
+
 
 function initChat() {
     if (!db) return;
