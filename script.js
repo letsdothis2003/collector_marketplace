@@ -1,18 +1,26 @@
 /* ============================================================
    FILE: script.js
-   OBTAINUM MARKETPLACE — Full functionality with image carousel
-   and fixed profile tabs (Sold Items & Settings)
+   OBTAINUM MARKETPLACE — FIXED User Registration
+   Proper profile creation for new users
    ============================================================ */
 
 // ==================== DATABASE CONFIG ====================
 const SUPABASE_URL = "https://gotzmuobwuubsugnowxq.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
 
+// Gemini API Key (Replace with your actual key)
+const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE";
+
 let db;
+let genAI;
+
 try {
   db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  if (GEMINI_API_KEY && GEMINI_API_KEY !== "YOUR_GEMINI_API_KEY_HERE") {
+    genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+  }
 } catch (e) {
-  console.error('[OBTAINUM] Supabase init failed:', e);
+  console.error('[OBTAINUM] Init failed:', e);
 }
 
 // ==================== STATE MANAGEMENT ====================
@@ -35,7 +43,9 @@ const State = {
   imageFiles: [],
   keepExistingImages: [],
   currentChatPartnerId: null,
-  currentListingId: null
+  currentListingId: null,
+  aiSessionId: null,
+  aiMessages: []
 };
 
 // ==================== HELPER FUNCTIONS ====================
@@ -131,7 +141,6 @@ function createImageCarousel(images, listingId) {
   `;
 }
 
-// Global carousel functions
 window.changeSlide = function(carouselId, direction) {
   const slides = document.getElementById(`${carouselId}-slides`);
   const dots = document.getElementById(`${carouselId}-dots`);
@@ -191,7 +200,10 @@ function navigate(page) {
   if (page === 'wishlist' && State.user) loadWishlist();
   if (page === 'create' && State.user) initCreatePage();
   if (page === 'messages' && State.user) loadMessages();
-  if (page === 'assistant') updateAssistantUI();
+  if (page === 'assistant') {
+    updateAssistantUI();
+    loadAIChatHistory();
+  }
 }
 
 function updateNavActive(page) {
@@ -245,7 +257,7 @@ function updateAssistantUI() {
   }
 }
 
-// ==================== AUTH MODULE ====================
+// ==================== AUTH MODULE (FIXED REGISTRATION) ====================
 async function initAuth() {
   if (!db) return;
   const { data: { session } } = await db.auth.getSession();
@@ -274,39 +286,56 @@ async function onAuthChange(user) {
     .eq('id', user.id)
     .single();
   
-  if (profileError && profileError.code !== 'PGRST116') {
-    console.error("Error fetching profile:", profileError);
-  }
-  
+  // If profile doesn't exist, create it manually (fallback for when trigger fails)
   if (!profile) {
-    const rawName = user.user_metadata?.username || user.user_metadata?.name || user.email.split('@')[0];
-    const newUsername = rawName.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 30);
-    const finalUsername = newUsername.length >= 3 ? newUsername : `${newUsername}_usr`;
+    console.log("Profile not found, creating fallback profile...");
+    
+    // Get username from metadata or generate from email
+    let username = user.user_metadata?.username || 
+                   user.user_metadata?.preferred_username || 
+                   user.email?.split('@')[0] || 
+                   'user_' + Math.random().toString(36).substring(2, 10);
+    
+    // Clean username (remove special chars, ensure length 3-30)
+    username = username.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, 28);
+    // Ensure minimum length
+    if (username.length < 3) username = username + '_usr';
     
     const newProfileData = {
       id: user.id,
       email: user.email,
-      username: finalUsername,
-      avatar_url: user.user_metadata?.picture || user.user_metadata?.avatar_url || null
+      username: username,
+      avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     };
     
-    const { data: created, error: createErr } = await db
-      .from('profiles')
-      .insert(newProfileData)
-      .select()
-      .single();
-    
-    if (createErr) {
-      console.error('[OBTAINUM] Could not create profile:', createErr.message);
-    } else {
+    try {
+      const { data: created, error: createErr } = await db
+        .from('profiles')
+        .insert(newProfileData)
+        .select()
+        .single();
+      
+      if (createErr) {
+        console.error('[OBTAINUM] Could not create profile fallback:', createErr.message);
+        showToast('Account created but profile setup failed. Please try logging in again.', 'error');
+        return;
+      }
+      
       profile = created;
-      showToast(`Welcome, ${finalUsername}!`, 'success');
+      showToast(`Welcome, ${username}! Your profile is ready.`, 'success');
+    } catch (err) {
+      console.error('Profile creation error:', err);
+      showToast('Error setting up your profile. Please contact support.', 'error');
+      return;
     }
   }
   
   State.profile = profile;
   updateAuthUI();
   await loadWishlistIds();
+  await initAISession();
 }
 
 function onSignOut() {
@@ -315,11 +344,14 @@ function onSignOut() {
   State.wishlistIds.clear();
   State.currentChatPartnerId = null;
   State.currentListingId = null;
+  State.aiSessionId = null;
+  State.aiMessages = [];
   updateAuthUI();
   if (State.currentPage === 'profile') navigate('shop');
   if (State.currentPage === 'messages') navigate('shop');
   if (State.currentPage === 'wishlist') navigate('shop');
   if (State.currentPage === 'create') navigate('shop');
+  if (State.currentPage === 'assistant') updateAssistantUI();
   showToast('Signed out successfully.', 'info');
 }
 
@@ -389,37 +421,52 @@ async function handleRegister(e) {
   if (errEl) errEl.classList.remove('show');
   
   try {
+    // Clean username to meet database constraints
+    const cleanUsername = username.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, 28);
+    if (cleanUsername.length < 3) {
+      throw new Error('Username must be at least 3 characters (letters, numbers, underscores only)');
+    }
+    
     const { data, error } = await db.auth.signUp({
       email,
       password: pass,
-      options: { data: { username } }
+      options: { 
+        data: { 
+          username: cleanUsername,
+          avatar_url: null
+        } 
+      }
     });
+    
     if (error) throw error;
     
     if (data.session) {
+      // User is immediately signed in (if email confirmation is disabled)
       closeModal('auth-modal');
       showToast('Account created! Welcome to OBTAINUM.', 'success');
     } else {
-      const registerFormWrap = document.getElementById('register-form-wrap');
-      if (registerFormWrap) {
-        registerFormWrap.innerHTML = `
-          <div class="auth-confirm-panel">
-            <div class="confirm-icon">✉️</div>
-            <div class="confirm-title">CHECK YOUR EMAIL</div>
-            <div class="confirm-msg">Click the confirmation link to activate your account.</div>
-            <button class="btn btn-outline w-full" onclick="closeModal('auth-modal')">GOT IT</button>
+      // Email confirmation required
+      document.getElementById('register-form-wrap').innerHTML = `
+        <div class="auth-confirm-panel" style="text-align:center;padding:20px;">
+          <div class="confirm-icon" style="font-size:3rem;">✉️</div>
+          <div class="confirm-title" style="font-weight:bold;margin:16px 0;">CHECK YOUR EMAIL</div>
+          <div class="confirm-msg" style="color:var(--text-muted);">
+            We sent a confirmation link to<br>
+            <strong>${escHtml(email)}</strong><br><br>
+            Click it to activate your OBTAINUM account,<br>
+            then come back and log in.
           </div>
-        `;
-      }
+          <button class="btn btn-outline w-full" style="margin-top:20px;" onclick="closeModal('auth-modal')">GOT IT</button>
+        </div>
+      `;
     }
   } catch (err) {
     if (errEl) {
-      errEl.textContent = err.message || 'Registration failed.';
+      errEl.textContent = err.message || 'Registration failed. Please try again.';
       errEl.classList.add('show');
     }
   } finally {
-    const btn2 = document.getElementById('register-btn');
-    if (btn2) setLoading(btn2, false, 'CREATE ACCOUNT');
+    if (btn) setLoading(btn, false, 'CREATE ACCOUNT');
   }
 }
 
@@ -448,6 +495,390 @@ function switchAuthTab(tab) {
     if (regForm) regForm.classList.remove('hidden');
     if (loginForm) loginForm.classList.add('hidden');
   }
+}
+
+// ==================== RAG (RETRIEVAL-AUGMENTED GENERATION) FOR AI ====================
+
+async function initAISession() {
+  if (!State.user) return;
+  if (!State.aiSessionId) {
+    State.aiSessionId = crypto.randomUUID();
+  }
+}
+
+async function loadAIChatHistory() {
+  if (!State.user) return;
+  
+  try {
+    const { data, error } = await db
+      .from('ai_chat_messages')
+      .select('*')
+      .eq('user_id', State.user.id)
+      .order('created_at', { ascending: true });
+    
+    if (error) throw error;
+    
+    State.aiMessages = data || [];
+    
+    const messagesDiv = document.getElementById('assistantMessages');
+    if (messagesDiv && State.aiMessages.length > 0) {
+      if (State.aiMessages.length > 1) {
+        messagesDiv.innerHTML = '';
+      }
+      
+      State.aiMessages.forEach(msg => {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `assistant-message ${msg.sender_type === 'user' ? 'user' : 'bot'}`;
+        msgDiv.innerHTML = msg.content.replace(/\n/g, '<br>');
+        messagesDiv.appendChild(msgDiv);
+      });
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+  } catch (err) {
+    console.error('Error loading AI chat history:', err);
+  }
+}
+
+async function saveAIMessage(senderType, content) {
+  if (!State.user) return;
+  
+  try {
+    const { error } = await db
+      .from('ai_chat_messages')
+      .insert({
+        sender_type: senderType,
+        user_id: State.user.id,
+        session_id: State.aiSessionId,
+        content: content
+      });
+    
+    if (error) throw error;
+    
+    State.aiMessages.push({
+      sender_type: senderType,
+      content: content,
+      created_at: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Error saving AI message:', err);
+  }
+}
+
+// ========== RAG: RETRIEVE RELEVANT LISTINGS ==========
+async function retrieveRelevantListings(query, limit = 10) {
+  try {
+    const searchQuery = query.toLowerCase();
+    
+    const { data, error } = await db
+      .from('listings')
+      .select(`
+        id,
+        name,
+        description,
+        category,
+        subcategory,
+        price,
+        msrp,
+        condition,
+        location,
+        shipping,
+        is_sold,
+        is_fair,
+        view_count,
+        favorite_count,
+        created_at,
+        profiles:seller_id (username, rating, location)
+      `)
+      .eq('is_sold', false)
+      .or(`name.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%,category.ilike.%${searchQuery}%`)
+      .limit(limit);
+    
+    if (error) throw error;
+    
+    return data || [];
+  } catch (err) {
+    console.error('Retrieval error:', err);
+    return [];
+  }
+}
+
+// ========== RAG: GET MARKET STATISTICS ==========
+async function getMarketStatistics(category = null) {
+  try {
+    let query = db.from('listings').select('price, msrp, condition, is_sold');
+    
+    if (category && category !== 'all') {
+      query = query.eq('category', category);
+    }
+    
+    const { data, error } = await query;
+    
+    if (error) throw error;
+    
+    const activeListings = (data || []).filter(l => !l.is_sold);
+    const soldListings = (data || []).filter(l => l.is_sold);
+    
+    const prices = activeListings.map(l => l.price).filter(p => p > 0);
+    const msrpPrices = activeListings.map(l => l.msrp).filter(m => m && m > 0);
+    
+    return {
+      totalActive: activeListings.length,
+      totalSold: soldListings.length,
+      avgPrice: prices.length ? prices.reduce((a, b) => a + b, 0) / prices.length : 0,
+      minPrice: prices.length ? Math.min(...prices) : 0,
+      maxPrice: prices.length ? Math.max(...prices) : 0,
+      avgMsrp: msrpPrices.length ? msrpPrices.reduce((a, b) => a + b, 0) / msrpPrices.length : 0,
+      conditionBreakdown: {
+        new: activeListings.filter(l => l.condition === 'new').length,
+        likeNew: activeListings.filter(l => l.condition === 'like-new').length,
+        good: activeListings.filter(l => l.condition === 'good').length,
+        fair: activeListings.filter(l => l.condition === 'fair').length,
+        poor: activeListings.filter(l => l.condition === 'poor').length
+      }
+    };
+  } catch (err) {
+    console.error('Market stats error:', err);
+    return null;
+  }
+}
+
+// ========== RAG: ANALYZE SPECIFIC LISTING ==========
+async function analyzeListing(listingId) {
+  const listing = State.listings.find(l => l.id === listingId);
+  if (!listing) return null;
+  
+  const similarListings = State.listings.filter(l => 
+    l.category === listing.category && 
+    l.id !== listingId &&
+    !l.is_sold
+  ).slice(0, 5);
+  
+  const similarPrices = similarListings.map(l => l.price);
+  const avgSimilarPrice = similarPrices.length ? 
+    similarPrices.reduce((a, b) => a + b, 0) / similarPrices.length : 0;
+  
+  let valueScore = 0;
+  let verdict = '';
+  
+  if (listing.msrp && listing.msrp > 0) {
+    const percentOfMsrp = (listing.price / listing.msrp) * 100;
+    if (percentOfMsrp <= 80) {
+      valueScore = 90;
+      verdict = 'Excellent Deal! Significantly below MSRP';
+    } else if (percentOfMsrp <= 100) {
+      valueScore = 75;
+      verdict = 'Good Deal - At or slightly below MSRP';
+    } else if (percentOfMsrp <= 120) {
+      valueScore = 60;
+      verdict = 'Fair Price - Slightly above MSRP';
+    } else {
+      valueScore = 40;
+      verdict = 'Overpriced - Consider negotiating';
+    }
+  } else if (avgSimilarPrice > 0) {
+    const percentOfMarket = (listing.price / avgSimilarPrice) * 100;
+    if (percentOfMarket <= 85) {
+      valueScore = 85;
+      verdict = 'Below market average - Good value';
+    } else if (percentOfMarket <= 110) {
+      valueScore = 70;
+      verdict = 'At market average - Fair price';
+    } else {
+      valueScore = 50;
+      verdict = 'Above market average - Compare alternatives';
+    }
+  } else {
+    valueScore = 50;
+    verdict = 'Limited market data - Use caution';
+  }
+  
+  const conditionMultiplier = {
+    'new': 1.0,
+    'like-new': 0.9,
+    'good': 0.75,
+    'fair': 0.6,
+    'poor': 0.4
+  };
+  
+  const conditionScore = (conditionMultiplier[listing.condition] || 0.5) * 100;
+  
+  return {
+    listing: listing,
+    similarListings: similarListings,
+    avgSimilarPrice: avgSimilarPrice,
+    valueScore: Math.round(valueScore),
+    conditionScore: Math.round(conditionScore),
+    verdict: verdict,
+    recommendation: valueScore >= 70 ? 
+      '✅ Recommended purchase - Good value for money' : 
+      '⚠️ Consider alternatives or negotiate price'
+  };
+}
+
+// ========== GENERATE RAG RESPONSE ==========
+async function generateRAGResponse(userQuestion, retrievedListings, marketStats, listingAnalysis) {
+  if (!genAI) {
+    return getFallbackRAGResponse(userQuestion, retrievedListings, marketStats, listingAnalysis);
+  }
+  
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    
+    let context = `You are OBTAINUM AI, a marketplace assistant focused on CONSISTENCY over availability. 
+
+CURRENT MARKET STATISTICS:
+- Total active listings: ${marketStats?.totalActive || 0}
+- Average price: $${(marketStats?.avgPrice || 0).toFixed(2)}
+- Price range: $${(marketStats?.minPrice || 0).toFixed(2)} - $${(marketStats?.maxPrice || 0).toFixed(2)}
+
+RETRIEVED RELEVANT LISTINGS (${retrievedListings.length} found):
+${retrievedListings.slice(0, 5).map(l => `
+- ${l.name} | $${l.price} | Condition: ${l.condition} | Location: ${l.location || 'N/A'}
+`).join('')}
+
+${listingAnalysis ? `
+LISTING ANALYSIS:
+- Name: ${listingAnalysis.listing?.name}
+- Price: $${listingAnalysis.listing?.price}
+- Value Score: ${listingAnalysis.valueScore}/100
+- Verdict: ${listingAnalysis.verdict}
+` : ''}
+
+USER QUESTION: "${userQuestion}"
+
+Provide a helpful, data-driven response. Be concise and use bullet points when helpful.`;
+    
+    const result = await model.generateContent(context);
+    const response = await result.response;
+    return response.text();
+    
+  } catch (err) {
+    console.error('Gemini RAG error:', err);
+    return getFallbackRAGResponse(userQuestion, retrievedListings, marketStats, listingAnalysis);
+  }
+}
+
+function getFallbackRAGResponse(userQuestion, retrievedListings, marketStats, listingAnalysis) {
+  const q = userQuestion.toLowerCase();
+  const lines = [];
+  
+  lines.push("📊 **OBTAINUM AI Analysis**\n");
+  
+  if (q.includes('price') || q.includes('worth') || q.includes('fair') || q.includes('deal')) {
+    if (listingAnalysis) {
+      lines.push(`**Current Listing:** ${listingAnalysis.verdict}`);
+      lines.push(`• Value Score: ${listingAnalysis.valueScore}/100`);
+      lines.push(`• ${listingAnalysis.recommendation}\n`);
+    }
+    
+    if (marketStats && marketStats.totalActive > 0) {
+      lines.push(`**Market Overview:**`);
+      lines.push(`• Average price: $${marketStats.avgPrice.toFixed(2)}`);
+      lines.push(`• Price range: $${marketStats.minPrice.toFixed(2)} - $${marketStats.maxPrice.toFixed(2)}\n`);
+    }
+    
+    if (retrievedListings.length > 0) {
+      lines.push(`**Similar Listings Found:**`);
+      retrievedListings.slice(0, 3).forEach(l => {
+        lines.push(`• ${l.name.substring(0, 40)}: $${l.price} (${l.condition})`);
+      });
+    }
+  }
+  
+  if (q.includes('safe') || q.includes('pickup') || q.includes('meet')) {
+    lines.push(`**🛡️ Pickup Safety Guide**`);
+    lines.push(`• Meet at police stations, bank lobbies, or busy retail areas`);
+    lines.push(`• Never go alone - bring a friend`);
+    lines.push(`• Daylight hours only for first-time meetings`);
+    lines.push(`• Inspect item thoroughly before paying`);
+    lines.push(`• Share your location with someone you trust`);
+  }
+  
+  if (lines.length <= 2) {
+    lines.push(`I can help you with:`);
+    lines.push(`• **Price checks** - Compare with market values`);
+    lines.push(`• **Value assessment** - See if it's a good deal`);
+    lines.push(`• **Safety analysis** - Evaluate pickup locations`);
+    lines.push(`• **Condition advice** - Understand quality ratings`);
+    lines.push(`\nWhat would you like to know about a listing?`);
+  }
+  
+  return lines.join('\n');
+}
+
+// ========== MAIN AI ASSISTANT FUNCTION ==========
+async function askAssistant() {
+  if (!State.user) {
+    openAuthModal();
+    return;
+  }
+  
+  const input = document.getElementById('assistantInput');
+  const question = input?.value.trim();
+  if (!question) return;
+  
+  const messagesDiv = document.getElementById('assistantMessages');
+  if (!messagesDiv) return;
+  
+  const userMsgDiv = document.createElement('div');
+  userMsgDiv.className = 'assistant-message user';
+  userMsgDiv.textContent = question;
+  messagesDiv.appendChild(userMsgDiv);
+  
+  await saveAIMessage('user', question);
+  
+  if (input) input.value = '';
+  
+  const typingDiv = document.createElement('div');
+  typingDiv.className = 'assistant-message bot';
+  typingDiv.innerHTML = '<span class="spinner" style="width:16px;height:16px;"></span> 🔍 Analyzing...';
+  messagesDiv.appendChild(typingDiv);
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  
+  try {
+    const relevantListings = await retrieveRelevantListings(question);
+    let marketStats = null;
+    if (question.toLowerCase().includes('market') || question.toLowerCase().includes('average')) {
+      marketStats = await getMarketStatistics();
+    }
+    let listingAnalysis = null;
+    if (State.currentListingId) {
+      listingAnalysis = await analyzeListing(State.currentListingId);
+    }
+    
+    let aiResponse;
+    if (genAI) {
+      aiResponse = await generateRAGResponse(question, relevantListings, marketStats, listingAnalysis);
+    } else {
+      aiResponse = getFallbackRAGResponse(question, relevantListings, marketStats, listingAnalysis);
+    }
+    
+    typingDiv.remove();
+    
+    const botMsgDiv = document.createElement('div');
+    botMsgDiv.className = 'assistant-message bot';
+    botMsgDiv.innerHTML = aiResponse.replace(/\n/g, '<br>');
+    messagesDiv.appendChild(botMsgDiv);
+    
+    await saveAIMessage('ai', aiResponse);
+    
+  } catch (err) {
+    console.error('AI Assistant error:', err);
+    typingDiv.remove();
+    
+    const errorMsg = document.createElement('div');
+    errorMsg.className = 'assistant-message bot';
+    errorMsg.textContent = '⚠️ Sorry, I encountered an error. Please try again later.';
+    messagesDiv.appendChild(errorMsg);
+  }
+  
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function askSuggestion(suggestion) {
+  const input = document.getElementById('assistantInput');
+  if (input) input.value = suggestion;
+  askAssistant();
 }
 
 // ==================== LISTINGS MODULE ====================
@@ -1058,7 +1489,7 @@ async function submitListing(e) {
   }
 }
 
-// ==================== PROFILE MODULE (FIXED) ====================
+// ==================== PROFILE MODULE ====================
 async function loadProfile() {
   if (!State.user) {
     openAuthModal();
@@ -1119,10 +1550,8 @@ async function loadProfile() {
   const profileTabs = document.querySelector('.profile-tabs');
   if (profileTabs) profileTabs.style.display = isOwnProfile ? 'flex' : 'none';
   
-  // Load listings data
   await loadProfileListings(profileIdToLoad, isOwnProfile);
   
-  // Set up settings form values
   if (isOwnProfile) {
     const sUsername = document.getElementById('s-username');
     const sBio = document.getElementById('s-bio');
@@ -1135,7 +1564,6 @@ async function loadProfile() {
     if (sPhone) sPhone.value = profile?.phone || '';
   }
   
-  // Ensure the correct tab is visible
   const activeTab = document.querySelector('.profile-tab.active');
   if (activeTab) {
     const tabName = activeTab.dataset.ptab;
@@ -1150,17 +1578,14 @@ function showProfileTab(tabName) {
   const soldDiv = document.getElementById('ptab-sold');
   const settingsDiv = document.getElementById('ptab-settings');
   
-  // Hide all first
   if (myListingsDiv) myListingsDiv.classList.add('hidden');
   if (soldDiv) soldDiv.classList.add('hidden');
   if (settingsDiv) settingsDiv.classList.add('hidden');
   
-  // Show selected
   if (tabName === 'my-listings' && myListingsDiv) {
     myListingsDiv.classList.remove('hidden');
   } else if (tabName === 'sold' && soldDiv) {
     soldDiv.classList.remove('hidden');
-    // Refresh sold items when tab is shown
     if (State.user) loadProfileListings(State.user.id, true);
   } else if (tabName === 'settings' && settingsDiv) {
     settingsDiv.classList.remove('hidden');
@@ -1335,11 +1760,6 @@ async function confirmMarkSold() {
     
     if (State.currentPage === 'profile') {
       await loadProfileListings(State.user.id, true);
-      // Refresh the sold tab if it's active
-      const activeTab = document.querySelector('.profile-tab.active');
-      if (activeTab && activeTab.dataset.ptab === 'sold') {
-        // Already showing sold tab
-      }
     }
     if (State.currentPage === 'detail') navigate('profile');
   } catch (err) {
@@ -1351,6 +1771,7 @@ async function confirmMarkSold() {
 // ==================== ITEM DETAIL MODULE ====================
 async function openListing(listingId) {
   navigate('detail');
+  State.currentListingId = listingId;
   
   const content = document.getElementById('detail-content');
   if (content) content.innerHTML = '<div class="empty-state"><div class="spinner spinner-lg"></div></div>';
@@ -1387,7 +1808,6 @@ function renderDetail(listing) {
   const isOwner = State.user && State.user.id === listing.seller_id;
   const isWished = State.wishlistIds.has(listing.id);
   
-  // Create image carousel for detail view
   let imagesHtml = '';
   if (listing.images && listing.images.length > 0) {
     if (listing.images.length === 1) {
@@ -1413,7 +1833,6 @@ function renderDetail(listing) {
           </div>
         </div>
       `;
-      // Initialize carousel after a short delay
       setTimeout(() => {
         const slides = document.getElementById(`${detailCarouselId}-slides`);
         if (slides) slides.dataset.currentIndex = '0';
@@ -1552,7 +1971,6 @@ function createListingCard(listing, showOwnerActions = false) {
   const isOwner = State.user && State.user.id === listing.seller_id;
   const showActions = showOwnerActions !== undefined ? showOwnerActions : isOwner;
   
-  // Use carousel for multiple images
   let imageHtml;
   if (listing.images && listing.images.length > 1) {
     imageHtml = createImageCarousel(listing.images, listing.id);
@@ -1562,7 +1980,6 @@ function createListingCard(listing, showOwnerActions = false) {
     imageHtml = `<div class="card-no-image">📦</div>`;
   }
   
-  // Payment method icons
   const paymentIcons = {
     'cash': '💵', 'card': '💳', 'paypal': '🅿️', 'venmo': 'V', 'crypto': '₿', 'trade': '🔄'
   };
@@ -1876,60 +2293,6 @@ function initChat() {
     .subscribe();
 }
 
-// ==================== AI ASSISTANT ====================
-function askAssistant() {
-  if (!State.user) {
-    openAuthModal();
-    return;
-  }
-  
-  const input = document.getElementById('assistantInput');
-  const question = input?.value.trim();
-  if (!question) return;
-  
-  const messagesDiv = document.getElementById('assistantMessages');
-  if (!messagesDiv) return;
-  
-  const userMsgDiv = document.createElement('div');
-  userMsgDiv.className = 'assistant-message user';
-  userMsgDiv.textContent = question;
-  messagesDiv.appendChild(userMsgDiv);
-  
-  if (input) input.value = '';
-  
-  setTimeout(() => {
-    const botMsgDiv = document.createElement('div');
-    botMsgDiv.className = 'assistant-message bot';
-    botMsgDiv.textContent = generateAIResponse(question);
-    messagesDiv.appendChild(botMsgDiv);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-  }, 500);
-  
-  messagesDiv.scrollTop = messagesDiv.scrollHeight;
-}
-
-function askSuggestion(suggestion) {
-  const input = document.getElementById('assistantInput');
-  if (input) input.value = suggestion;
-  askAssistant();
-}
-
-function generateAIResponse(question) {
-  const q = question.toLowerCase();
-  
-  if (q.includes('fair price') || q.includes('pricing')) {
-    return "💰 Fair pricing tip: Compare completed sales on eBay or Marketplace. For collectibles, check recent auction results. OBTAINUM's AI Fair Price badge means the listing is ≤20% above MSRP when available.";
-  } else if (q.includes('scam') || q.includes('avoid')) {
-    return "🛡️ Safety tips: Always meet in public places, use secure payment methods, verify item condition in person, check seller ratings, and never send deposits before seeing the item.";
-  } else if (q.includes('trending') || q.includes('popular')) {
-    return "📈 Currently trending: Vintage trading cards (Pokémon, MTG), retro gaming consoles (GameCube, PS2), vinyl records, and limited-edition sneakers. Check our 'Popular' sort filter!";
-  } else if (q.includes('vintage game')) {
-    return "🎮 Price check for vintage games: Condition is key! Loose cartridges sell for 30-50% of CIB (Complete in Box). Use PriceCharting.com for reference values.";
-  } else {
-    return "🤖 I'm your OBTAINUM assistant! Ask me about fair pricing, avoiding scams, trending items, or price checks. What would you like to know?";
-  }
-}
-
 // ==================== ERROR BANNER ====================
 function showErrorBanner() {
   const banner = document.getElementById('error-banner');
@@ -2059,7 +2422,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   initChat();
   navigate('shop');
   
-  // Populate filter chips
   const categoryChips = document.getElementById('category-chips');
   if (categoryChips) {
     const categories = ['all', 'Electronics', 'Clothing & Accessories', 'Collectibles', 'Toys & Figures', 'Sports & Outdoors', 'Books & Media', 'Home & Garden', 'Tools & Equipment', 'Other'];
@@ -2097,5 +2459,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   if (!navigator.onLine) showErrorBanner();
   
-  console.log('%c OBTAINUM INITIALIZED - Image Carousel & Profile Tabs Fixed', 'background:#00ff41;color:#001a07;font-family:monospace;padding:4px 8px;');
+  console.log('%c OBTAINUM INITIALIZED - User Registration FIXED', 'background:#00ff41;color:#001a07;font-family:monospace;padding:4px 8px;');
 });
