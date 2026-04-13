@@ -520,24 +520,57 @@
 
   
     <!-- ====== MESSAGES PAGE ====== -->
-    <section class="page" id="page-messages">
-        <div class="chat-container">
-          <aside class="chat-sidebar">
-            <div class="chat-header">Conversations</div>
-            <div id="conversationList" class="convo-list"></div>
-          </aside>
-          <main class="chat-window">
-            <div id="activeChatHeader" class="active-chat-header">Select a conversation...</div>
-            <div id="chatThread" class="chat-thread"></div>
-            <form id="chatForm" class="chat-input-area" style="display:none;">
-              <label for="chatImageInput" class="attach-btn">&#128206;</label>
-              <input type="file" id="chatImageInput" accept="image/*" hidden>
-              <input type="text" id="chatMessageInput" placeholder="Write a message..." maxlength="1000">
-              <button type="submit" class="btn btn-primary">SEND</button>
-            </form>
-          </main>
+<section class="page" id="page-messages">
+  <div class="chat-container">
+    <aside class="chat-sidebar">
+      <div class="chat-sidebar-header">
+        <h2>Chats</h2>
+        <div class="search-convo">
+          <input type="text" placeholder="Search Messenger" id="convoSearch">
         </div>
-    </section>
+      </div>
+      <div id="conversationList" class="convo-list">
+        </div>
+    </aside>
+
+    <main class="chat-window">
+      <div id="activeChatHeader" class="active-chat-header">
+        <div class="partner-info">
+          <div class="partner-avatar" id="headerAvatar">?</div>
+          <div class="partner-details">
+            <span id="chatPartnerName" class="name">Select a conversation</span>
+            <div id="listingContext" class="listing-context">
+              </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="chatThread" class="chat-thread">
+        <div class="chat-empty-state">
+          <p>Select a chat to view the item details and history.</p>
+        </div>
+      </div>
+
+      <form id="chatForm" class="chat-input-area" style="display:none;">
+        <div class="input-actions">
+          <label for="chatImageInput" class="attach-btn" title="Send Image">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M19 5v14H5V5h14m0-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-4.86 8.86l-3 3.87L9 13.14 6 17h12l-3.86-5.14z"></path></svg>
+          </label>
+          <input type="file" id="chatImageInput" accept="image/*" hidden>
+        </div>
+        
+        <input type="text" id="chatMessageInput" 
+               placeholder="Write a message..." 
+               maxlength="1000" 
+               autocomplete="off">
+               
+        <button type="submit" class="send-btn">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="var(--primary)"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
+        </button>
+      </form>
+    </main>
+  </div>
+</section>
 
   <script src="script.js"></script>
 </body>
