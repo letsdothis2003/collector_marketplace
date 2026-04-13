@@ -3,7 +3,7 @@
    Vanilla JS, no frameworks. Connects to Supabase.
    Sections: CONFIG | STATE | THEME | ROUTER | AUTH |
              LISTINGS | WISHLIST | CREATE | PROFILE |
-             DETAIL + AI | RENDER | ANIMATIONS | EVENTS | INIT
+             DETAIL + AI | RENDER | ANIMATIONS | EVENTS | INIT | Chat System 
    ============================================================ */
 
 // --- SECTION: DATABASE CONFIG ---
@@ -1815,3 +1815,96 @@ document.addEventListener('DOMContentLoaded', async () => {
   );
 });
 
+
+/* =========================================================
+   OBTAINUM CHAT ENGINE (SQL-Aligned: Text & Images)
+   ========================================================= */
+
+// --- 1. SENDING LOGIC ---
+document.getElementById('chatForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const db = getDB();
+    const input = document.getElementById('chatMessageInput');
+    const { data: { user } } = await db.auth.getUser();
+
+    if (!input.value.trim()) return;
+
+    // Matches your SQL: content is present, image_url is NULL
+    const { error } = await db.from('messages').insert([{
+        sender_id: user.id,
+        receiver_id: currentChatPartnerId,
+        content: input.value,
+        image_url: null,
+        listing_id: currentListingId || null // Optional per your schema
+    }]);
+
+    if (error) alert("Error: " + error.message);
+    else input.value = '';
+};
+
+// --- 2. IMAGE UPLOAD LOGIC ---
+document.getElementById('chatImageInput').onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const db = getDB();
+    const { data: { user } } = await db.auth.getUser();
+
+    // Matches your Storage Policy: Folder name must be User ID
+    const filePath = `${user.id}/${Date.now()}_${file.name}`;
+    
+    const { data, error: uploadError } = await db.storage
+        .from('chat-images')
+        .upload(filePath, file);
+
+    if (uploadError) return alert("Upload failed: " + uploadError.message);
+
+    const { data: { publicUrl } } = db.storage.from('chat-images').getPublicUrl(filePath);
+
+    // Matches your SQL: content is NULL, image_url is present
+    const { error: msgError } = await db.from('messages').insert([{
+        sender_id: user.id,
+        receiver_id: currentChatPartnerId,
+        content: null,
+        image_url: publicUrl,
+        listing_id: currentListingId || null
+    }]);
+
+    if (msgError) console.error("Message Error:", msgError.message);
+};
+
+// --- 3. REAL-TIME RENDER LOGIC ---
+function renderMessage(msg, currentUserId) {
+    const thread = document.getElementById('chatThread');
+    const isSent = msg.sender_id === currentUserId;
+    
+    const div = document.createElement('div');
+    div.className = `msg ${isSent ? 'sent' : 'received'}`;
+
+    // Conditional rendering based on your SQL schema structure
+    if (msg.image_url) {
+        div.innerHTML = `<img src="${msg.image_url}" class="msg-image" onclick="window.open(this.src)">`;
+    } else if (msg.content) {
+        div.innerText = msg.content;
+    }
+
+    thread.appendChild(div);
+    thread.scrollTop = thread.scrollHeight;
+}
+
+// Subscription setup
+function subscribeToMessages(currentUserId) {
+    const db = getDB();
+    db.channel('chat_channel')
+    .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'messages' 
+    }, payload => {
+        // Only render if relevant to current conversation
+        if (payload.new.sender_id === currentUserId || payload.new.receiver_id === currentUserId) {
+            renderMessage(payload.new, currentUserId);
+        }
+    })
+    .subscribe();
+}
