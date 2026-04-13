@@ -645,3 +645,13 @@ body.light-mode::after { opacity: 0; }
   font-weight: bold;
   z-index: 5;
 }
+
+/* Ensure hidden class works properly */
+.hidden {
+  display: none !important;
+}
+
+/* Make sure nav buttons transition smoothly */
+.nav-btn {
+  transition: opacity 0.2s ease, display 0.2s ease;
+}
