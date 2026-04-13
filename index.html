@@ -63,8 +63,8 @@
     <button class="nav-btn" onclick="navigate('wishlist'); closeMobileNav()">&#9825; WISHLIST</button>
     <button class="nav-btn" onclick="navigate('profile'); closeMobileNav()">&#9881; PROFILE</button>
     <button class="nav-btn" onclick="navigate('Ai Assistant'); closeMobileNav()">&#9881; Assistant</button>
-    <button class="nav-btn" onclick="navigate('Messages')="closeMobileNav('Messages')">&#9881; MESSAGES</button>
-    <button class="nav-btn" onclick="navigate('Messages')="closeMobileNav('donate')">&#9881; DONATE</button>
+    <button class="nav-btn" onclick="navigate('Messages');"closeMobileNav('Messages')">&#9881; MESSAGES</button>
+    <button class="nav-btn" onclick="navigate('Messages');"closeMobileNav('donate')">&#9881; DONATE</button>
   </nav>
 
   <!-- ===================== APP PAGES ===================== -->
@@ -517,6 +517,27 @@
       </div>
     </div>
   </div>
+
+  
+    <!-- ====== MESSAGES PAGE ====== -->
+    <section class="page" id="page-messages">
+        <div class="chat-container">
+          <aside class="chat-sidebar">
+            <div class="chat-header">Conversations</div>
+            <div id="conversationList" class="convo-list"></div>
+          </aside>
+          <main class="chat-window">
+            <div id="activeChatHeader" class="active-chat-header">Select a conversation...</div>
+            <div id="chatThread" class="chat-thread"></div>
+            <form id="chatForm" class="chat-input-area" style="display:none;">
+              <label for="chatImageInput" class="attach-btn">&#128206;</label>
+              <input type="file" id="chatImageInput" accept="image/*" hidden>
+              <input type="text" id="chatMessageInput" placeholder="Write a message..." maxlength="1000">
+              <button type="submit" class="btn btn-primary">SEND</button>
+            </form>
+          </main>
+        </div>
+    </section>
 
   <script src="script.js"></script>
 </body>
