@@ -482,3 +482,166 @@ body.light-mode::after { opacity: 0; }
   .profile-banner { flex-direction: column; text-align: center; }
   .listings-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
 }
+
+
+
+/* Add these to your existing style.css */
+
+/* Image Carousel for Listings */
+.image-carousel {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: var(--bg-3);
+}
+
+.carousel-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.carousel-slides {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.3s ease;
+}
+
+.carousel-slide {
+  min-width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.carousel-slide img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.carousel-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid var(--neon);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.2s ease;
+  color: var(--neon);
+  font-size: 1.2rem;
+}
+
+.carousel-btn:hover {
+  background: var(--neon);
+  color: #001a07;
+  transform: translateY(-50%) scale(1.1);
+}
+
+.carousel-btn.prev {
+  left: 10px;
+}
+
+.carousel-btn.next {
+  right: 10px;
+}
+
+.carousel-dots {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+
+.carousel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.carousel-dot.active {
+  background: var(--neon);
+  width: 20px;
+  border-radius: 4px;
+}
+
+.image-count-badge {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  color: var(--neon);
+  z-index: 10;
+  font-family: monospace;
+}
+
+/* Profile tabs content fix */
+#ptab-my-listings, #ptab-sold, #ptab-settings {
+  transition: all 0.3s ease;
+}
+
+#ptab-my-listings.hidden, #ptab-sold.hidden, #ptab-settings.hidden {
+  display: none !important;
+}
+
+#ptab-my-listings:not(.hidden), #ptab-sold:not(.hidden), #ptab-settings:not(.hidden) {
+  display: block;
+}
+
+/* Settings form enhancements */
+.settings-form-group {
+  margin-bottom: 20px;
+}
+
+.settings-form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.settings-form-group small {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+/* Sold item styling in profile */
+.sold-listing-card {
+  opacity: 0.8;
+  position: relative;
+}
+
+.sold-listing-card::after {
+  content: 'SOLD';
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: var(--danger);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: bold;
+  z-index: 5;
+}
