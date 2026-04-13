@@ -21,7 +21,7 @@ try {
    SECTION: STATE MANAGEMENT
    ============================================================ */
 
-const PAGES = ['shop', 'detail', 'create', 'profile', 'wishlist'];
+const PAGES = ['shop', 'detail', 'create', 'profile', 'wishlist', 'messages'];
 
 const CATEGORIES = [
   'Collectibles', 'Electronics', 'Clothing & Accessories',
@@ -70,7 +70,9 @@ const State = {
   editingListingId: null,
   imageFiles: [],
   keepExistingImages: [],
-  isOnline: navigator.onLine
+  isOnline: navigator.onLine,
+  currentChatPartnerId: null,
+  currentListingId: null
 };
 
 /* ============================================================
@@ -119,6 +121,7 @@ function navigate(page) {
   if (page === 'profile') loadProfile();
   if (page === 'wishlist') loadWishlist();
   if (page === 'create') initCreatePage();
+  if (page === 'messages') loadMessages();
 }
 
 function updateNavActive(page) {
@@ -340,6 +343,7 @@ async function loadListings() {
       .select(`
         *,
         profiles:seller_id (
+          id,
           username,
           avatar_url,
           rating,
@@ -521,7 +525,7 @@ async function loadWishlist() {
         listing_id,
         listings:listing_id (
           *,
-          profiles:seller_id ( username, avatar_url, rating, location )
+          profiles:seller_id ( id, username, avatar_url, rating, location )
         )
       `)
       .eq('user_id', State.user.id);
@@ -918,7 +922,7 @@ async function submitListing(e) {
         .update(listingData)
         .eq('id', State.editingListingId)
         .eq('seller_id', State.user.id)
-        .select('*, profiles:seller_id(username, avatar_url, rating, location)')
+        .select('*, profiles:seller_id(id, username, avatar_url, rating, location)')
         .single();
       if (error) throw error;
       savedListing = data;
@@ -930,7 +934,7 @@ async function submitListing(e) {
       const { data, error } = await db
         .from('listings')
         .insert(listingData)
-        .select('*, profiles:seller_id(username, avatar_url, rating, location)')
+        .select('*, profiles:seller_id(id, username, avatar_url, rating, location)')
         .single();
       if (error) throw error;
       savedListing = data;
@@ -962,17 +966,26 @@ async function submitListing(e) {
 
 async function loadProfile() {
   if (!State.user) {
-    navigate('shop');
     openAuthModal();
     return;
   }
 
-  const { data: profile } = await db
+  const profileIdToLoad = window.selectedProfileId || State.user.id;
+  const isOwnProfile = profileIdToLoad === State.user.id;
+
+  if (window.selectedProfileId) delete window.selectedProfileId;
+
+  const { data: profile, error } = await db
     .from('profiles')
     .select('*')
-    .eq('id', State.user.id)
+    .eq('id', profileIdToLoad)
     .single();
-  State.profile = profile;
+
+  if (error) {
+    showToast("Could not load profile.", 'error');
+    navigate('shop');
+    return;
+  }
 
   const avatarEl = document.getElementById('profile-avatar-lg');
   const usernameEl = document.getElementById('profile-username');
@@ -980,7 +993,7 @@ async function loadProfile() {
   const bioEl = document.getElementById('profile-bio');
   const locationEl = document.getElementById('profile-location');
 
-  const name = profile?.username || State.user.email?.split('@')[0] || '?';
+  const name = profile?.username || '?';
 
   if (profile?.avatar_url) {
     avatarEl.innerHTML = `<img src="${escHtml(profile.avatar_url)}" alt="${escHtml(name)}" />`;
@@ -989,30 +1002,51 @@ async function loadProfile() {
   }
 
   if (usernameEl) usernameEl.textContent = (profile?.username || name).toUpperCase();
-  if (emailEl) emailEl.textContent = State.user.email;
+  if (emailEl) emailEl.textContent = isOwnProfile ? profile.email : '';
   if (bioEl) bioEl.textContent = profile?.bio || '';
   if (locationEl) locationEl.textContent = profile?.location ? '&#128205; ' + profile.location : '';
 
-  // Pre-fill settings form
-  const sUsernameEl = document.getElementById('s-username');
-  if (sUsernameEl) {
-    sUsernameEl.value = profile?.username || '';
-    document.getElementById('s-bio').value = profile?.bio || '';
-    document.getElementById('s-location').value = profile?.location || '';
-    document.getElementById('s-phone').value = profile?.phone || '';
-    document.getElementById('s-website').value = profile?.website || '';
+  const editButton = document.querySelector('#page-profile .profile-banner .btn');
+  if (editButton) {
+    if (isOwnProfile) {
+      editButton.innerHTML = '&#9998; Edit Profile';
+      editButton.onclick = openEditProfile;
+      editButton.style.display = 'inline-block';
+    } else if (profile) {
+      editButton.innerHTML = '✉️ Let\'s Chat';
+      editButton.onclick = () => startChat(profile.id);
+      editButton.style.display = 'inline-block';
+    }
   }
 
-  await loadProfileListings();
+  document.querySelector('.profile-tabs').style.display = isOwnProfile ? 'flex' : 'none';
+  document.getElementById('ptab-my-listings').style.display = 'block';
+  document.getElementById('ptab-sold').style.display = 'none';
+  document.getElementById('ptab-settings').style.display = 'none';
+
+  if (isOwnProfile) {
+    document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector('.profile-tab[data-ptab="my-listings"]').classList.add('active');
+    const sUsernameEl = document.getElementById('s-username');
+    if (sUsernameEl) {
+      sUsernameEl.value = profile?.username || '';
+      document.getElementById('s-bio').value = profile?.bio || '';
+      document.getElementById('s-location').value = profile?.location || '';
+      document.getElementById('s-phone').value = profile?.phone || '';
+      document.getElementById('s-website').value = profile?.website || '';
+    }
+  }
+
+  await loadProfileListings(profileIdToLoad, isOwnProfile);
 }
 
-async function loadProfileListings() {
-  if (!State.user) return;
+async function loadProfileListings(profileId, isOwnProfile) {
+  if (!profileId) return;
 
   const { data } = await db
     .from('listings')
-    .select('*, profiles:seller_id(username, avatar_url, rating, location)')
-    .eq('seller_id', State.user.id)
+    .select('*, profiles:seller_id(id, username, avatar_url, rating, location)')
+    .eq('seller_id', profileId)
     .order('created_at', { ascending: false });
 
   const allListings = data || [];
@@ -1039,21 +1073,19 @@ async function loadProfileListings() {
         <div class="empty-state">
           <div class="empty-icon">&#128722;</div>
           <div class="empty-title">NO ACTIVE LISTINGS</div>
-          <div class="empty-sub">Start selling by creating your first listing.</div>
-          <br/>
-          <button class="btn btn-primary" onclick="navigate('create')" style="margin-top:12px;">+ CREATE LISTING</button>
+          ${isOwnProfile ? '<div class="empty-sub">Start selling by creating your first listing.</div><br/><button class="btn btn-primary" onclick="navigate(\'create\')" style="margin-top:12px;">+ CREATE LISTING</button>' : ''}
         </div>
       `;
     } else {
       grid.innerHTML = '';
-      active.forEach(l => grid.appendChild(createListingCard(l, true)));
+      active.forEach(l => grid.appendChild(createListingCard(l, isOwnProfile)));
       animateCards(grid);
     }
   }
 
   // Sold listings
   const soldGrid = document.getElementById('profile-sold-grid');
-  if (soldGrid) {
+  if (isOwnProfile && soldGrid) {
     if (sold.length === 0) {
       soldGrid.innerHTML = `
         <div class="empty-state">
@@ -1156,7 +1188,7 @@ async function confirmMarkSold() {
     applyFilters();
 
     // Reload profile listings if on profile page
-    if (State.currentPage === 'profile') loadProfileListings();
+    if (State.currentPage === 'profile') loadProfileListings(State.user.id, true);
     if (State.currentPage === 'detail') navigate('profile');
   } catch (err) {
     console.error('Error marking as sold:', err);
@@ -1177,7 +1209,7 @@ async function openListing(listingId) {
   try {
     const { data: listing, error } = await db
       .from('listings')
-      .select('*, profiles:seller_id(username, avatar_url, rating, location, bio)')
+      .select('*, profiles:seller_id(id, username, avatar_url, rating, location, bio)')
       .eq('id', listingId)
       .single();
 
@@ -1185,10 +1217,7 @@ async function openListing(listingId) {
     State.selectedListing = listing;
 
     // Increment view count (fire and forget)
-    db.from('listings')
-      .update({ view_count: (listing.view_count || 0) + 1 })
-      .eq('id', listingId)
-      .then(() => {});
+    db.rpc('increment_view_count', { listing_id: listingId });
 
     renderDetail(listing);
     loadSimilarItems(listing);
@@ -1239,10 +1268,9 @@ function renderDetail(listing) {
       <button class="btn btn-danger" onclick="deleteListing('${listing.id}')">&#10005; DELETE</button>
     `;
   } else {
-    actionsHtml = `
-      ${listing.type === 'buy-now' ? '<button class="btn btn-primary btn-lg">BUY NOW</button>' : ''}
-      ${listing.type === 'offers' ? '<button class="btn btn-primary btn-lg">MAKE AN OFFER</button>' : ''}
-      ${listing.type === 'auction' ? '<button class="btn btn-primary btn-lg">PLACE BID</button>' : ''}
+      const mainActionText = listing.type === 'buy-now' ? 'BUY NOW' : listing.type === 'offers' ? 'MAKE AN OFFER' : 'PLACE BID';
+      actionsHtml = `
+      <button class="btn btn-primary btn-lg" onclick="startChat('${listing.seller_id}', '${listing.id}')">${mainActionText}</button>
       ${State.user ? `
         <button class="btn btn-outline wishlist-btn ${isWished ? 'active' : ''}" onclick="toggleWishlist(event, '${listing.id}')" id="detail-wish-btn">
           ${isWished ? '&#9829; REMOVE FROM WISHLIST' : '&#9825; ADD TO WISHLIST'}
@@ -1309,7 +1337,7 @@ function renderDetail(listing) {
           </div>` : ''}
           <div class="detail-meta-item">
             <div class="detail-meta-label">Views</div>
-            <div class="detail-meta-value">&#128065; ${(listing.view_count || 0) + 1}</div>
+            <div class="detail-meta-value">&#128065; ${listing.view_count || 0}</div>
           </div>
           <div class="detail-meta-item">
             <div class="detail-meta-label">Favorites</div>
@@ -1335,10 +1363,18 @@ function renderDetail(listing) {
             }
           </div>
           <div style="flex:1;">
-            <div class="seller-name">${escHtml(seller.username || 'Anonymous')}</div>
-            ${seller.location ? `<div class="seller-location">; ${escHtml(seller.location)}</div>` : ''}
+            <div style="display: flex; justify-content: space-between; align-items: start;">
+              <div class="seller-name">${escHtml(seller.username || 'Anonymous')}</div>
+              <button 
+                onclick="viewSellerProfile('${seller.id}')" 
+                class="btn btn-outline btn-sm">
+                View Profile
+              </button>
+            </div>
+            
+            ${seller.location ? `<div class="seller-location">📍 ${escHtml(seller.location)}</div>` : ''}
             ${seller.rating > 0 ? `<div class="seller-rating">${'&#9733;'.repeat(Math.round(seller.rating))} ${parseFloat(seller.rating).toFixed(1)}</div>` : ''}
-            ${seller.bio ? `<div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;">${escHtml(seller.bio.slice(0, 100))}${seller.bio.length > 100 ? '...' : ''}</div>` : ''}
+            ${seller.bio ? `<div style="font-size:0.8rem;color:var(--text-light);margin-top:4px;">${escHtml(seller.bio.slice(0, 100))}${seller.bio.length > 100 ? '...' : ''}</div>` : ''}
           </div>
         </div>
 
@@ -1447,7 +1483,7 @@ async function loadSimilarItems(listing) {
   try {
     const { data } = await db
       .from('listings')
-      .select('*, profiles:seller_id(username, avatar_url, rating, location)')
+      .select('*, profiles:seller_id(id, username, avatar_url, rating, location)')
       .eq('category', listing.category)
       .eq('is_sold', false)
       .neq('id', listing.id)
@@ -1792,6 +1828,10 @@ function setupEventListeners() {
       }
     }
   });
+
+  document.getElementById('chatForm').onsubmit = handleSendMessage;
+  document.getElementById('chatImageInput').onchange = handleSendImage;
+
 }
 
 /* ============================================================
@@ -1802,6 +1842,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initTheme();
   setupEventListeners();
   await initAuth();
+  initChat();
   navigate('shop');
 
   const logo = document.querySelector('.logo');
@@ -1817,63 +1858,176 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
 /* =========================================================
-   OBTAINUM CHAT ENGINE (SQL-Aligned: Text & Images)
+   SECTION: CHAT SYSTEM
    ========================================================= */
 
-// --- 1. SENDING LOGIC ---
-document.getElementById('chatForm').onsubmit = async (e) => {
+function viewSellerProfile(sellerId) {
+    window.selectedProfileId = sellerId; 
+    navigate('profile');
+}
+
+async function startChat(partnerId, listingId = null) {
+  if (!State.user) {
+    openAuthModal();
+    return;
+  }
+  if (partnerId === State.user.id) {
+    showToast("You can't start a chat with yourself.", "info");
+    return;
+  }
+  
+  State.currentChatPartnerId = partnerId;
+  State.currentListingId = listingId;
+  
+  navigate('messages');
+}
+
+async function loadMessages() {
+    if (!State.user) {
+        openAuthModal();
+        return;
+    }
+
+    const { data: allMessages, error } = await db
+        .from('messages')
+        .select('*, sender:sender_id(id, username, avatar_url), receiver:receiver_id(id, username, avatar_url)')
+        .or(`sender_id.eq.${State.user.id},receiver_id.eq.${State.user.id}`)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error("Error fetching conversations", error);
+        return;
+    }
+
+    const conversations = new Map();
+    allMessages.forEach(msg => {
+        const partner = msg.sender.id === State.user.id ? msg.receiver : msg.sender;
+        if (!conversations.has(partner.id)) {
+            conversations.set(partner.id, {
+                partnerProfile: partner,
+                lastMessage: msg
+            });
+        }
+    });
+  
+    const sortedConversations = Array.from(conversations.values())
+        .sort((a,b) => new Date(b.lastMessage.created_at) - new Date(a.lastMessage.created_at));
+
+    const convoListEl = document.getElementById('conversationList');
+    convoListEl.innerHTML = '';
+    if (sortedConversations.length === 0) {
+        convoListEl.innerHTML = '<div class="empty-state-small">No conversations yet.</div>';
+    } else {
+        sortedConversations.forEach(convo => {
+            const partnerProfile = convo.partnerProfile;
+            const li = document.createElement('div');
+            li.className = 'convo-item';
+            li.onclick = () => loadConversationThread(partnerProfile.id);
+            li.innerHTML = `
+              <div class="convo-avatar">${partnerProfile.avatar_url ? `<img src="${partnerProfile.avatar_url}" />` : (partnerProfile.username || '?').charAt(0).toUpperCase()}</div>
+              <div class="convo-details">
+                  <div class="convo-username">${partnerProfile.username}</div>
+                  <div class="convo-preview">${convo.lastMessage.content ? escHtml(convo.lastMessage.content.substring(0, 30)) + '...' : '<em>Image</em>'}</div>
+              </div>
+            `;
+            convoListEl.appendChild(li);
+        });
+    }
+
+    if (State.currentChatPartnerId) {
+        await loadConversationThread(State.currentChatPartnerId, State.currentListingId);
+    } else {
+        document.getElementById('activeChatHeader').innerHTML = 'Select a conversation';
+        document.getElementById('chatThread').innerHTML = '<div class="empty-state-small">Your messages will appear here.</div>';
+        document.getElementById('chatForm').style.display = 'none';
+    }
+}
+
+async function loadConversationThread(partnerId, listingId = null) {
+    State.currentChatPartnerId = partnerId;
+    
+    document.querySelectorAll('.convo-item').forEach(el => el.classList.remove('active'));
+    // There should be a better way to select this element
+
+    const {data: partnerProfile, error: pError} = await db.from('profiles').select('*').eq('id', partnerId).single();
+    if (pError || !partnerProfile) {
+        console.error("Couldn't load partner profile", pError);
+        return;
+    }
+    document.getElementById('activeChatHeader').innerHTML = `Chat with <strong>${partnerProfile.username}</strong>`;
+    document.getElementById('chatForm').style.display = 'flex';
+
+    if (listingId) {
+        const {data: listing, error} = await db.from('listings').select('name, price').eq('id', listingId).single();
+        if(listing){
+            const listingUrl = `${window.location.origin}${window.location.pathname}#`;
+            const messageInput = document.getElementById('chatMessageInput');
+            messageInput.value = `I'm interested in your listing: "${listing.name}" for $${listing.price}. ${listingUrl}`;
+            messageInput.focus();
+        }
+        State.currentListingId = null; // Clear after using it
+    }
+
+    const { data: messages, error: mError } = await db
+        .from('messages')
+        .select('*')
+        .or(`(sender_id.eq.${State.user.id},receiver_id.eq.${partnerId}),(sender_id.eq.${partnerId},receiver_id.eq.${State.user.id})`)
+        .order('created_at', { ascending: true });
+
+    if(mError){
+        console.error("Error loading messages", mError);
+        return;
+    }
+    
+    const threadEl = document.getElementById('chatThread');
+    threadEl.innerHTML = '';
+    messages.forEach(msg => renderMessage(msg, State.user.id));
+}
+
+async function handleSendMessage(e) {
     e.preventDefault();
-    const db = getDB();
     const input = document.getElementById('chatMessageInput');
-    const { data: { user } } = await db.auth.getUser();
+    if (!input.value.trim() || !State.currentChatPartnerId) return;
 
-    if (!input.value.trim()) return;
-
-    // Matches your SQL: content is present, image_url is NULL
     const { error } = await db.from('messages').insert([{
-        sender_id: user.id,
-        receiver_id: currentChatPartnerId,
+        sender_id: State.user.id,
+        receiver_id: State.currentChatPartnerId,
         content: input.value,
-        image_url: null,
-        listing_id: currentListingId || null // Optional per your schema
     }]);
 
-    if (error) alert("Error: " + error.message);
-    else input.value = '';
-};
+    if (error) {
+      showToast("Error sending message: " + error.message, 'error');
+    } else {
+      input.value = '';
+    }
+}
 
-// --- 2. IMAGE UPLOAD LOGIC ---
-document.getElementById('chatImageInput').onchange = async (e) => {
+async function handleSendImage(e) {
     const file = e.target.files[0];
-    if (!file) return;
+    if (!file || !State.currentChatPartnerId) return;
 
-    const db = getDB();
-    const { data: { user } } = await db.auth.getUser();
-
-    // Matches your Storage Policy: Folder name must be User ID
-    const filePath = `${user.id}/${Date.now()}_${file.name}`;
+    const filePath = `${State.user.id}/${Date.now()}_${file.name}`;
     
-    const { data, error: uploadError } = await db.storage
+    const { error: uploadError } = await db.storage
         .from('chat-images')
         .upload(filePath, file);
 
-    if (uploadError) return alert("Upload failed: " + uploadError.message);
+    if (uploadError) {
+      showToast("Upload failed: " + uploadError.message, 'error');
+      return;
+    }
 
     const { data: { publicUrl } } = db.storage.from('chat-images').getPublicUrl(filePath);
 
-    // Matches your SQL: content is NULL, image_url is present
     const { error: msgError } = await db.from('messages').insert([{
-        sender_id: user.id,
-        receiver_id: currentChatPartnerId,
-        content: null,
+        sender_id: State.user.id,
+        receiver_id: State.currentChatPartnerId,
         image_url: publicUrl,
-        listing_id: currentListingId || null
     }]);
 
-    if (msgError) console.error("Message Error:", msgError.message);
-};
+    if (msgError) showToast("Message Error:" + msgError.message, 'error');
+}
 
-// --- 3. REAL-TIME RENDER LOGIC ---
 function renderMessage(msg, currentUserId) {
     const thread = document.getElementById('chatThread');
     const isSent = msg.sender_id === currentUserId;
@@ -1881,29 +2035,33 @@ function renderMessage(msg, currentUserId) {
     const div = document.createElement('div');
     div.className = `msg ${isSent ? 'sent' : 'received'}`;
 
-    // Conditional rendering based on your SQL schema structure
+    let content = '';
     if (msg.image_url) {
-        div.innerHTML = `<img src="${msg.image_url}" class="msg-image" onclick="window.open(this.src)">`;
+        content = `<img src="${escHtml(msg.image_url)}" class="msg-image" onclick="window.open(this.src)">`;
     } else if (msg.content) {
-        div.innerText = msg.content;
+        content = escHtml(msg.content);
     }
+    div.innerHTML = content;
 
     thread.appendChild(div);
     thread.scrollTop = thread.scrollHeight;
 }
 
-// Subscription setup
-function subscribeToMessages(currentUserId) {
-    const db = getDB();
-    db.channel('chat_channel')
+function initChat() {
+    if (!db) return;
+    db.channel('public:messages')
     .on('postgres_changes', { 
         event: 'INSERT', 
         schema: 'public', 
         table: 'messages' 
     }, payload => {
-        // Only render if relevant to current conversation
-        if (payload.new.sender_id === currentUserId || payload.new.receiver_id === currentUserId) {
-            renderMessage(payload.new, currentUserId);
+        if (State.currentPage === 'messages' && 
+           (payload.new.sender_id === State.user.id && payload.new.receiver_id === State.currentChatPartnerId || 
+            payload.new.receiver_id === State.user.id && payload.new.sender_id === State.currentChatPartnerId)) {
+            renderMessage(payload.new, State.user.id);
+        }
+        if (State.currentPage === 'messages') {
+            loadMessages(); // Refresh conversation list
         }
     })
     .subscribe();
