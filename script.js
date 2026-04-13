@@ -181,6 +181,14 @@ window.goToSlide = function(carouselId, index) {
 // ==================== NAVIGATION ====================
 function navigate(page) {
   const pages = ['shop', 'detail', 'create', 'profile', 'wishlist', 'messages', 'assistant', 'donate'];
+  
+  // Don't allow navigation to restricted pages if not logged in
+  const restrictedPages = ['create', 'profile', 'wishlist', 'messages'];
+  if (restrictedPages.includes(page) && !State.user) {
+    openAuthModal();
+    return;
+  }
+  
   if (!pages.includes(page)) page = 'shop';
   
   pages.forEach(p => {
@@ -198,10 +206,7 @@ function navigate(page) {
   if (page === 'wishlist' && State.user) loadWishlist();
   if (page === 'create' && State.user) initCreatePage();
   if (page === 'messages' && State.user) loadMessages();
-  if (page === 'assistant') {
-    updateAssistantUI();
-    loadAIChatHistory();
-  }
+  if (page === 'assistant') updateAssistantUI();
 }
 
 function updateNavActive(page) {
@@ -358,7 +363,20 @@ function updateAuthUI() {
   const avatarWrap = document.getElementById('user-avatar-wrap');
   const avatar = document.getElementById('header-avatar');
   
+  // Navigation buttons that should only show when logged in
+  const authNavButtons = [
+    'nav-create', 'nav-wishlist', 'nav-profile', 
+    'nav-assistant', 'nav-messages', 'nav-donate'
+  ];
+  
+  // Mobile navigation buttons
+  const mobileAuthNavButtons = [
+    'mobile-nav-create', 'mobile-nav-wishlist', 'mobile-nav-profile',
+    'mobile-nav-assistant', 'mobile-nav-messages', 'mobile-nav-donate'
+  ];
+  
   if (State.user) {
+    // User is logged in - show avatar, hide login button
     btnWrap.classList.add('hidden');
     avatarWrap.classList.remove('hidden');
     const name = State.profile?.username || State.user.email || '?';
@@ -367,9 +385,31 @@ function updateAuthUI() {
     } else {
       avatar.textContent = name.charAt(0).toUpperCase();
     }
+    
+    // Show auth-only navigation buttons
+    authNavButtons.forEach(btnId => {
+      const btn = document.getElementById(btnId);
+      if (btn) btn.classList.remove('hidden');
+    });
+    mobileAuthNavButtons.forEach(btnId => {
+      const btn = document.getElementById(btnId);
+      if (btn) btn.classList.remove('hidden');
+    });
+    
   } else {
+    // User is logged out - show login button, hide avatar
     btnWrap.classList.remove('hidden');
     avatarWrap.classList.add('hidden');
+    
+    // Hide auth-only navigation buttons
+    authNavButtons.forEach(btnId => {
+      const btn = document.getElementById(btnId);
+      if (btn) btn.classList.add('hidden');
+    });
+    mobileAuthNavButtons.forEach(btnId => {
+      const btn = document.getElementById(btnId);
+      if (btn) btn.classList.add('hidden');
+    });
   }
 }
 
