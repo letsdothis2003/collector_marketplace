@@ -1,7 +1,7 @@
 /* ============================================================
    FILE: script.js
-   OBTAINUM MARKETPLACE — Full functionality with working theme toggle
-   Location & payment visible, profile settings & sold items fixed
+   OBTAINUM MARKETPLACE — Full functionality with image carousel
+   and fixed profile tabs (Sold Items & Settings)
    ============================================================ */
 
 // ==================== DATABASE CONFIG ====================
@@ -80,7 +80,7 @@ function setLoading(btn, isLoading, text) {
   btn.innerHTML = isLoading ? `<span class="spinner"></span> ${text}` : text;
 }
 
-// ==================== THEME TOGGLE (RESTORED - TEXT BASED) ====================
+// ==================== THEME TOGGLE ====================
 function initTheme() {
   const saved = localStorage.getItem('obtainum-theme') || 'dark';
   applyTheme(saved);
@@ -98,6 +98,78 @@ function toggleTheme() {
   applyTheme(isLight ? 'dark' : 'light');
   showToast(isLight ? 'Dark mode activated' : 'Light mode activated', 'info');
 }
+
+// ==================== IMAGE CAROUSEL FUNCTION ====================
+function createImageCarousel(images, listingId) {
+  if (!images || images.length === 0) {
+    return `<div class="card-no-image">📦</div>`;
+  }
+  
+  if (images.length === 1) {
+    return `<img src="${escHtml(images[0])}" alt="Listing image" style="width:100%;height:100%;object-fit:cover;" />`;
+  }
+  
+  const carouselId = `carousel-${listingId}`;
+  return `
+    <div class="image-carousel" id="${carouselId}">
+      <div class="carousel-container">
+        <div class="carousel-slides" id="${carouselId}-slides">
+          ${images.map((img, idx) => `
+            <div class="carousel-slide" data-index="${idx}">
+              <img src="${escHtml(img)}" alt="Image ${idx + 1}" loading="lazy" />
+            </div>
+          `).join('')}
+        </div>
+        <button class="carousel-btn prev" onclick="event.stopPropagation(); changeSlide('${carouselId}', -1)">‹</button>
+        <button class="carousel-btn next" onclick="event.stopPropagation(); changeSlide('${carouselId}', 1)">›</button>
+        <div class="carousel-dots" id="${carouselId}-dots">
+          ${images.map((_, idx) => `<span class="carousel-dot ${idx === 0 ? 'active' : ''}" onclick="event.stopPropagation(); goToSlide('${carouselId}', ${idx})"></span>`).join('')}
+        </div>
+        <div class="image-count-badge">${images.length} images</div>
+      </div>
+    </div>
+  `;
+}
+
+// Global carousel functions
+window.changeSlide = function(carouselId, direction) {
+  const slides = document.getElementById(`${carouselId}-slides`);
+  const dots = document.getElementById(`${carouselId}-dots`);
+  if (!slides) return;
+  
+  const currentIndex = parseInt(slides.dataset.currentIndex || '0');
+  const totalSlides = slides.children.length;
+  let newIndex = currentIndex + direction;
+  
+  if (newIndex < 0) newIndex = totalSlides - 1;
+  if (newIndex >= totalSlides) newIndex = 0;
+  
+  slides.style.transform = `translateX(-${newIndex * 100}%)`;
+  slides.dataset.currentIndex = newIndex;
+  
+  if (dots) {
+    const dotElements = dots.querySelectorAll('.carousel-dot');
+    dotElements.forEach((dot, idx) => {
+      dot.classList.toggle('active', idx === newIndex);
+    });
+  }
+};
+
+window.goToSlide = function(carouselId, index) {
+  const slides = document.getElementById(`${carouselId}-slides`);
+  const dots = document.getElementById(`${carouselId}-dots`);
+  if (!slides) return;
+  
+  slides.style.transform = `translateX(-${index * 100}%)`;
+  slides.dataset.currentIndex = index;
+  
+  if (dots) {
+    const dotElements = dots.querySelectorAll('.carousel-dot');
+    dotElements.forEach((dot, idx) => {
+      dot.classList.toggle('active', idx === index);
+    });
+  }
+};
 
 // ==================== NAVIGATION ====================
 function navigate(page) {
@@ -328,14 +400,17 @@ async function handleRegister(e) {
       closeModal('auth-modal');
       showToast('Account created! Welcome to OBTAINUM.', 'success');
     } else {
-      document.getElementById('register-form-wrap').innerHTML = `
-        <div class="auth-confirm-panel">
-          <div class="confirm-icon">✉️</div>
-          <div class="confirm-title">CHECK YOUR EMAIL</div>
-          <div class="confirm-msg">Click the confirmation link to activate your account.</div>
-          <button class="btn btn-outline w-full" onclick="closeModal('auth-modal')">GOT IT</button>
-        </div>
-      `;
+      const registerFormWrap = document.getElementById('register-form-wrap');
+      if (registerFormWrap) {
+        registerFormWrap.innerHTML = `
+          <div class="auth-confirm-panel">
+            <div class="confirm-icon">✉️</div>
+            <div class="confirm-title">CHECK YOUR EMAIL</div>
+            <div class="confirm-msg">Click the confirmation link to activate your account.</div>
+            <button class="btn btn-outline w-full" onclick="closeModal('auth-modal')">GOT IT</button>
+          </div>
+        `;
+      }
     }
   } catch (err) {
     if (errEl) {
@@ -983,7 +1058,7 @@ async function submitListing(e) {
   }
 }
 
-// ==================== PROFILE MODULE ====================
+// ==================== PROFILE MODULE (FIXED) ====================
 async function loadProfile() {
   if (!State.user) {
     openAuthModal();
@@ -1044,22 +1119,11 @@ async function loadProfile() {
   const profileTabs = document.querySelector('.profile-tabs');
   if (profileTabs) profileTabs.style.display = isOwnProfile ? 'flex' : 'none';
   
+  // Load listings data
   await loadProfileListings(profileIdToLoad, isOwnProfile);
   
-  // Reset tab visibility based on isOwnProfile
+  // Set up settings form values
   if (isOwnProfile) {
-    const myListingsDiv = document.getElementById('ptab-my-listings');
-    const soldDiv = document.getElementById('ptab-sold');
-    const settingsDiv = document.getElementById('ptab-settings');
-    if (myListingsDiv) myListingsDiv.style.display = 'block';
-    if (soldDiv) soldDiv.style.display = 'none';
-    if (settingsDiv) settingsDiv.style.display = 'none';
-    
-    const profileTabsBtns = document.querySelectorAll('.profile-tab');
-    profileTabsBtns.forEach(t => t.classList.remove('active'));
-    const firstTab = document.querySelector('.profile-tab[data-ptab="my-listings"]');
-    if (firstTab) firstTab.classList.add('active');
-    
     const sUsername = document.getElementById('s-username');
     const sBio = document.getElementById('s-bio');
     const sLocation = document.getElementById('s-location');
@@ -1069,6 +1133,37 @@ async function loadProfile() {
     if (sBio) sBio.value = profile?.bio || '';
     if (sLocation) sLocation.value = profile?.location || '';
     if (sPhone) sPhone.value = profile?.phone || '';
+  }
+  
+  // Ensure the correct tab is visible
+  const activeTab = document.querySelector('.profile-tab.active');
+  if (activeTab) {
+    const tabName = activeTab.dataset.ptab;
+    showProfileTab(tabName);
+  } else {
+    showProfileTab('my-listings');
+  }
+}
+
+function showProfileTab(tabName) {
+  const myListingsDiv = document.getElementById('ptab-my-listings');
+  const soldDiv = document.getElementById('ptab-sold');
+  const settingsDiv = document.getElementById('ptab-settings');
+  
+  // Hide all first
+  if (myListingsDiv) myListingsDiv.classList.add('hidden');
+  if (soldDiv) soldDiv.classList.add('hidden');
+  if (settingsDiv) settingsDiv.classList.add('hidden');
+  
+  // Show selected
+  if (tabName === 'my-listings' && myListingsDiv) {
+    myListingsDiv.classList.remove('hidden');
+  } else if (tabName === 'sold' && soldDiv) {
+    soldDiv.classList.remove('hidden');
+    // Refresh sold items when tab is shown
+    if (State.user) loadProfileListings(State.user.id, true);
+  } else if (tabName === 'settings' && settingsDiv) {
+    settingsDiv.classList.remove('hidden');
   }
 }
 
@@ -1101,7 +1196,7 @@ async function loadProfileListings(profileId, isOwnProfile) {
   const grid = document.getElementById('profile-listings-grid');
   if (grid) {
     if (active.length === 0) {
-      grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">NO ACTIVE LISTINGS</div></div>`;
+      grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">NO ACTIVE LISTINGS</div>${isOwnProfile ? '<div class="empty-sub">Click + CREATE to list your first item</div>' : ''}</div>`;
     } else {
       grid.innerHTML = '';
       active.forEach(l => grid.appendChild(createListingCard(l, isOwnProfile)));
@@ -1109,12 +1204,16 @@ async function loadProfileListings(profileId, isOwnProfile) {
   }
   
   const soldGrid = document.getElementById('profile-sold-grid');
-  if (isOwnProfile && soldGrid) {
+  if (soldGrid) {
     if (sold.length === 0) {
-      soldGrid.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">NO SOLD ITEMS YET</div></div>`;
+      soldGrid.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">NO SOLD ITEMS YET</div><div class="empty-sub">Items you sell will appear here</div></div>`;
     } else {
       soldGrid.innerHTML = '';
-      sold.forEach(l => soldGrid.appendChild(createListingCard(l, false)));
+      sold.forEach(l => {
+        const card = createListingCard(l, false);
+        card.classList.add('sold-listing-card');
+        soldGrid.appendChild(card);
+      });
     }
   }
 }
@@ -1191,25 +1290,7 @@ function switchProfileTab(btn) {
   const tabName = btn.dataset.ptab;
   document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
-  
-  const myListingsDiv = document.getElementById('ptab-my-listings');
-  const soldDiv = document.getElementById('ptab-sold');
-  const settingsDiv = document.getElementById('ptab-settings');
-  
-  if (tabName === 'my-listings') {
-    if (myListingsDiv) myListingsDiv.classList.remove('hidden');
-    if (soldDiv) soldDiv.classList.add('hidden');
-    if (settingsDiv) settingsDiv.classList.add('hidden');
-  } else if (tabName === 'sold') {
-    if (myListingsDiv) myListingsDiv.classList.add('hidden');
-    if (soldDiv) soldDiv.classList.remove('hidden');
-    if (settingsDiv) settingsDiv.classList.add('hidden');
-    if (State.user) loadProfileListings(State.user.id, true);
-  } else if (tabName === 'settings') {
-    if (myListingsDiv) myListingsDiv.classList.add('hidden');
-    if (soldDiv) soldDiv.classList.add('hidden');
-    if (settingsDiv) settingsDiv.classList.remove('hidden');
-  }
+  showProfileTab(tabName);
 }
 
 function openEditProfile() {
@@ -1252,7 +1333,14 @@ async function confirmMarkSold() {
     if (idx !== -1) State.listings.splice(idx, 1);
     applyFilters();
     
-    if (State.currentPage === 'profile') loadProfileListings(State.user.id, true);
+    if (State.currentPage === 'profile') {
+      await loadProfileListings(State.user.id, true);
+      // Refresh the sold tab if it's active
+      const activeTab = document.querySelector('.profile-tab.active');
+      if (activeTab && activeTab.dataset.ptab === 'sold') {
+        // Already showing sold tab
+      }
+    }
     if (State.currentPage === 'detail') navigate('profile');
   } catch (err) {
     console.error('Error marking as sold:', err);
@@ -1299,14 +1387,45 @@ function renderDetail(listing) {
   const isOwner = State.user && State.user.id === listing.seller_id;
   const isWished = State.wishlistIds.has(listing.id);
   
-  // Format payment methods for detail view
+  // Create image carousel for detail view
+  let imagesHtml = '';
+  if (listing.images && listing.images.length > 0) {
+    if (listing.images.length === 1) {
+      imagesHtml = `<img src="${escHtml(listing.images[0])}" alt="${escHtml(listing.name)}" style="width:100%;border-radius:var(--radius-lg);" />`;
+    } else {
+      const detailCarouselId = `detail-carousel-${listing.id}`;
+      imagesHtml = `
+        <div class="image-carousel" id="${detailCarouselId}">
+          <div class="carousel-container">
+            <div class="carousel-slides" id="${detailCarouselId}-slides" style="display:flex;transition:transform 0.3s ease;">
+              ${listing.images.map((img, idx) => `
+                <div class="carousel-slide" style="min-width:100%;">
+                  <img src="${escHtml(img)}" alt="Image ${idx + 1}" style="width:100%;border-radius:var(--radius-lg);" />
+                </div>
+              `).join('')}
+            </div>
+            <button class="carousel-btn prev" onclick="changeSlide('${detailCarouselId}', -1)">‹</button>
+            <button class="carousel-btn next" onclick="changeSlide('${detailCarouselId}', 1)">›</button>
+            <div class="carousel-dots" id="${detailCarouselId}-dots">
+              ${listing.images.map((_, idx) => `<span class="carousel-dot ${idx === 0 ? 'active' : ''}" onclick="goToSlide('${detailCarouselId}', ${idx})"></span>`).join('')}
+            </div>
+            <div class="image-count-badge">${listing.images.length} images</div>
+          </div>
+        </div>
+      `;
+      // Initialize carousel after a short delay
+      setTimeout(() => {
+        const slides = document.getElementById(`${detailCarouselId}-slides`);
+        if (slides) slides.dataset.currentIndex = '0';
+      }, 100);
+    }
+  } else {
+    imagesHtml = `<div class="card-no-image">📦</div>`;
+  }
+  
   const paymentMethodsList = listing.payment_methods && listing.payment_methods.length > 0
     ? listing.payment_methods.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' · ')
     : 'Cash';
-  
-  const imagesHtml = listing.images && listing.images.length > 0
-    ? `<img src="${escHtml(listing.images[0])}" alt="${escHtml(listing.name)}" id="main-detail-img" style="max-width:100%;border-radius:var(--radius-lg);" />`
-    : `<div class="card-no-image">📦</div>`;
   
   let actionsHtml;
   if (isOwner) {
@@ -1425,7 +1544,7 @@ function createListingCard(listing, showOwnerActions = false) {
   const card = document.createElement('div');
   card.className = 'listing-card animate-fade';
   card.onclick = (e) => {
-    if (e.target.closest('.wishlist-btn, .owner-btn')) return;
+    if (e.target.closest('.wishlist-btn, .owner-btn, .carousel-btn, .carousel-dot')) return;
     openListing(listing.id);
   };
   
@@ -1433,9 +1552,15 @@ function createListingCard(listing, showOwnerActions = false) {
   const isOwner = State.user && State.user.id === listing.seller_id;
   const showActions = showOwnerActions !== undefined ? showOwnerActions : isOwner;
   
-  const img = listing.images && listing.images.length > 0
-    ? `<img src="${escHtml(listing.images[0])}" alt="${escHtml(listing.name)}" loading="lazy" style="width:100%;height:100%;object-fit:cover;" />`
-    : `<div class="card-no-image">📦</div>`;
+  // Use carousel for multiple images
+  let imageHtml;
+  if (listing.images && listing.images.length > 1) {
+    imageHtml = createImageCarousel(listing.images, listing.id);
+  } else if (listing.images && listing.images.length === 1) {
+    imageHtml = `<img src="${escHtml(listing.images[0])}" alt="${escHtml(listing.name)}" style="width:100%;height:100%;object-fit:cover;" />`;
+  } else {
+    imageHtml = `<div class="card-no-image">📦</div>`;
+  }
   
   // Payment method icons
   const paymentIcons = {
@@ -1450,7 +1575,7 @@ function createListingCard(listing, showOwnerActions = false) {
     wishlistBtn = `
       <button class="wishlist-btn ${isWished ? 'active' : ''}"
         onclick="toggleWishlist(event, '${listing.id}')"
-        style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;z-index:10;transition:all 0.2s;"
+        style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;z-index:20;transition:all 0.2s;"
       >${isWished ? '❤️' : '🤍'}</button>
     `;
   }
@@ -1465,13 +1590,13 @@ function createListingCard(listing, showOwnerActions = false) {
     `;
   }
   
-  const soldOverlay = listing.is_sold ? '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);padding:8px 16px;border-radius:8px;font-weight:bold;color:var(--danger);z-index:5;">SOLD</div>' : '';
+  const soldOverlay = listing.is_sold ? '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);padding:8px 16px;border-radius:8px;font-weight:bold;color:var(--danger);z-index:15;">SOLD</div>' : '';
   const locationDisplay = listing.location ? `📍 ${listing.location.substring(0, 25)}` : '';
   
   card.innerHTML = `
     <div class="card-image-wrap" style="position:relative;aspect-ratio:1;background:var(--bg-3);overflow:hidden;">
-      ${img}
-      ${listing.is_fair ? '<span style="position:absolute;top:8px;left:8px;background:var(--neon);color:#001a07;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:bold;z-index:5;">AI FAIR</span>' : ''}
+      ${imageHtml}
+      ${listing.is_fair ? '<span style="position:absolute;top:8px;left:8px;background:var(--neon);color:#001a07;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:bold;z-index:20;">AI FAIR</span>' : ''}
       ${soldOverlay}
       ${wishlistBtn}
     </div>
@@ -1772,7 +1897,6 @@ function askAssistant() {
   
   if (input) input.value = '';
   
-  // Simulated AI response (replace with actual API call)
   setTimeout(() => {
     const botMsgDiv = document.createElement('div');
     botMsgDiv.className = 'assistant-message bot';
@@ -1973,5 +2097,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   if (!navigator.onLine) showErrorBanner();
   
-  console.log('%c OBTAINUM INITIALIZED - All Features Working', 'background:#00ff41;color:#001a07;font-family:monospace;padding:4px 8px;');
+  console.log('%c OBTAINUM INITIALIZED - Image Carousel & Profile Tabs Fixed', 'background:#00ff41;color:#001a07;font-family:monospace;padding:4px 8px;');
 });
