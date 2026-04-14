@@ -99,6 +99,11 @@ body {
   to { opacity: 0; transform: translateX(100%); }
 }
 
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.2); }
+}
+
 /* Utility animation classes */
 .animate-fade { animation: fadeIn 0.4s ease both; }
 .animate-slide { animation: slideIn 0.3s ease both; }
@@ -324,7 +329,6 @@ body.light-mode .chip.active { background: rgba(0, 138, 42, 0.12); }
 /* Empty State */
 .empty-state { grid-column: 1 / -1; text-align: center; padding: 80px 20px; }
 .empty-icon { font-size: 4rem; margin-bottom: 16px; opacity: 0.4; animation: pulse 2s ease-in-out infinite; }
-@keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.7; } }
 .empty-title { font-family: 'Orbitron', sans-serif; font-size: 1.1rem; color: var(--text-muted); letter-spacing: 0.08em; }
 .empty-sub { font-size: 0.88rem; color: var(--text-muted); margin-top: 8px; }
 
@@ -464,30 +468,7 @@ body::after {
 }
 body.light-mode::after { opacity: 0; }
 
-/* Responsive */
-@media (max-width: 900px) {
-  .shop-layout { grid-template-columns: 1fr; }
-  .sidebar { position: relative; top: 0; height: auto; display: none; }
-  .sidebar.mobile-open { display: block; }
-  .detail-grid { grid-template-columns: 1fr; }
-  .form-row { grid-template-columns: 1fr; }
-  .nav-menu { display: none; }
-  .hamburger { display: flex; }
-  .chat-container { grid-template-columns: 1fr; }
-  .chat-sidebar { display: none; }
-}
-@media (max-width: 600px) {
-  :root { --header-h: 70px; }
-  .logo { font-size: 1.2rem; }
-  .profile-banner { flex-direction: column; text-align: center; }
-  .listings-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
-}
-
-
-
-/* Add these to your existing style.css */
-
-/* Image Carousel for Listings */
+/* ========== IMAGE CAROUSEL ========== */
 .image-carousel {
   position: relative;
   width: 100%;
@@ -594,7 +575,30 @@ body.light-mode::after { opacity: 0; }
   font-family: monospace;
 }
 
-/* Profile tabs content fix */
+/* ========== AI SUGGESTIONS PANEL ========== */
+.ai-suggestion-card {
+  animation: fadeIn 0.4s ease;
+  margin-top: 20px;
+}
+
+.ai-suggestion-card > div {
+  transition: all 0.2s ease;
+}
+
+.ai-suggestion-card > div:hover {
+  transform: translateX(4px);
+}
+
+.ai-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--neon);
+  border-radius: 50%;
+  display: inline-block;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* ========== PROFILE TABS CONTENT FIX ========== */
 #ptab-my-listings, #ptab-sold, #ptab-settings {
   transition: all 0.3s ease;
 }
@@ -646,74 +650,21 @@ body.light-mode::after { opacity: 0; }
   z-index: 5;
 }
 
-/* Ensure hidden class works properly */
-.hidden {
-  display: none !important;
+/* Responsive */
+@media (max-width: 900px) {
+  .shop-layout { grid-template-columns: 1fr; }
+  .sidebar { position: relative; top: 0; height: auto; display: none; }
+  .sidebar.mobile-open { display: block; }
+  .detail-grid { grid-template-columns: 1fr; }
+  .form-row { grid-template-columns: 1fr; }
+  .nav-menu { display: none; }
+  .hamburger { display: flex; }
+  .chat-container { grid-template-columns: 1fr; }
+  .chat-sidebar { display: none; }
 }
-
-/* Make sure nav buttons transition smoothly */
-.nav-btn {
-  transition: opacity 0.2s ease, display 0.2s ease;
+@media (max-width: 600px) {
+  :root { --header-h: 70px; }
+  .logo { font-size: 1.2rem; }
+  .profile-banner { flex-direction: column; text-align: center; }
+  .listings-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
 }
-
-
-
-/* Make login button bigger and fixed width */
-#auth-btn-wrap .btn {
-  min-width: 100px;
-  padding: 10px 24px;
-  font-size: 0.95rem;
-  font-weight: 700;
-}
-
-/* Ensure header actions have consistent width */
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 160px;
-  justify-content: flex-end;
-}
-
-/* Avatar same size as login button for consistency */
-.header-avatar {
-  width: 42px;
-  height: 42px;
-  min-width: 42px;
-}
-
-/* Theme toggle wrapper - fixed width */
-.header-actions > div:last-child {
-  min-width: 60px;
-  text-align: center;
-}
-
-/* AI Suggestions Panel */
-.ai-suggestion-card {
-  animation: fadeIn 0.4s ease;
-  margin-top: 20px;
-}
-
-.ai-suggestion-card > div {
-  transition: all 0.2s ease;
-}
-
-.ai-suggestion-card > div:hover {
-  transform: translateX(4px);
-}
-
-.ai-dot {
-  width: 8px;
-  height: 8px;
-  background: var(--neon);
-  border-radius: 50%;
-  display: inline-block;
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(1.2); }
-}
-
-
