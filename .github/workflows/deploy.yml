@@ -24,18 +24,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       
-      - name: Create config file with API keys from Secrets
+      - name: Create config file from Secrets
         run: |
-          echo "// This file is auto-generated during deployment" > config.js
-          echo "// DO NOT EDIT MANUALLY" >> config.js
-          echo "" >> config.js
+          echo "// Auto-generated during deployment" > config.js
           echo "window.ENV = {" >> config.js
           echo "  GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'," >> config.js
           echo "  SUPABASE_URL: '${{ secrets.SUPABASE_URL }}'," >> config.js
           echo "  SUPABASE_ANON_KEY: '${{ secrets.SUPABASE_ANON_KEY }}'" >> config.js
           echo "};" >> config.js
-          
-          echo "✅ Config file created with secrets (keys hidden in logs)"
+          echo "✅ Created config.js"
       
       - name: Setup Pages
         uses: actions/configure-pages@v4
