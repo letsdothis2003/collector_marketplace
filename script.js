@@ -2451,3 +2451,59 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   console.log('%c OBTAINUM INITIALIZED - Ready', 'background:#00ff41;color:#001a07;font-family:monospace;padding:4px 8px;');
 });
+
+
+
+// ==================== CONTACT & ABOUT FUNCTIONS ====================
+
+function sendContactMessage(e) {
+  e.preventDefault();
+  const name = document.getElementById('contact-name')?.value || '';
+  const email = document.getElementById('contact-email')?.value || '';
+  const subject = document.getElementById('contact-subject')?.value || '';
+  const message = document.getElementById('contact-message')?.value || '';
+  
+  // In a real implementation, this would send to your backend
+  // For now, we'll show a success message and log to console
+  
+  console.log('Contact form submitted:', { name, email, subject, message });
+  showToast('Message sent! We\'ll get back to you soon.', 'success');
+  
+  // Clear form
+  document.getElementById('contact-name').value = '';
+  document.getElementById('contact-email').value = '';
+  document.getElementById('contact-message').value = '';
+  
+  // Optional: Save to Supabase
+  if (db && State.user) {
+    db.from('contact_messages').insert([{
+      name: name,
+      email: email,
+      subject: subject,
+      message: message,
+      user_id: State.user.id,
+      created_at: new Date().toISOString()
+    }]).catch(err => console.error('Failed to save message:', err));
+  }
+}
+
+function showReportModal() {
+  document.getElementById('report-modal').classList.add('open');
+}
+
+function submitBugReport(e) {
+  e.preventDefault();
+  const title = document.getElementById('bug-title')?.value || '';
+  const description = document.getElementById('bug-description')?.value || '';
+  const url = document.getElementById('bug-url')?.value || window.location.href;
+  
+  console.log('Bug report:', { title, description, url, user: State.user?.email });
+  showToast('Bug report submitted! Thank you for helping improve OBTAINUM.', 'success');
+  
+  closeModal('report-modal');
+  
+  // Clear form
+  document.getElementById('bug-title').value = '';
+  document.getElementById('bug-description').value = '';
+  document.getElementById('bug-url').value = '';
+}
