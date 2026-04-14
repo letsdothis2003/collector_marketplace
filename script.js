@@ -1122,23 +1122,32 @@ async function submitListing(e) {
     const subcategory = subcategoryEl && subcategoryEl.value ? subcategoryEl.value : null;
     const isFair = msrp ? price <= msrp * 1.2 : true;
     
-    const listingData = {
-      seller_id: State.user.id,
-      name: document.getElementById('c-name')?.value.trim() || '',
-      category: document.getElementById('c-category')?.value || '',
-      subcategory: subcategory,
-      description: document.getElementById('c-desc')?.value.trim() || '',
-      price: price,
-      msrp: msrp,
-      condition: document.getElementById('c-condition')?.value || '',
-      type: document.getElementById('c-type')?.value || 'buy-now',
-      shipping: document.getElementById('c-shipping')?.value || 'paid',
-      location: document.getElementById('c-location')?.value.trim() || null,
-      tags: tags,
-      payment_methods: paymentMethods,
-      is_fair: isFair,
-      images: allImages
-    };
+// Inside submitListing, replace the validation section with:
+
+const location = document.getElementById('c-location')?.value.trim();
+if (!location) {
+  throw new Error('Location is required. Please enter your city and state.');
+}
+
+const shipping = document.getElementById('c-shipping')?.value;
+
+const listingData = {
+  seller_id: State.user.id,
+  name: document.getElementById('c-name')?.value.trim() || '',
+  category: document.getElementById('c-category')?.value || '',
+  subcategory: subcategory,
+  description: document.getElementById('c-desc')?.value.trim() || '',
+  price: price,
+  msrp: msrp,
+  condition: document.getElementById('c-condition')?.value || '',
+  type: document.getElementById('c-type')?.value || 'buy-now',
+  shipping: shipping,  // Now can be 'shipping', 'pickup', or 'both'
+  location: location,   // Now required
+  tags: tags,
+  payment_methods: paymentMethods,
+  is_fair: isFair,
+  images: allImages
+};
     
     if (!listingData.name || !listingData.category || !listingData.description || isNaN(price)) {
       throw new Error('Please fill out all required fields.');
@@ -1456,6 +1465,23 @@ function createListingCard(listing, showOwnerActions = false) {
   const paymentIcons = { cash: '💵', card: '💳', paypal: '🅿️', venmo: 'V', crypto: '₿', trade: '🔄' };
   const paymentDisplay = listing.payment_methods?.length ? listing.payment_methods.slice(0,3).map(p => paymentIcons[p] || p).join(' ') : '💵';
   
+  // Get shipping display text and icon
+  let shippingDisplay = '';
+  let shippingIcon = '';
+  if (listing.shipping === 'shipping') {
+    shippingDisplay = 'Shipping Only';
+    shippingIcon = '📦';
+  } else if (listing.shipping === 'pickup') {
+    shippingDisplay = 'Pickup Only';
+    shippingIcon = '📍';
+  } else if (listing.shipping === 'both') {
+    shippingDisplay = 'Shipping & Pickup';
+    shippingIcon = '🚚';
+  } else {
+    shippingDisplay = listing.shipping || 'Shipping';
+    shippingIcon = '📦';
+  }
+  
   let wishlistBtn = '';
   if (State.user && !isOwner) {
     wishlistBtn = `<button class="wishlist-btn ${isWished ? 'active' : ''}" onclick="toggleWishlist(event, '${listing.id}')" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;z-index:20;">${isWished ? '❤️' : '🤍'}</button>`;
@@ -1467,11 +1493,32 @@ function createListingCard(listing, showOwnerActions = false) {
   }
   
   const soldOverlay = listing.is_sold ? '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);padding:8px 16px;border-radius:8px;font-weight:bold;color:var(--danger);z-index:15;">SOLD</div>' : '';
-  const locationDisplay = listing.location ? `📍 ${listing.location.substring(0,25)}` : '';
+  const locationDisplay = listing.location ? `📍 ${listing.location.substring(0,25)}` : '📍 Location not specified';
   
-  card.innerHTML = `<div class="card-image-wrap" style="position:relative;aspect-ratio:1;overflow:hidden;">${imageHtml}${listing.is_fair ? '<span style="position:absolute;top:8px;left:8px;background:var(--neon);color:#001a07;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:bold;z-index:20;">AI FAIR</span>' : ''}${soldOverlay}${wishlistBtn}</div><div class="card-body" style="padding:12px;"><div class="card-title" style="font-weight:700;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;">${escHtml(listing.name)}</div><div class="card-price" style="color:var(--neon);font-weight:bold;font-size:1.1rem;">$${listing.price.toFixed(2)}</div><div class="card-meta" style="font-size:0.7rem;color:var(--text-muted);display:flex;gap:8px;margin:4px 0;"><span>🏷️ ${listing.condition || 'N/A'}</span><span>📦 ${listing.type || 'buy-now'}</span></div>${locationDisplay ? `<div class="card-location" style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;">${locationDisplay}</div>` : ''}<div class="card-payment" style="font-size:0.7rem;display:flex;align-items:center;gap:6px;background:rgba(0,255,65,0.08);padding:4px 8px;border-radius:6px;margin-top:4px;"><span>💳 Accepts:</span><span>${paymentDisplay}</span></div>${ownerActions}</div>`;
+  card.innerHTML = `<div class="card-image-wrap" style="position:relative;aspect-ratio:1;overflow:hidden;">${imageHtml}${listing.is_fair ? '<span style="position:absolute;top:8px;left:8px;background:var(--neon);color:#001a07;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:bold;z-index:20;">AI FAIR</span>' : ''}${soldOverlay}${wishlistBtn}</div>
+<div class="card-body" style="padding:12px;">
+  <div class="card-title" style="font-weight:700;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;">${escHtml(listing.name)}</div>
+  <div class="card-price" style="color:var(--neon);font-weight:bold;font-size:1.1rem;">$${listing.price.toFixed(2)}</div>
+  <div class="card-meta" style="font-size:0.7rem;color:var(--text-muted);display:flex;flex-wrap:wrap;gap:8px;margin:4px 0;">
+    <span>🏷️ ${listing.condition || 'N/A'}</span>
+    <span>📦 ${listing.type || 'buy-now'}</span>
+  </div>
+  <div class="card-location" style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;display:flex;align-items:center;gap:4px;">
+    <span>${locationDisplay}</span>
+  </div>
+  <div class="card-shipping" style="font-size:0.7rem;margin-bottom:4px;display:flex;align-items:center;gap:6px;background:rgba(0,255,65,0.1);padding:4px 8px;border-radius:4px;">
+    <span>${shippingIcon}</span>
+    <span style="font-weight:500;">${shippingDisplay}</span>
+  </div>
+  <div class="card-payment" style="font-size:0.7rem;display:flex;align-items:center;gap:6px;background:rgba(0,255,65,0.05);padding:4px 8px;border-radius:6px;margin-top:4px;">
+    <span>💳 Accepts:</span>
+    <span>${paymentDisplay}</span>
+  </div>
+  ${ownerActions}
+</div>`;
   return card;
 }
+
 
 function renderListings(listings) {
   const grid = document.getElementById('listings-grid');
