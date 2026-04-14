@@ -459,6 +459,49 @@
 
   </main>
 
+
+<!-- ====== AI ASSISTANT PAGE ====== -->
+<section class="page" id="page-assistant">
+  <div class="assistant-container">
+    <div class="assistant-header">
+      <span class="assistant-icon">🤖</span>
+      <h2>OBTAINUM AI ASSISTANT</h2>
+      <p>Ask about any product · Price checks · Safety tips · Alternatives</p>
+    </div>
+    <div class="assistant-chat-panel">
+      <div class="assistant-messages" id="assistantMessages">
+        <div class="assistant-message bot">✨ Hey there! I'm your shopping assistant. Ask me about ANY product - electronics, collectibles, clothing, you name it. Want to know if something's a good deal? Need safety tips for a pickup? Just ask!</div>
+      </div>
+      <div class="assistant-input-area">
+        <input type="text" id="assistantInput" placeholder="e.g., 'Is $500 fair for a used PlayStation 5?' or 'Thoughts on vintage Pokemon cards?'" maxlength="500" />
+        <button class="btn btn-primary" id="askAssistantBtn">ASK</button>
+      </div>
+      <div class="assistant-suggestions">
+        <button class="suggestion-chip" onclick="askSuggestion('Is $300 fair for a used Nintendo Switch?')">🎮 Nintendo Switch price check</button>
+        <button class="suggestion-chip" onclick="askSuggestion('What should I look for when buying a used GPU?')">🖥️ Used GPU buying guide</button>
+        <button class="suggestion-chip" onclick="askSuggestion('Safe meetup spots for Craigslist pickups?')">🛡️ Pickup safety tips</button>
+        <button class="suggestion-chip" onclick="askSuggestion('Are vintage Levi\'s jeans worth collecting?')">👖 Vintage clothing value</button>
+      </div>
+      <div id="assistant-login-notice" class="assistant-login-notice hidden" style="text-align:center;padding:16px;background:var(--bg-3);margin-top:12px;border-radius:var(--radius);">
+        <p>🔐 <strong>Login to save chat history</strong> — You can still ask questions as a guest!</p>
+        <button class="btn btn-primary btn-sm" onclick="openAuthModal()">Login / Register</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+
+
+
+
+
+
+
+
+
+
+  
   <!-- ===================== AUTH MODAL ===================== -->
   <div class="modal-overlay" id="auth-modal" onclick="closeOnOverlay(event, 'auth-modal')">
     <div class="modal">
