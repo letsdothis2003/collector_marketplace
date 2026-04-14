@@ -1,8 +1,6 @@
 /* ============================================================
    FILE: script.js
-   OBTAINUM MARKETPLACE — Complete Remake
-   Simplified AI Assistant (works for ANY product)
-   Fixed login button positioning
+   OBTAINUM MARKETPLACE — Complete Working Version
    ============================================================ */
 
 // ==================== DATABASE CONFIG ====================
@@ -243,8 +241,8 @@ function updateAssistantUI() {
   
   if (!State.user) {
     if (assistantLoginNotice) assistantLoginNotice?.classList.remove('hidden');
-    if (assistantInput) assistantInput.disabled = false; // Still allow typing
-    if (assistantBtn) assistantBtn.disabled = false; // Still allow asking
+    if (assistantInput) assistantInput.disabled = false;
+    if (assistantBtn) assistantBtn.disabled = false;
     if (assistantSuggestions) {
       assistantSuggestions.style.opacity = '1';
       assistantSuggestions.style.pointerEvents = 'auto';
@@ -332,7 +330,6 @@ async function onAuthChange(user) {
   State.profile = profile;
   updateAuthUI();
   await loadWishlistIds();
-  await initAISession();
 }
 
 function onSignOut() {
@@ -509,47 +506,7 @@ function switchAuthTab(tab) {
   }
 }
 
-// ==================== SIMPLIFIED AI ASSISTANT (ANY PRODUCT) ====================
-
-async function initAISession() {
-  if (!State.user) return;
-  if (!State.aiSessionId) {
-    State.aiSessionId = crypto.randomUUID();
-  }
-}
-
-async function loadAIChatHistory() {
-  if (!State.user) return;
-  
-  try {
-    const { data, error } = await db
-      .from('ai_chat_messages')
-      .select('*')
-      .eq('user_id', State.user.id)
-      .order('created_at', { ascending: true });
-    
-    if (error) throw error;
-    
-    State.aiMessages = data || [];
-    
-    const messagesDiv = document.getElementById('assistantMessages');
-    if (messagesDiv && State.aiMessages.length > 0) {
-      if (State.aiMessages.length > 1) {
-        messagesDiv.innerHTML = '';
-      }
-      
-      State.aiMessages.forEach(msg => {
-        const msgDiv = document.createElement('div');
-        msgDiv.className = `assistant-message ${msg.sender_type === 'user' ? 'user' : 'bot'}`;
-        msgDiv.innerHTML = msg.content.replace(/\n/g, '<br>');
-        messagesDiv.appendChild(msgDiv);
-      });
-      messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
-  } catch (err) {
-    console.error('Error loading AI chat history:', err);
-  }
-}
+// ==================== AI ASSISTANT ====================
 
 async function saveAIMessage(senderType, content) {
   if (!State.user) return;
@@ -560,93 +517,78 @@ async function saveAIMessage(senderType, content) {
       .insert({
         sender_type: senderType,
         user_id: State.user.id,
-        session_id: State.aiSessionId,
+        session_id: State.aiSessionId || crypto.randomUUID(),
         content: content
       });
     
     if (error) throw error;
-    
-    State.aiMessages.push({
-      sender_type: senderType,
-      content: content,
-      created_at: new Date().toISOString()
-    });
   } catch (err) {
     console.error('Error saving AI message:', err);
   }
 }
 
-// HUMAN-LIKE AI RESPONSE - Works for ANY product
 async function generateHumanLikeResponse(userQuestion) {
-  if (!genAI) {
-    return getFallbackHumanResponse(userQuestion);
+  if (genAI) {
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      
+      const prompt = `You are OBTAINUM, a friendly shopping assistant. Answer the user's question about products, prices, safety, or shopping advice.
+
+User question: "${userQuestion}"
+
+Instructions:
+- Be conversational and helpful
+- Keep responses under 4 sentences
+- If asked about price, give honest opinion on what's fair
+- If asked about safety, give practical tips
+- If asked about alternatives, suggest comparable products
+
+Respond naturally:`;
+
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      return response.text();
+      
+    } catch (err) {
+      console.error('Gemini API error:', err);
+    }
   }
   
-  try {
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-    
-    const prompt = `You are OBTAINUM, a friendly shopping assistant. Talk like a helpful human - be casual and conversational.
-
-USER ASKED: "${userQuestion}"
-
-RULES:
-1. ONLY answer questions about PRODUCTS, SHOPPING, PRICES, SAFETY, or ALTERNATIVES
-2. If asked about unrelated topics, politely say you only help with shopping
-3. Sound like a real person - use phrases like "Honestly...", "Here's the thing...", "Good question!"
-4. Keep responses under 4 sentences
-5. For price checks, give honest opinion on whether it's a good/fair/bad deal
-6. For safety, give practical tips for meetups and transactions
-7. For alternatives, suggest comparable products or brands
-
-Write a friendly, human-sounding response:`;
-
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    return response.text();
-    
-  } catch (err) {
-    console.error('Gemini error:', err);
-    return getFallbackHumanResponse(userQuestion);
-  }
+  return getLocalResponse(userQuestion);
 }
 
-function getFallbackHumanResponse(question) {
+function getLocalResponse(question) {
   const q = question.toLowerCase();
   
-  // Price checks
-  if (q.includes('price') || q.includes('how much') || q.includes('fair') || q.includes('deal') || q.includes('worth')) {
-    if (q.includes('playstation') || q.includes('ps5')) {
-      return "Honestly? Used PS5s are going for $400-450. Under $400 is a solid deal with a controller. Just watch out for the digital-only version unless that's what you want!";
+  if (q.includes('price') || q.includes('how much') || q.includes('cost')) {
+    if (q.includes('ps5') || q.includes('playstation')) {
+      return "Used PS5s are going for $400-450 right now. Anything under $400 with a controller is a solid deal!";
     }
     if (q.includes('switch') || q.includes('nintendo')) {
-      return "Used Nintendo Switches: $200-250 for regular, $250-300 for OLED. Lite versions go for about $150. Make sure to check for Joy-Con drift before buying!";
+      return "Used Nintendo Switches: $200-250 for regular, $250-300 for OLED. Check for Joy-Con drift!";
     }
-    if (q.includes('gpu') || q.includes('graphics') || q.includes('rtx')) {
-      return "GPU prices are finally reasonable! RTX 3060 around $250-300, RTX 4070 about $500-550. Always ask for proof it works and check for mining history.";
+    if (q.includes('gpu') || q.includes('graphics card')) {
+      return "GPU prices are finally reasonable! RTX 3060 around $250-300, RTX 4070 about $500-550.";
     }
-    if (q.includes('pokemon') || q.includes('card')) {
-      return "Pokemon card values vary wildly! Check eBay sold listings for accurate pricing. Condition is EVERYTHING - a single crease can cut value by 50% or more.";
+    if (q.includes('iphone')) {
+      return "iPhone 13: $400-500, iPhone 14: $550-650, iPhone 15: $700-800. Check battery health!";
     }
-    return "For accurate pricing, check eBay sold listings or Facebook Marketplace. Used items in good condition typically go for 30-50% below retail. Want me to help with a specific product?";
+    return "Check eBay sold listings for accurate pricing. Used items typically go for 30-50% below retail.";
   }
   
-  // Safety
-  if (q.includes('safe') || q.includes('meet') || q.includes('pickup') || q.includes('craigslist') || q.includes('marketplace')) {
-    return "Safety first! Meet in a public place like a police station parking lot. Bring a friend, tell someone where you're going, and trust your gut. Cash only, inspect before paying, and never go alone to someone's house.";
+  if (q.includes('safe') || q.includes('meet') || q.includes('pickup')) {
+    return "Safety first! Meet at a police station parking lot, bring a friend, tell someone where you're going, and trust your gut. Cash only, inspect before paying!";
   }
   
-  // Alternatives
-  if (q.includes('alternative') || q.includes('instead') || q.includes('comparable') || q.includes('similar')) {
-    return "When looking for alternatives, consider refurbished units from reputable sellers or last year's model - often 90% of features for 60% of the price. What specific product are you comparing?";
-  }
-  
-  // Condition
   if (q.includes('condition') || q.includes('look for') || q.includes('check')) {
-    return "When buying used, always ask for photos of any damage, test electronics before paying, check for authentic serial numbers, and don't be afraid to walk away if something feels off.";
+    return "Ask for photos of damage, test electronics before paying, check serial numbers, and don't be afraid to walk away if something feels off.";
   }
   
-  // General
-  return "Hey! I'm here to help with product questions, price checks, and shopping advice. Ask me things like 'Is this a good deal?' or 'What should I look for when buying X?' or 'Safe ways to meet up?' What are you curious about?";
+  if (q.includes('hi') || q.includes('hello') || q.includes('hey')) {
+    return "Hey there! 👋 I'm your shopping assistant. Ask me things like 'Is $400 fair for a used PS5?' or 'Safe places to meet for pickup?' What are you shopping for?";
+  }
+  
+  return "I'm here to help with shopping questions! Ask me about price checks, safety tips for meetups, or what to look for when buying used items.";
 }
 
 async function askAssistant() {
@@ -657,20 +599,17 @@ async function askAssistant() {
   const messagesDiv = document.getElementById('assistantMessages');
   if (!messagesDiv) return;
   
-  // Add user message
   const userMsgDiv = document.createElement('div');
   userMsgDiv.className = 'assistant-message user';
   userMsgDiv.textContent = question;
   messagesDiv.appendChild(userMsgDiv);
   
-  // Save if logged in
   if (State.user) {
     await saveAIMessage('user', question);
   }
   
   if (input) input.value = '';
   
-  // Typing indicator
   const typingDiv = document.createElement('div');
   typingDiv.className = 'assistant-message bot';
   typingDiv.innerHTML = '<span class="spinner" style="width:16px;height:16px;"></span> Thinking...';
@@ -678,13 +617,7 @@ async function askAssistant() {
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
   
   try {
-    let aiResponse;
-    if (genAI) {
-      aiResponse = await generateHumanLikeResponse(question);
-    } else {
-      aiResponse = getFallbackHumanResponse(question);
-    }
-    
+    const aiResponse = await generateHumanLikeResponse(question);
     typingDiv.remove();
     
     const botMsgDiv = document.createElement('div');
@@ -695,14 +628,11 @@ async function askAssistant() {
     if (State.user) {
       await saveAIMessage('ai', aiResponse);
     }
-    
   } catch (err) {
-    console.error('AI error:', err);
     typingDiv.remove();
-    
     const errorMsg = document.createElement('div');
     errorMsg.className = 'assistant-message bot';
-    errorMsg.textContent = 'Hmm, something went wrong. Mind trying that again?';
+    errorMsg.textContent = getLocalResponse(question);
     messagesDiv.appendChild(errorMsg);
   }
   
