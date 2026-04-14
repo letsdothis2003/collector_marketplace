@@ -4,13 +4,11 @@
    ============================================================ */
 
 // ==================== DATABASE CONFIG ====================
-// Supabase keys (hardcoded - your site will work)
 const SUPABASE_URL = "https://gotzmuobwuubsugnowxq.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
 
-// Gemini API Key - ADD YOUR KEY HERE WHEN READY
-// Get it from: https://aistudio.google.com/
-const GEMINI_API_KEY = null;  // ← REPLACE null WITH YOUR ACTUAL KEY
+
+const GEMINI_API_KEY = null;  
 
 let db;
 let genAI;
