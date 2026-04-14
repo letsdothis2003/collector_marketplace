@@ -1,12 +1,13 @@
 /* ============================================================
    FILE: script.js
    OBTAINUM MARKETPLACE — Complete Working Version
+   Location & Shipping Method Displayed on Every Listing
    ============================================================ */
 
 // ==================== DATABASE CONFIG ====================
 const SUPABASE_URL = "https://gotzmuobwuubsugnowxq.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
-const GEMINI_API_KEY = " ";
+const GEMINI_API_KEY = "AIzaSyDDfZIMVZxkkJlv-WwfX06YPvlhRl9KOZI";
 
 let db;
 let genAI;
@@ -1122,32 +1123,34 @@ async function submitListing(e) {
     const subcategory = subcategoryEl && subcategoryEl.value ? subcategoryEl.value : null;
     const isFair = msrp ? price <= msrp * 1.2 : true;
     
-// Inside submitListing, replace the validation section with:
-
-const location = document.getElementById('c-location')?.value.trim();
-if (!location) {
-  throw new Error('Location is required. Please enter your city and state.');
-}
-
-const shipping = document.getElementById('c-shipping')?.value;
-
-const listingData = {
-  seller_id: State.user.id,
-  name: document.getElementById('c-name')?.value.trim() || '',
-  category: document.getElementById('c-category')?.value || '',
-  subcategory: subcategory,
-  description: document.getElementById('c-desc')?.value.trim() || '',
-  price: price,
-  msrp: msrp,
-  condition: document.getElementById('c-condition')?.value || '',
-  type: document.getElementById('c-type')?.value || 'buy-now',
-  shipping: shipping,  // Now can be 'shipping', 'pickup', or 'both'
-  location: location,   // Now required
-  tags: tags,
-  payment_methods: paymentMethods,
-  is_fair: isFair,
-  images: allImages
-};
+    // Get location and shipping - both required
+    const location = document.getElementById('c-location')?.value.trim();
+    if (!location) {
+      throw new Error('Location is required. Please enter your city and state.');
+    }
+    
+    const shipping = document.getElementById('c-shipping')?.value;
+    if (!shipping) {
+      throw new Error('Shipping method is required.');
+    }
+    
+    const listingData = {
+      seller_id: State.user.id,
+      name: document.getElementById('c-name')?.value.trim() || '',
+      category: document.getElementById('c-category')?.value || '',
+      subcategory: subcategory,
+      description: document.getElementById('c-desc')?.value.trim() || '',
+      price: price,
+      msrp: msrp,
+      condition: document.getElementById('c-condition')?.value || '',
+      type: document.getElementById('c-type')?.value || 'buy-now',
+      shipping: shipping,
+      location: location,
+      tags: tags,
+      payment_methods: paymentMethods,
+      is_fair: isFair,
+      images: allImages
+    };
     
     if (!listingData.name || !listingData.category || !listingData.description || isNaN(price)) {
       throw new Error('Please fill out all required fields.');
@@ -1415,6 +1418,23 @@ function renderDetail(listing) {
   const isOwner = State.user && State.user.id === listing.seller_id;
   const isWished = State.wishlistIds.has(listing.id);
   
+  // Get shipping display
+  let shippingDisplay = '';
+  let shippingIcon = '';
+  if (listing.shipping === 'shipping') {
+    shippingDisplay = 'Shipping Only';
+    shippingIcon = '📦';
+  } else if (listing.shipping === 'pickup') {
+    shippingDisplay = 'Pickup Only';
+    shippingIcon = '📍';
+  } else if (listing.shipping === 'both') {
+    shippingDisplay = 'Shipping & Pickup Available';
+    shippingIcon = '🚚';
+  } else {
+    shippingDisplay = listing.shipping || 'Shipping';
+    shippingIcon = '📦';
+  }
+  
   let imagesHtml = '';
   if (listing.images && listing.images.length > 0) {
     if (listing.images.length === 1) {
@@ -1439,7 +1459,51 @@ function renderDetail(listing) {
     actionsHtml = `${contactBtn}${wishlistBtn}`;
   }
   
-  content.innerHTML = `<div class="detail-grid"><div class="detail-images">${imagesHtml}</div><div class="detail-info">${listing.is_sold ? '<div class="sold-banner" style="background:var(--danger);padding:8px;text-align:center;border-radius:8px;margin-bottom:16px;">SOLD</div>' : ''}<h1 class="detail-title">${escHtml(listing.name)}</h1><div class="detail-price-row"><span class="detail-price">$${parseFloat(listing.price).toFixed(2)}</span>${listing.msrp ? `<span class="detail-msrp" style="text-decoration:line-through;margin-left:12px;">$${parseFloat(listing.msrp).toFixed(2)} MSRP</span>` : ''}</div><div class="detail-meta-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0;">${listing.location ? `<div><strong>📍 Location</strong><br>${escHtml(listing.location)}</div>` : ''}<div><strong>💳 Payment</strong><br>${paymentMethodsList}</div><div><strong>📦 Condition</strong><br>${listing.condition || 'N/A'}</div><div><strong>🚚 Shipping</strong><br>${listing.shipping || 'paid'}</div></div><div class="detail-description">${escHtml(listing.description)}</div><div class="seller-card"><div class="seller-avatar">${seller.username?.charAt(0) || '?'}</div><div><div class="seller-name">${escHtml(seller.username || 'Anonymous')}</div>${seller.rating > 0 ? `<div>⭐ ${seller.rating.toFixed(1)}</div>` : ''}${seller.location ? `<div>📍 ${escHtml(seller.location)}</div>` : ''}</div><button onclick="viewSellerProfile('${seller.id}')" class="btn btn-outline btn-sm">View Profile</button></div><div class="detail-actions" style="display:flex;flex-direction:column;gap:10px;">${actionsHtml}</div></div></div>`;
+  content.innerHTML = `<div class="detail-grid">
+    <div class="detail-images">${imagesHtml}</div>
+    <div class="detail-info">
+      ${listing.is_sold ? '<div class="sold-banner" style="background:var(--danger);padding:8px;text-align:center;border-radius:8px;margin-bottom:16px;">SOLD</div>' : ''}
+      <h1 class="detail-title">${escHtml(listing.name)}</h1>
+      <div class="detail-price-row">
+        <span class="detail-price">$${parseFloat(listing.price).toFixed(2)}</span>
+        ${listing.msrp ? `<span class="detail-msrp" style="text-decoration:line-through;margin-left:12px;">$${parseFloat(listing.msrp).toFixed(2)} MSRP</span>` : ''}
+      </div>
+      
+      <!-- Shipping & Location Section - Prominent -->
+      <div class="detail-shipping-section" style="background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin:16px 0;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+          <span style="font-size:1.5rem;">${shippingIcon}</span>
+          <div>
+            <div style="font-weight:700;font-size:1rem;">${shippingDisplay}</div>
+            <div style="font-size:0.8rem;color:var(--text-muted);">How you'll receive this item</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding-top:8px;border-top:1px solid var(--border);">
+          <span style="font-size:1.2rem;">📍</span>
+          <div>
+            <div style="font-weight:600;">Item Location</div>
+            <div style="font-size:0.9rem;">${escHtml(listing.location || 'Not specified')}</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="detail-meta-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0;">
+        <div><strong>📦 Condition</strong><br>${listing.condition || 'N/A'}</div>
+        <div><strong>💳 Payment Methods</strong><br>${paymentMethodsList}</div>
+      </div>
+      <div class="detail-description">${escHtml(listing.description)}</div>
+      <div class="seller-card">
+        <div class="seller-avatar">${seller.username?.charAt(0) || '?'}</div>
+        <div>
+          <div class="seller-name">${escHtml(seller.username || 'Anonymous')}</div>
+          ${seller.rating > 0 ? `<div>⭐ ${seller.rating.toFixed(1)}</div>` : ''}
+          ${seller.location ? `<div>📍 ${escHtml(seller.location)}</div>` : ''}
+        </div>
+        <button onclick="viewSellerProfile('${seller.id}')" class="btn btn-outline btn-sm">View Profile</button>
+      </div>
+      <div class="detail-actions" style="display:flex;flex-direction:column;gap:10px;">${actionsHtml}</div>
+    </div>
+  </div>`;
 }
 
 function viewSellerProfile(sellerId) { window.selectedProfileId = sellerId; navigate('profile'); }
@@ -1519,7 +1583,6 @@ function createListingCard(listing, showOwnerActions = false) {
   return card;
 }
 
-
 function renderListings(listings) {
   const grid = document.getElementById('listings-grid');
   if (!grid) return;
@@ -1594,5 +1657,5 @@ document.addEventListener('DOMContentLoaded', async () => {
     cats.forEach(cat => { const opt = document.createElement('option'); opt.value = cat; opt.textContent = cat; catSelect.appendChild(opt); });
   }
   if (!navigator.onLine) showErrorBanner();
-  console.log('%c OBTAINUM INITIALIZED - AI Assistant Ready!', 'background:#00ff41;color:#001a07;padding:4px 8px;');
+  console.log('%c OBTAINUM INITIALIZED - Location & Shipping Displayed', 'background:#00ff41;color:#001a07;padding:4px 8px;');
 });
