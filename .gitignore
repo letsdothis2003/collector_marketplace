@@ -1,0 +1,26 @@
+# Config files with secrets (DO NOT COMMIT)
+config.js
+.env
+.env.local
+.env.production
+
+# Keep the example file
+!config.example.js
+!.env.example
+
+# Dependencies
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
