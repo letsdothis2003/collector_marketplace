@@ -186,7 +186,7 @@ window.goToSlide = function(carouselId, index) {
 
 // ==================== NAVIGATION ====================
 function navigate(page) {
-  const pages = ['shop', 'detail', 'create', 'profile', 'wishlist', 'messages', 'assistant', 'donate'];
+  const pages = ['shop', 'detail', 'create', 'profile', 'wishlist', 'messages', 'assistant', 'about', 'contact', 'donate'];
   if (!pages.includes(page)) page = 'shop';
   
   pages.forEach(p => {
