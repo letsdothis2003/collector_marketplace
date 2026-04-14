@@ -11,8 +11,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/@google/generative-ai@0.1.3/dist/index.min.js"></script>
   
-  <!-- Config and main script -->
-  <script src="config.js"></script>
   <script src="script.js"></script>
 </head>
 <body>
@@ -39,6 +37,8 @@
       <button class="nav-btn" id="nav-profile" onclick="navigate('profile')">⚙️ PROFILE</button>
       <button class="nav-btn" id="nav-assistant" onclick="navigate('assistant')">🤖 ASSISTANT</button>
       <button class="nav-btn" id="nav-messages" onclick="navigate('messages')">💬 MESSAGES</button>
+      <button class="nav-btn" id="nav-about" onclick="navigate('about')">📖 ABOUT</button>
+      <button class="nav-btn" id="nav-contact" onclick="navigate('contact')">📧 CONTACT</button>
       <button class="nav-btn" id="nav-donate" onclick="navigate('donate')">🎁 DONATE</button>
     </nav>
 
@@ -68,6 +68,8 @@
     <button class="nav-btn" onclick="navigate('profile'); closeMobileNav()">⚙️ PROFILE</button>
     <button class="nav-btn" onclick="navigate('assistant'); closeMobileNav()">🤖 ASSISTANT</button>
     <button class="nav-btn" onclick="navigate('messages'); closeMobileNav()">💬 MESSAGES</button>
+    <button class="nav-btn" onclick="navigate('about'); closeMobileNav()">📖 ABOUT</button>
+    <button class="nav-btn" onclick="navigate('contact'); closeMobileNav()">📧 CONTACT</button>
     <button class="nav-btn" onclick="navigate('donate'); closeMobileNav()">🎁 DONATE</button>
   </nav>
 
@@ -160,6 +162,7 @@
           <button class="btn btn-primary" onclick="openAuthModal()">Login / Register</button>
         </div>
         <form class="create-form" id="create-form" onsubmit="submitListing(event)">
+          <!-- ... rest of create form ... -->
           <div class="form-group">
             <label class="form-label">📸 Images (up to 10)</label>
             <div id="existing-images-section" class="hidden">
@@ -335,7 +338,7 @@
         </div>
         <div class="assistant-chat-panel">
           <div class="assistant-messages" id="assistantMessages">
-            <div class="assistant-message bot">✨ Hi! I'm your AI marketplace assistant. Ask me about pricing, trending items, or safety tips!</div>
+            <div class="assistant-message bot">✨ Hi! I'm your OBTAINUM AI assistant. Ask me anything about the marketplace!</div>
           </div>
           <div class="assistant-input-area">
             <input type="text" id="assistantInput" placeholder="Ask anything (e.g., 'What's a fair price for used GPU?')" maxlength="300" />
@@ -373,12 +376,151 @@
       </div>
     </section>
 
+    <!-- ====== ABOUT PAGE ====== -->
+    <section class="page" id="page-about">
+      <div class="about-container">
+        <div class="about-hero">
+          <h1>📖 About OBTAINUM</h1>
+          <p>The techno marketplace for collectors and hobbyists</p>
+        </div>
+        <div class="about-content">
+          <div class="about-section">
+            <h2>🎯 Our Mission</h2>
+            <p>OBTAINUM was born from a simple idea: create a fair marketplace where collectors can buy and sell without fear of scalping or unfair pricing. We believe in transparency, community, and the thrill of the hunt.</p>
+          </div>
+          <div class="about-section">
+            <h2>✨ What Makes Us Different</h2>
+            <ul>
+              <li>🤖 <strong>AI-Powered Price Analysis</strong> - Our AI analyzes market value to help you make informed decisions</li>
+              <li>🛡️ <strong>No Scalping Policy</strong> - We actively monitor and prevent price gouging</li>
+              <li>💬 <strong>Direct Seller Communication</strong> - Chat directly with sellers, no middlemen</li>
+              <li>⭐ <strong>Community Driven</strong> - Built by collectors, for collectors</li>
+              <li>🔒 <strong>Secure Transactions</strong> - Your data and privacy are protected</li>
+            </ul>
+          </div>
+          <div class="about-section">
+            <h2>📜 Our Story</h2>
+            <p>Founded in 2024, OBTAINUM started as a passion project for vintage toy collectors who were tired of bots and scalpers ruining the hobby. Today, we've grown into a full-featured marketplace serving thousands of collectors across categories including electronics, collectibles, clothing, and more.</p>
+          </div>
+          <div class="about-section">
+            <h2>🌱 Future Plans</h2>
+            <p>We're constantly improving! Upcoming features include: blockchain authentication for rare items, expanded AI recommendations, mobile apps, and community forums.</p>
+          </div>
+          <div class="about-stats">
+            <div class="stat-card">
+              <span class="stat-number">1,000+</span>
+              <span class="stat-label">Active Listings</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-number">500+</span>
+              <span class="stat-label">Happy Collectors</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-number">100%</span>
+              <span class="stat-label">Community Driven</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== CONTACT PAGE ====== -->
+    <section class="page" id="page-contact">
+      <div class="contact-container">
+        <div class="contact-hero">
+          <h1>📧 Contact Us</h1>
+          <p>We'd love to hear from you!</p>
+        </div>
+        <div class="contact-grid">
+          <div class="contact-info">
+            <div class="contact-method">
+              <span class="contact-icon">✉️</span>
+              <div>
+                <h3>Email</h3>
+                <p>support@obtainum.com</p>
+                <small>Response within 24-48 hours</small>
+              </div>
+            </div>
+            <div class="contact-method">
+              <span class="contact-icon">💬</span>
+              <div>
+                <h3>Discord</h3>
+                <p>Join our community server</p>
+                <button class="btn btn-outline btn-sm" onclick="window.open('https://discord.gg/obtainum', '_blank')">Join Discord →</button>
+              </div>
+            </div>
+            <div class="contact-method">
+              <span class="contact-icon">🐦</span>
+              <div>
+                <h3>Twitter / X</h3>
+                <p>@obtainum</p>
+              </div>
+            </div>
+            <div class="contact-method">
+              <span class="contact-icon">📱</span>
+              <div>
+                <h3>Report an Issue</h3>
+                <p>Found a bug? Let us know!</p>
+                <button class="btn btn-outline btn-sm" onclick="showReportModal()">Report Bug →</button>
+              </div>
+            </div>
+          </div>
+          <div class="contact-form">
+            <h3>Send us a message</h3>
+            <form id="contact-form" onsubmit="sendContactMessage(event)">
+              <div class="form-group">
+                <input type="text" id="contact-name" placeholder="Your Name" required>
+              </div>
+              <div class="form-group">
+                <input type="email" id="contact-email" placeholder="Your Email" required>
+              </div>
+              <div class="form-group">
+                <select id="contact-subject">
+                  <option value="general">General Inquiry</option>
+                  <option value="support">Technical Support</option>
+                  <option value="report">Report a Listing</option>
+                  <option value="partnership">Partnership Opportunity</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <textarea id="contact-message" rows="5" placeholder="Your message..." required></textarea>
+              </div>
+              <button type="submit" class="btn btn-primary w-full">Send Message</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ====== DONATE PAGE ====== -->
     <section class="page" id="page-donate">
       <div class="donate-container">
         <h1>☕ Support OBTAINUM</h1>
         <p>Help us keep AI features free and fair. Donations keep the marketplace independent.</p>
-        <button class="btn btn-primary" onclick="showToast('❤️ Thank you! Demo mode — imagine crypto/paypal integration.')">Donate via Crypto/PayPal</button>
+        <div class="donate-options">
+          <div class="donate-card">
+            <h3>💜 One-Time Donation</h3>
+            <p>Support our development efforts</p>
+            <div class="donate-buttons">
+              <button class="btn btn-outline" onclick="showToast('❤️ Thank you for your support!')">$5</button>
+              <button class="btn btn-outline" onclick="showToast('❤️ Thank you for your support!')">$10</button>
+              <button class="btn btn-outline" onclick="showToast('❤️ Thank you for your support!')">$25</button>
+              <button class="btn btn-outline" onclick="showToast('❤️ Thank you for your support!')">$50</button>
+            </div>
+          </div>
+          <div class="donate-card">
+            <h3>🔄 Monthly Supporter</h3>
+            <p>Become a sustaining member</p>
+            <div class="donate-buttons">
+              <button class="btn btn-primary" onclick="showToast('❤️ Thank you for becoming a supporter!')">Subscribe $5/mo</button>
+            </div>
+          </div>
+          <div class="donate-card">
+            <h3>🪙 Crypto Donations</h3>
+            <p>Bitcoin, Ethereum, and more</p>
+            <button class="btn btn-outline" onclick="showToast('Contact us for crypto address')">Get Crypto Address</button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -391,6 +533,25 @@
       <div class="modal-tabs"><button class="modal-tab active" id="tab-login" onclick="switchAuthTab('login')">LOGIN</button><button class="modal-tab" id="tab-register" onclick="switchAuthTab('register')">REGISTER</button></div>
       <div id="auth-login"><form class="auth-form" onsubmit="handleLogin(event)"><button type="button" class="btn btn-outline w-full" onclick="signInWithGoogle()">CONTINUE WITH GOOGLE</button><div class="auth-divider"><span>OR</span></div><input class="form-input" id="login-email" type="email" placeholder="Email" required><input class="form-input" id="login-pass" type="password" placeholder="Password" required><div id="login-error" class="auth-error"></div><button type="submit" class="btn btn-primary btn-lg w-full" id="login-btn">LOGIN</button></form></div>
       <div id="auth-register" class="hidden"><form class="auth-form" onsubmit="handleRegister(event)"><button type="button" class="btn btn-outline w-full" onclick="signInWithGoogle()">CONTINUE WITH GOOGLE</button><div class="auth-divider"><span>OR</span></div><input class="form-input" id="reg-username" placeholder="Username" required><input class="form-input" id="reg-email" type="email" placeholder="Email" required><input class="form-input" id="reg-pass" type="password" placeholder="Password" required><div id="register-error" class="auth-error"></div><button type="submit" class="btn btn-primary btn-lg w-full" id="register-btn">CREATE ACCOUNT</button></form></div>
+    </div>
+  </div>
+
+  <!-- Report Bug Modal -->
+  <div class="modal-overlay" id="report-modal" onclick="closeOnOverlay(event, 'report-modal')">
+    <div class="modal" style="max-width:500px;"><button class="modal-close" onclick="closeModal('report-modal')">&times;</button>
+      <div class="modal-logo" style="font-size:1.1rem;">🐛 Report a Bug</div>
+      <form onsubmit="submitBugReport(event)">
+        <div class="form-group">
+          <input class="form-input" id="bug-title" placeholder="Bug title" required>
+        </div>
+        <div class="form-group">
+          <textarea class="form-input" id="bug-description" rows="4" placeholder="Describe the issue..." required></textarea>
+        </div>
+        <div class="form-group">
+          <input class="form-input" id="bug-url" placeholder="Page URL where it happened">
+        </div>
+        <button type="submit" class="btn btn-primary w-full">Submit Report</button>
+      </form>
     </div>
   </div>
 
