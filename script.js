@@ -815,6 +815,8 @@ async function saveAIMessage(senderType, content) {
   }
 }
 
+// ==================== SIMPLE GEMINI AI CHAT ====================
+
 async function askAssistant() {
   if (!State.user) {
     openAuthModal();
@@ -828,30 +830,87 @@ async function askAssistant() {
   const messagesDiv = document.getElementById('assistantMessages');
   if (!messagesDiv) return;
   
+  // Add user message to UI
   const userMsgDiv = document.createElement('div');
   userMsgDiv.className = 'assistant-message user';
   userMsgDiv.textContent = question;
   messagesDiv.appendChild(userMsgDiv);
   
+  // Save user message to database
   await saveAIMessage('user', question);
   
   if (input) input.value = '';
   
+  // Show typing indicator
   const typingDiv = document.createElement('div');
   typingDiv.className = 'assistant-message bot';
-  typingDiv.innerHTML = '<span class="spinner" style="width:16px;height:16px;"></span> 🔍 Analyzing...';
+  typingDiv.innerHTML = '<span class="spinner" style="width:16px;height:16px;"></span> Thinking...';
   messagesDiv.appendChild(typingDiv);
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
   
-  setTimeout(() => {
+  try {
+    let aiResponse;
+    
+    // Use Gemini API if available
+    if (genAI) {
+      aiResponse = await getGeminiResponse(question);
+    } else {
+      aiResponse = "⚠️ Gemini API is not configured. Please add your API key to enable AI chat.\n\nYou can still browse listings and use all other features!";
+    }
+    
+    // Remove typing indicator
     typingDiv.remove();
+    
+    // Add AI response to UI
     const botMsgDiv = document.createElement('div');
     botMsgDiv.className = 'assistant-message bot';
-    botMsgDiv.innerHTML = "I'm analyzing the marketplace data. For detailed AI analysis, please configure your Gemini API key in the settings.";
+    botMsgDiv.innerHTML = aiResponse.replace(/\n/g, '<br>');
     messagesDiv.appendChild(botMsgDiv);
-    saveAIMessage('ai', botMsgDiv.innerHTML);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-  }, 1000);
+    
+    // Save AI response to database
+    await saveAIMessage('ai', aiResponse);
+    
+  } catch (err) {
+    console.error('AI Assistant error:', err);
+    typingDiv.remove();
+    
+    const errorMsg = document.createElement('div');
+    errorMsg.className = 'assistant-message bot';
+    errorMsg.textContent = '⚠️ Sorry, I encountered an error. Please try again later.';
+    messagesDiv.appendChild(errorMsg);
+  }
+  
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+async function getGeminiResponse(userMessage) {
+  if (!genAI) {
+    return "⚠️ Gemini API is not configured. Please add your API key to continue.";
+  }
+  
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    
+    // Simple system prompt for a regular chat assistant
+    const prompt = `You are OBTAINUM AI, a friendly and helpful assistant for a marketplace website. 
+Your role is to help users with general questions about buying, selling, collectibles, pricing, safety tips, and marketplace navigation.
+
+Keep responses:
+- Concise and helpful
+- Friendly and approachable
+- Use bullet points when listing multiple items
+- Stay on topic
+
+User question: ${userMessage}`;
+    
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    return response.text();
+    
+  } catch (err) {
+    console.error('Gemini API error:', err);
+    return "⚠️ Sorry, I'm having trouble connecting right now. Please try again in a moment.";
+  }
 }
 
 function askSuggestion(suggestion) {
