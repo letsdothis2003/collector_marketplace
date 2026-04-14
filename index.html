@@ -307,21 +307,22 @@
             </div>
           </div>
 
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label" for="c-shipping">Shipping *</label>
-              <select class="form-input" id="c-shipping" required>
-                <option value="paid">Paid Shipping</option>
-                <option value="free">Free Shipping</option>
-                <option value="local">Local Delivery</option>
-                <option value="pickup">Pickup Only</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="c-location">Location</label>
-              <input class="form-input" id="c-location" type="text" placeholder="City, State" />
-            </div>
-          </div>
+         <div class="form-row">
+  <div class="form-group">
+    <label class="form-label" for="c-shipping">Shipping / Pickup *</label>
+    <select class="form-input" id="c-shipping" required>
+      <option value="shipping">📦 Shipping Only</option>
+      <option value="pickup">📍 Pickup Only</option>
+      <option value="both">🚚 Both (Shipping & Pickup)</option>
+    </select>
+    <small style="color:var(--text-muted);font-size:0.7rem;">Select how the buyer can receive this item</small>
+  </div>
+  <div class="form-group">
+    <label class="form-label" for="c-location">📍 Location *</label>
+    <input class="form-input" id="c-location" type="text" placeholder="City, State (e.g., Austin, TX)" required />
+    <small style="color:var(--text-muted);font-size:0.7rem;">Required for pickup or local delivery</small>
+  </div>
+</div>
 
           <!-- Payment Methods -->
           <div class="form-group">
