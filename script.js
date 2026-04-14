@@ -1,13 +1,14 @@
 /* ============================================================
    FILE: script.js
-   OBTAINUM MARKETPLACE — Complete Working Version
-   Location & Shipping Method Displayed on Every Listing
+   OBTAINUM MARKETPLACE — Complete with AI Listing Suggestions
    ============================================================ */
 
 // ==================== DATABASE CONFIG ====================
 const SUPABASE_URL = "https://gotzmuobwuubsugnowxq.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
-const GEMINI_API_KEY = " ";
+
+// Gemini API Key (Replace with your actual key)
+const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE";
 
 let db;
 let genAI;
@@ -71,8 +72,7 @@ function showToast(message, type = 'info') {
 }
 
 function closeModal(id) {
-  const modal = document.getElementById(id);
-  if (modal) modal.classList.remove('open');
+  document.getElementById(id)?.classList.remove('open');
 }
 
 function closeOnOverlay(e, id) {
@@ -80,8 +80,7 @@ function closeOnOverlay(e, id) {
 }
 
 function closeMobileNav() {
-  const mobileNav = document.getElementById('mobile-nav');
-  if (mobileNav) mobileNav.classList.remove('open');
+  document.getElementById('mobile-nav')?.classList.remove('open');
 }
 
 function setLoading(btn, isLoading, text) {
@@ -109,7 +108,7 @@ function toggleTheme() {
   showToast(isLight ? 'Dark mode activated' : 'Light mode activated', 'info');
 }
 
-// ==================== IMAGE CAROUSEL ====================
+// ==================== IMAGE CAROUSEL FUNCTION ====================
 function createImageCarousel(images, listingId) {
   if (!images || images.length === 0) {
     return `<div class="card-no-image">📦</div>`;
@@ -183,25 +182,16 @@ window.goToSlide = function(carouselId, index) {
 // ==================== NAVIGATION ====================
 function navigate(page) {
   const pages = ['shop', 'detail', 'create', 'profile', 'wishlist', 'messages', 'assistant', 'donate'];
-  
-  const restrictedPages = ['create', 'profile', 'wishlist', 'messages'];
-  if (restrictedPages.includes(page) && !State.user) {
-    openAuthModal();
-    return;
-  }
-  
   if (!pages.includes(page)) page = 'shop';
   
   pages.forEach(p => {
-    const el = document.getElementById(`page-${p}`);
-    if (el) el.classList.remove('active');
+    document.getElementById(`page-${p}`)?.classList.remove('active');
   });
   
-  const target = document.getElementById(`page-${page}`);
-  if (target) target.classList.add('active');
-  
+  document.getElementById(`page-${page}`)?.classList.add('active');
   State.currentPage = page;
   updateNavActive(page);
+  
   updateRestrictedPageUI();
   
   if (page === 'shop') loadListings();
@@ -209,7 +199,10 @@ function navigate(page) {
   if (page === 'wishlist' && State.user) loadWishlist();
   if (page === 'create' && State.user) initCreatePage();
   if (page === 'messages' && State.user) loadMessages();
-  if (page === 'assistant') updateAssistantUI();
+  if (page === 'assistant') {
+    updateAssistantUI();
+    loadAIChatHistory();
+  }
 }
 
 function updateNavActive(page) {
@@ -222,13 +215,17 @@ function updateRestrictedPageUI() {
   const messagesLoginNotice = document.getElementById('messages-login-notice');
   const chatForm = document.getElementById('chatForm');
   const conversationList = document.getElementById('conversationList');
+  const activeChatHeader = document.getElementById('activeChatHeader');
+  const chatThread = document.getElementById('chatThread');
   
   if (!State.user) {
-    if (messagesLoginNotice) messagesLoginNotice?.classList.remove('hidden');
+    if (messagesLoginNotice) messagesLoginNotice.classList.remove('hidden');
     if (chatForm) chatForm.style.display = 'none';
     if (conversationList) conversationList.innerHTML = '<div class="empty-state-small">Login to see conversations</div>';
+    if (activeChatHeader) activeChatHeader.innerHTML = 'Login to chat';
+    if (chatThread) chatThread.innerHTML = '<div class="empty-state-small">🔐 Please login to send and receive messages</div>';
   } else {
-    if (messagesLoginNotice) messagesLoginNotice?.classList.add('hidden');
+    if (messagesLoginNotice) messagesLoginNotice.classList.add('hidden');
   }
   
   updateAssistantUI();
@@ -241,15 +238,15 @@ function updateAssistantUI() {
   const assistantSuggestions = document.querySelector('.assistant-suggestions');
   
   if (!State.user) {
-    if (assistantLoginNotice) assistantLoginNotice?.classList.remove('hidden');
-    if (assistantInput) assistantInput.disabled = false;
-    if (assistantBtn) assistantBtn.disabled = false;
+    if (assistantLoginNotice) assistantLoginNotice.classList.remove('hidden');
+    if (assistantInput) assistantInput.disabled = true;
+    if (assistantBtn) assistantBtn.disabled = true;
     if (assistantSuggestions) {
-      assistantSuggestions.style.opacity = '1';
-      assistantSuggestions.style.pointerEvents = 'auto';
+      assistantSuggestions.style.opacity = '0.5';
+      assistantSuggestions.style.pointerEvents = 'none';
     }
   } else {
-    if (assistantLoginNotice) assistantLoginNotice?.classList.add('hidden');
+    if (assistantLoginNotice) assistantLoginNotice.classList.add('hidden');
     if (assistantInput) assistantInput.disabled = false;
     if (assistantBtn) assistantBtn.disabled = false;
     if (assistantSuggestions) {
@@ -289,12 +286,12 @@ async function onAuthChange(user) {
     .single();
   
   if (!profile) {
-    console.log("Profile not found, creating fallback profile...");
+    console.log("Profile not found, creating fallback...");
     
     let username = user.user_metadata?.username || 
-                   user.user_metadata?.preferred_username || 
+                   user.user_metadata?.full_name || 
                    user.email?.split('@')[0] || 
-                   'user_' + Math.random().toString(36).substring(2, 10);
+                   'user_' + Math.random().toString(36).substring(2, 8);
     
     username = username.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, 28);
     if (username.length < 3) username = username + '_usr';
@@ -308,29 +305,22 @@ async function onAuthChange(user) {
       updated_at: new Date().toISOString()
     };
     
-    try {
-      const { data: created, error: createErr } = await db
-        .from('profiles')
-        .insert(newProfileData)
-        .select()
-        .single();
-      
-      if (createErr) {
-        console.error('[OBTAINUM] Could not create profile:', createErr.message);
-        return;
-      }
-      
+    const { data: created, error: createErr } = await db
+      .from('profiles')
+      .insert(newProfileData)
+      .select()
+      .single();
+    
+    if (!createErr) {
       profile = created;
       showToast(`Welcome, ${username}!`, 'success');
-    } catch (err) {
-      console.error('Profile creation error:', err);
-      return;
     }
   }
   
   State.profile = profile;
   updateAuthUI();
   await loadWishlistIds();
+  await initAISession();
 }
 
 function onSignOut() {
@@ -342,9 +332,11 @@ function onSignOut() {
   State.aiSessionId = null;
   State.aiMessages = [];
   updateAuthUI();
-  if (['profile', 'messages', 'wishlist', 'create'].includes(State.currentPage)) {
-    navigate('shop');
-  }
+  if (State.currentPage === 'profile') navigate('shop');
+  if (State.currentPage === 'messages') navigate('shop');
+  if (State.currentPage === 'wishlist') navigate('shop');
+  if (State.currentPage === 'create') navigate('shop');
+  if (State.currentPage === 'assistant') updateAssistantUI();
   showToast('Signed out successfully.', 'info');
 }
 
@@ -353,40 +345,18 @@ function updateAuthUI() {
   const avatarWrap = document.getElementById('user-avatar-wrap');
   const avatar = document.getElementById('header-avatar');
   
-  const authNavButtons = ['nav-create', 'nav-wishlist', 'nav-profile', 'nav-assistant', 'nav-messages', 'nav-donate'];
-  const mobileAuthNavButtons = ['mobile-nav-create', 'mobile-nav-wishlist', 'mobile-nav-profile', 'mobile-nav-assistant', 'mobile-nav-messages', 'mobile-nav-donate'];
-  
   if (State.user) {
-    if (btnWrap) btnWrap.classList.add('hidden');
-    if (avatarWrap) avatarWrap.classList.remove('hidden');
+    btnWrap.classList.add('hidden');
+    avatarWrap.classList.remove('hidden');
     const name = State.profile?.username || State.user.email || '?';
-    if (State.profile?.avatar_url && avatar) {
+    if (State.profile?.avatar_url) {
       avatar.innerHTML = `<img src="${State.profile.avatar_url}" alt="${escHtml(name)}" />`;
-    } else if (avatar) {
+    } else {
       avatar.textContent = name.charAt(0).toUpperCase();
     }
-    
-    authNavButtons.forEach(btnId => {
-      const btn = document.getElementById(btnId);
-      if (btn) btn.classList.remove('hidden');
-    });
-    mobileAuthNavButtons.forEach(btnId => {
-      const btn = document.getElementById(btnId);
-      if (btn) btn.classList.remove('hidden');
-    });
   } else {
-    if (btnWrap) btnWrap.classList.remove('hidden');
-    if (avatarWrap) avatarWrap.classList.add('hidden');
-    if (avatar) avatar.innerHTML = '?';
-    
-    authNavButtons.forEach(btnId => {
-      const btn = document.getElementById(btnId);
-      if (btn) btn.classList.add('hidden');
-    });
-    mobileAuthNavButtons.forEach(btnId => {
-      const btn = document.getElementById(btnId);
-      if (btn) btn.classList.add('hidden');
-    });
+    btnWrap.classList.remove('hidden');
+    avatarWrap.classList.add('hidden');
   }
 }
 
@@ -404,14 +374,14 @@ async function handleLogin(e) {
     const { error } = await db.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
     closeModal('auth-modal');
-    showToast('Welcome back!', 'success');
+    showToast('Welcome back to OBTAINUM!', 'success');
   } catch (err) {
     if (errEl) {
       errEl.textContent = err.message || 'Login failed.';
       errEl.classList.add('show');
     }
   } finally {
-    if (btn) setLoading(btn, false, 'LOGIN');
+    if (btn) setLoading(btn, false, 'LOGIN TO OBTAINUM');
   }
 }
 
@@ -420,10 +390,13 @@ async function signInWithGoogle() {
   try {
     const { error } = await db.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.origin + window.location.pathname }
+      options: { 
+        redirectTo: window.location.origin + window.location.pathname
+      }
     });
     if (error) throw error;
   } catch (err) {
+    console.error('Google sign-in error:', err);
     showToast('Google sign-in failed: ' + err.message, 'error');
   }
 }
@@ -436,38 +409,42 @@ async function handleRegister(e) {
   const errEl = document.getElementById('register-error');
   const btn = document.getElementById('register-btn');
   
-  if (btn) setLoading(btn, true, 'CREATING...');
+  if (btn) setLoading(btn, true, 'CREATING ACCOUNT...');
   if (errEl) errEl.classList.remove('show');
   
-  try {
-    const cleanUsername = username.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, 28);
-    if (cleanUsername.length < 3) {
-      throw new Error('Username must be at least 3 characters (letters, numbers, underscores only)');
+  const cleanUsername = username.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, 28);
+  if (cleanUsername.length < 3) {
+    if (errEl) {
+      errEl.textContent = 'Username must be at least 3 characters (letters, numbers, underscores only)';
+      errEl.classList.add('show');
     }
-    
+    if (btn) setLoading(btn, false, 'CREATE ACCOUNT');
+    return;
+  }
+  
+  try {
     const { data, error } = await db.auth.signUp({
       email,
       password: pass,
-      options: { data: { username: cleanUsername } }
+      options: { 
+        data: { username: cleanUsername }
+      }
     });
     
     if (error) throw error;
     
     if (data.session) {
       closeModal('auth-modal');
-      showToast('Account created! Welcome!', 'success');
+      showToast('Account created! Welcome to OBTAINUM.', 'success');
     } else {
-      const registerFormWrap = document.getElementById('register-form-wrap');
-      if (registerFormWrap) {
-        registerFormWrap.innerHTML = `
-          <div class="auth-confirm-panel" style="text-align:center;padding:20px;">
-            <div class="confirm-icon" style="font-size:3rem;">✉️</div>
-            <div class="confirm-title" style="font-weight:bold;margin:16px 0;">CHECK YOUR EMAIL</div>
-            <div class="confirm-msg">Click the confirmation link to activate your account.</div>
-            <button class="btn btn-outline w-full" onclick="closeModal('auth-modal')">GOT IT</button>
-          </div>
-        `;
-      }
+      document.getElementById('register-form-wrap').innerHTML = `
+        <div class="auth-confirm-panel" style="text-align:center;padding:20px;">
+          <div class="confirm-icon" style="font-size:3rem;">✉️</div>
+          <div class="confirm-title" style="font-weight:bold;margin:16px 0;">CHECK YOUR EMAIL</div>
+          <div class="confirm-msg">Click the confirmation link to activate your account.</div>
+          <button class="btn btn-outline w-full" onclick="closeModal('auth-modal')">GOT IT</button>
+        </div>
+      `;
     }
   } catch (err) {
     if (errEl) {
@@ -484,8 +461,7 @@ async function signOut() {
 }
 
 function openAuthModal() {
-  const modal = document.getElementById('auth-modal');
-  if (modal) modal.classList.add('open');
+  document.getElementById('auth-modal').classList.add('open');
 }
 
 function switchAuthTab(tab) {
@@ -507,7 +483,314 @@ function switchAuthTab(tab) {
   }
 }
 
-// ==================== AI ASSISTANT ====================
+// ==================== AI LISTING SUGGESTIONS (RAG-powered) ====================
+// NEW FUNCTION: Generates AI suggestion for a listing (runs once, saves to DB)
+
+async function generateAndSaveListingSuggestion(listingId) {
+  if (!db) return null;
+  
+  // Check if suggestion already exists
+  const { data: existingListing } = await db
+    .from('listings')
+    .select('ai_suggestions')
+    .eq('id', listingId)
+    .single();
+  
+  if (existingListing?.ai_suggestions) {
+    console.log('AI suggestion already exists for listing', listingId);
+    return existingListing.ai_suggestions;
+  }
+  
+  // Get the full listing data
+  const { data: listing, error } = await db
+    .from('listings')
+    .select('*, profiles:seller_id(username, rating, location)')
+    .eq('id', listingId)
+    .single();
+  
+  if (error || !listing) {
+    console.error('Could not fetch listing:', error);
+    return null;
+  }
+  
+  let suggestion = null;
+  
+  // Try Gemini API first
+  if (genAI) {
+    try {
+      suggestion = await analyzeListingWithGemini(listing);
+    } catch (err) {
+      console.error('Gemini analysis failed:', err);
+      suggestion = getFallbackListingAnalysis(listing);
+    }
+  } else {
+    suggestion = getFallbackListingAnalysis(listing);
+  }
+  
+  // Save to database
+  if (suggestion) {
+    const { error: updateError } = await db
+      .from('listings')
+      .update({ ai_suggestions: suggestion })
+      .eq('id', listingId);
+    
+    if (updateError) {
+      console.error('Failed to save AI suggestion:', updateError);
+    } else {
+      console.log('AI suggestion saved for listing', listingId);
+    }
+  }
+  
+  return suggestion;
+}
+
+async function analyzeListingWithGemini(listing) {
+  if (!genAI) return getFallbackListingAnalysis(listing);
+  
+  const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+  
+  const prompt = `
+You are OBTAINUM's pricing AI. Analyze this marketplace listing and provide a JSON response.
+
+LISTING DETAILS:
+- Item Name: ${listing.name}
+- Category: ${listing.category}
+- Condition: ${listing.condition}
+- Listed Price: $${listing.price}
+- MSRP (if available): ${listing.msrp ? '$' + listing.msrp : 'Not provided'}
+- Shipping: ${listing.shipping}
+- Seller Location: ${listing.location || 'Not specified'}
+
+TASK: Analyze this item and return ONLY valid JSON with this exact structure:
+{
+  "itemIdentification": "What specific product/model this appears to be",
+  "originalRetailPrice": "Original MSRP/retail price when new (estimated if not provided)",
+  "currentMarketValue": "Estimated current market value based on condition and age",
+  "inflationAdjustedPrice": "What the original price would be in today's dollars",
+  "valueAssessment": "good deal / fair price / overpriced",
+  "score": 0-100 (100 = best deal),
+  "reasoning": "Brief explanation of your assessment",
+  "shippingAdvice": "Specific advice about shipping for this item type",
+  "safetyAdvice": "If pickup, safety tips; if shipped, packaging advice",
+  "recommendation": "buy / negotiate / avoid"
+}`;
+  
+  try {
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    return getFallbackListingAnalysis(listing);
+  } catch (err) {
+    console.error('Gemini analysis error:', err);
+    return getFallbackListingAnalysis(listing);
+  }
+}
+
+function getFallbackListingAnalysis(listing) {
+  let score = 50;
+  let valueAssessment = "fair price";
+  let recommendation = "consider";
+  
+  if (listing.msrp && listing.msrp > 0) {
+    const percentOfMsrp = (listing.price / listing.msrp) * 100;
+    if (percentOfMsrp <= 60) {
+      score = 90;
+      valueAssessment = "excellent deal";
+      recommendation = "buy";
+    } else if (percentOfMsrp <= 85) {
+      score = 75;
+      valueAssessment = "good deal";
+      recommendation = "buy";
+    } else if (percentOfMsrp <= 100) {
+      score = 60;
+      valueAssessment = "fair price";
+      recommendation = "consider";
+    } else if (percentOfMsrp <= 125) {
+      score = 40;
+      valueAssessment = "overpriced";
+      recommendation = "negotiate";
+    } else {
+      score = 25;
+      valueAssessment = "significantly overpriced";
+      recommendation = "avoid";
+    }
+  } else {
+    const categoryMultiplier = {
+      'Electronics': 0.6,
+      'Clothing & Accessories': 0.5,
+      'Collectibles': 0.8,
+      'Toys & Figures': 0.7,
+      'Sports & Outdoors': 0.55,
+      'Books & Media': 0.4,
+      'Home & Garden': 0.5,
+      'Tools & Equipment': 0.65,
+      'Other': 0.5
+    };
+    const multiplier = categoryMultiplier[listing.category] || 0.5;
+    const estimatedValue = listing.price * (1 - multiplier);
+    
+    if (listing.price <= estimatedValue * 1.1) {
+      score = 70;
+      valueAssessment = "fair price";
+      recommendation = "consider";
+    } else {
+      score = 45;
+      valueAssessment = "possibly overpriced";
+      recommendation = "negotiate";
+    }
+  }
+  
+  const conditionAdjustment = {
+    'new': 1.0,
+    'like-new': 0.9,
+    'good': 0.75,
+    'fair': 0.6,
+    'poor': 0.4
+  };
+  score = Math.round(score * (conditionAdjustment[listing.condition] || 0.7));
+  
+  let shippingAdvice = "";
+  switch (listing.shipping) {
+    case 'free':
+      shippingAdvice = "✅ Free shipping included - good value!";
+      break;
+    case 'paid':
+      shippingAdvice = "📦 Paid shipping - ask seller for exact cost before purchasing.";
+      break;
+    case 'local':
+      shippingAdvice = "🏠 Local delivery only - arrange a safe meeting spot.";
+      break;
+    case 'pickup':
+      shippingAdvice = "📍 Pickup only - inspect item in person before paying.";
+      break;
+    default:
+      shippingAdvice = "Contact seller for shipping details.";
+  }
+  
+  let safetyAdvice = "";
+  if (listing.shipping === 'pickup' || listing.shipping === 'local') {
+    safetyAdvice = "🛡️ Meet at a police station or busy public area. Bring a friend and inspect thoroughly.";
+  } else {
+    safetyAdvice = "📦 Request tracking and insurance for valuable items. Take photos when package arrives.";
+  }
+  
+  return {
+    itemIdentification: listing.name,
+    originalRetailPrice: listing.msrp ? `$${listing.msrp}` : "Unknown - check similar listings",
+    currentMarketValue: `$${Math.round(listing.price * (listing.msrp ? (listing.price/listing.msrp) : 0.7))} - $${Math.round(listing.price * 1.2)}`,
+    inflationAdjustedPrice: listing.msrp ? `$${Math.round(listing.msrp * 1.25)}` : "Unable to calculate",
+    valueAssessment: valueAssessment,
+    score: Math.min(100, Math.max(0, score)),
+    reasoning: `Based on ${listing.condition} condition and category "${listing.category}".`,
+    shippingAdvice: shippingAdvice,
+    safetyAdvice: safetyAdvice,
+    recommendation: recommendation
+  };
+}
+
+async function displayListingSuggestion(listingId) {
+  const suggestion = await generateAndSaveListingSuggestion(listingId);
+  const container = document.getElementById(`ai-suggestions-${listingId}`);
+  
+  if (!container || !suggestion) return;
+  
+  const scoreColor = suggestion.score >= 70 ? 'var(--neon)' : (suggestion.score >= 40 ? 'var(--warning)' : 'var(--danger)');
+  
+  container.innerHTML = `
+    <div class="ai-suggestion-card" style="background:var(--bg-2); border-radius:var(--radius-lg); padding:16px; margin-top:16px; border:1px solid var(--border);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="ai-dot"></span>
+          <strong style="color:var(--neon);">🤖 AI PRICE ANALYSIS</strong>
+        </div>
+        <div style="background:${scoreColor}; color:#001a07; padding:4px 12px; border-radius:20px; font-weight:bold;">
+          ${suggestion.valueAssessment.toUpperCase()} • ${suggestion.score}%
+        </div>
+      </div>
+      
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:12px; margin-bottom:16px;">
+        <div style="background:var(--bg-3); padding:10px; border-radius:8px;">
+          <div style="font-size:11px; color:var(--text-muted);">🔍 IDENTIFIED AS</div>
+          <div style="font-weight:600;">${escHtml(suggestion.itemIdentification)}</div>
+        </div>
+        <div style="background:var(--bg-3); padding:10px; border-radius:8px;">
+          <div style="font-size:11px; color:var(--text-muted);">💰 ORIGINAL PRICE</div>
+          <div style="font-weight:600;">${suggestion.originalRetailPrice}</div>
+        </div>
+        <div style="background:var(--bg-3); padding:10px; border-radius:8px;">
+          <div style="font-size:11px; color:var(--text-muted);">📈 CURRENT MARKET VALUE</div>
+          <div style="font-weight:600;">${suggestion.currentMarketValue}</div>
+        </div>
+      </div>
+      
+      <div style="background:rgba(0,255,65,0.05); padding:12px; border-radius:8px; margin-bottom:12px;">
+        <div style="font-weight:600; margin-bottom:6px;">📝 ANALYSIS</div>
+        <div style="font-size:14px;">${escHtml(suggestion.reasoning)}</div>
+      </div>
+      
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+        <div style="background:rgba(0,255,65,0.05); padding:10px; border-radius:8px;">
+          <div style="font-size:12px; font-weight:600;">🚚 SHIPPING ADVICE</div>
+          <div style="font-size:13px;">${escHtml(suggestion.shippingAdvice)}</div>
+        </div>
+        <div style="background:rgba(0,255,65,0.05); padding:10px; border-radius:8px;">
+          <div style="font-size:12px; font-weight:600;">🛡️ SAFETY ADVICE</div>
+          <div style="font-size:13px;">${escHtml(suggestion.safetyAdvice)}</div>
+        </div>
+      </div>
+      
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; padding-top:12px; border-top:1px solid var(--border);">
+        <span style="font-size:13px;">🏷️ ${suggestion.recommendation === 'buy' ? '✅ RECOMMENDED' : (suggestion.recommendation === 'negotiate' ? '🤝 TRY NEGOTIATING' : '⚠️ CONSIDER ALTERNATIVES')}</span>
+        <span style="font-size:11px; color:var(--text-muted);">AI analysis • generated once</span>
+      </div>
+    </div>
+  `;
+}
+
+// ==================== AI CHAT FUNCTIONS ====================
+async function initAISession() {
+  if (!State.user) return;
+  if (!State.aiSessionId) {
+    State.aiSessionId = crypto.randomUUID();
+  }
+}
+
+async function loadAIChatHistory() {
+  if (!State.user) return;
+  
+  try {
+    const { data, error } = await db
+      .from('ai_chat_messages')
+      .select('*')
+      .eq('user_id', State.user.id)
+      .order('created_at', { ascending: true });
+    
+    if (error) throw error;
+    
+    State.aiMessages = data || [];
+    
+    const messagesDiv = document.getElementById('assistantMessages');
+    if (messagesDiv && State.aiMessages.length > 0) {
+      if (State.aiMessages.length > 1) {
+        messagesDiv.innerHTML = '';
+      }
+      
+      State.aiMessages.forEach(msg => {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `assistant-message ${msg.sender_type === 'user' ? 'user' : 'bot'}`;
+        msgDiv.innerHTML = msg.content.replace(/\n/g, '<br>');
+        messagesDiv.appendChild(msgDiv);
+      });
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+  } catch (err) {
+    console.error('Error loading AI chat history:', err);
+  }
+}
 
 async function saveAIMessage(senderType, content) {
   if (!State.user) return;
@@ -518,81 +801,28 @@ async function saveAIMessage(senderType, content) {
       .insert({
         sender_type: senderType,
         user_id: State.user.id,
-        session_id: State.aiSessionId || crypto.randomUUID(),
+        session_id: State.aiSessionId,
         content: content
       });
     
     if (error) throw error;
+    
+    State.aiMessages.push({
+      sender_type: senderType,
+      content: content,
+      created_at: new Date().toISOString()
+    });
   } catch (err) {
     console.error('Error saving AI message:', err);
   }
 }
 
-async function generateHumanLikeResponse(userQuestion) {
-  if (genAI) {
-    try {
-      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-      
-      const prompt = `You are OBTAINUM, a friendly shopping assistant. Answer the user's question about products, prices, safety, or shopping advice.
-
-User question: "${userQuestion}"
-
-Instructions:
-- Be conversational and helpful
-- Keep responses under 4 sentences
-- If asked about price, give honest opinion on what's fair
-- If asked about safety, give practical tips
-- If asked about alternatives, suggest comparable products
-
-Respond naturally:`;
-
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      return response.text();
-      
-    } catch (err) {
-      console.error('Gemini API error:', err);
-    }
-  }
-  
-  return getLocalResponse(userQuestion);
-}
-
-function getLocalResponse(question) {
-  const q = question.toLowerCase();
-  
-  if (q.includes('price') || q.includes('how much') || q.includes('cost')) {
-    if (q.includes('ps5') || q.includes('playstation')) {
-      return "Used PS5s are going for $400-450 right now. Anything under $400 with a controller is a solid deal!";
-    }
-    if (q.includes('switch') || q.includes('nintendo')) {
-      return "Used Nintendo Switches: $200-250 for regular, $250-300 for OLED. Check for Joy-Con drift!";
-    }
-    if (q.includes('gpu') || q.includes('graphics card')) {
-      return "GPU prices are finally reasonable! RTX 3060 around $250-300, RTX 4070 about $500-550.";
-    }
-    if (q.includes('iphone')) {
-      return "iPhone 13: $400-500, iPhone 14: $550-650, iPhone 15: $700-800. Check battery health!";
-    }
-    return "Check eBay sold listings for accurate pricing. Used items typically go for 30-50% below retail.";
-  }
-  
-  if (q.includes('safe') || q.includes('meet') || q.includes('pickup')) {
-    return "Safety first! Meet at a police station parking lot, bring a friend, tell someone where you're going, and trust your gut. Cash only, inspect before paying!";
-  }
-  
-  if (q.includes('condition') || q.includes('look for') || q.includes('check')) {
-    return "Ask for photos of damage, test electronics before paying, check serial numbers, and don't be afraid to walk away if something feels off.";
-  }
-  
-  if (q.includes('hi') || q.includes('hello') || q.includes('hey')) {
-    return "Hey there! 👋 I'm your shopping assistant. Ask me things like 'Is $400 fair for a used PS5?' or 'Safe places to meet for pickup?' What are you shopping for?";
-  }
-  
-  return "I'm here to help with shopping questions! Ask me about price checks, safety tips for meetups, or what to look for when buying used items.";
-}
-
 async function askAssistant() {
+  if (!State.user) {
+    openAuthModal();
+    return;
+  }
+  
   const input = document.getElementById('assistantInput');
   const question = input?.value.trim();
   if (!question) return;
@@ -605,39 +835,25 @@ async function askAssistant() {
   userMsgDiv.textContent = question;
   messagesDiv.appendChild(userMsgDiv);
   
-  if (State.user) {
-    await saveAIMessage('user', question);
-  }
+  await saveAIMessage('user', question);
   
   if (input) input.value = '';
   
   const typingDiv = document.createElement('div');
   typingDiv.className = 'assistant-message bot';
-  typingDiv.innerHTML = '<span class="spinner" style="width:16px;height:16px;"></span> Thinking...';
+  typingDiv.innerHTML = '<span class="spinner" style="width:16px;height:16px;"></span> 🔍 Analyzing...';
   messagesDiv.appendChild(typingDiv);
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
   
-  try {
-    const aiResponse = await generateHumanLikeResponse(question);
+  setTimeout(() => {
     typingDiv.remove();
-    
     const botMsgDiv = document.createElement('div');
     botMsgDiv.className = 'assistant-message bot';
-    botMsgDiv.innerHTML = aiResponse.replace(/\n/g, '<br>');
+    botMsgDiv.innerHTML = "I'm analyzing the marketplace data. For detailed AI analysis, please configure your Gemini API key in the settings.";
     messagesDiv.appendChild(botMsgDiv);
-    
-    if (State.user) {
-      await saveAIMessage('ai', aiResponse);
-    }
-  } catch (err) {
-    typingDiv.remove();
-    const errorMsg = document.createElement('div');
-    errorMsg.className = 'assistant-message bot';
-    errorMsg.textContent = getLocalResponse(question);
-    messagesDiv.appendChild(errorMsg);
-  }
-  
-  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    saveAIMessage('ai', botMsgDiv.innerHTML);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  }, 1000);
 }
 
 function askSuggestion(suggestion) {
@@ -654,7 +870,16 @@ async function loadListings() {
     
     const { data, error } = await db
       .from('listings')
-      .select(`*, profiles:seller_id(id, username, avatar_url, rating, location)`)
+      .select(`
+        *,
+        profiles:seller_id (
+          id,
+          username,
+          avatar_url,
+          rating,
+          location
+        )
+      `)
       .eq('is_sold', false)
       .order('created_at', { ascending: false });
     
@@ -811,7 +1036,13 @@ async function loadWishlist() {
   try {
     const { data, error } = await db
       .from('wishlists')
-      .select(`listing_id, listings:listing_id(*, profiles:seller_id(id, username, avatar_url, rating, location))`)
+      .select(`
+        listing_id,
+        listings:listing_id (
+          *,
+          profiles:seller_id (id, username, avatar_url, rating, location)
+        )
+      `)
       .eq('user_id', State.user.id);
     
     if (error) throw error;
@@ -852,10 +1083,15 @@ async function toggleWishlist(e, listingId) {
   
   try {
     if (isWished) {
-      await db.from('wishlists').delete().eq('user_id', State.user.id).eq('listing_id', listingId);
+      await db.from('wishlists').delete()
+        .eq('user_id', State.user.id)
+        .eq('listing_id', listingId);
       showToast('Removed from wishlist.', 'info');
     } else {
-      await db.from('wishlists').insert({ user_id: State.user.id, listing_id: listingId });
+      await db.from('wishlists').insert({
+        user_id: State.user.id,
+        listing_id: listingId
+      });
       showToast('Added to wishlist!', 'success');
     }
   } catch (err) {
@@ -909,7 +1145,11 @@ async function initCreatePage() {
     let listing = State.listings.find(l => l.id === State.editingListingId);
     if (!listing) {
       try {
-        const { data, error } = await db.from('listings').select('*').eq('id', State.editingListingId).single();
+        const { data, error } = await db
+          .from('listings')
+          .select('*')
+          .eq('id', State.editingListingId)
+          .single();
         if (error) throw error;
         listing = data;
       } catch (err) {
@@ -923,16 +1163,27 @@ async function initCreatePage() {
     }
     
     if (listing) {
-      document.getElementById('c-name').value = listing.name || '';
-      document.getElementById('c-category').value = listing.category || '';
-      document.getElementById('c-desc').value = listing.description || '';
-      document.getElementById('c-price').value = listing.price ?? '';
-      document.getElementById('c-msrp').value = listing.msrp || '';
-      document.getElementById('c-condition').value = listing.condition || '';
-      document.getElementById('c-type').value = listing.type || 'buy-now';
-      document.getElementById('c-shipping').value = listing.shipping || 'paid';
-      document.getElementById('c-location').value = listing.location || '';
-      document.getElementById('c-tags').value = (listing.tags || []).join(', ');
+      const nameInput = document.getElementById('c-name');
+      const categorySelect = document.getElementById('c-category');
+      const descTextarea = document.getElementById('c-desc');
+      const priceInput = document.getElementById('c-price');
+      const msrpInput = document.getElementById('c-msrp');
+      const conditionSelect = document.getElementById('c-condition');
+      const typeSelect = document.getElementById('c-type');
+      const shippingSelect = document.getElementById('c-shipping');
+      const locationInput = document.getElementById('c-location');
+      const tagsInput = document.getElementById('c-tags');
+      
+      if (nameInput) nameInput.value = listing.name || '';
+      if (categorySelect) categorySelect.value = listing.category || '';
+      if (descTextarea) descTextarea.value = listing.description || '';
+      if (priceInput) priceInput.value = listing.price ?? '';
+      if (msrpInput) msrpInput.value = listing.msrp || '';
+      if (conditionSelect) conditionSelect.value = listing.condition || '';
+      if (typeSelect) typeSelect.value = listing.type || 'buy-now';
+      if (shippingSelect) shippingSelect.value = listing.shipping || 'paid';
+      if (locationInput) locationInput.value = listing.location || '';
+      if (tagsInput) tagsInput.value = (listing.tags || []).join(', ');
       
       updateSubcategories();
       const subcategorySelect = document.getElementById('c-subcategory');
@@ -954,11 +1205,15 @@ async function initCreatePage() {
           listing.images.forEach((url, i) => {
             const item = document.createElement('div');
             item.className = 'image-preview-item animate-pop';
-            item.innerHTML = `<img src="${escHtml(url)}" alt="Image ${i+1}" /><button class="remove-image" onclick="removeExistingImage(${i})">&times;</button>`;
+            item.innerHTML = `
+              <img src="${escHtml(url)}" alt="Image ${i + 1}" />
+              <button class="remove-image" onclick="removeExistingImage(${i})" title="Remove">&times;</button>
+            `;
             existingGrid.appendChild(item);
           });
         }
       }
+      
       updateDescCounter();
     }
   } else {
@@ -1020,7 +1275,10 @@ function removeExistingImage(index) {
   State.keepExistingImages.forEach((url, i) => {
     const item = document.createElement('div');
     item.className = 'image-preview-item animate-pop';
-    item.innerHTML = `<img src="${escHtml(url)}" alt="Image ${i+1}" /><button class="remove-image" onclick="removeExistingImage(${i})">&times;</button>`;
+    item.innerHTML = `
+      <img src="${escHtml(url)}" alt="Image ${i + 1}" />
+      <button class="remove-image" onclick="removeExistingImage(${i})" title="Remove">&times;</button>
+    `;
     existingGrid.appendChild(item);
   });
 }
@@ -1058,7 +1316,10 @@ function addImagePreview(src, index) {
   const item = document.createElement('div');
   item.className = 'image-preview-item animate-pop';
   item.dataset.index = index;
-  item.innerHTML = `<img src="${src}" alt="Preview ${index+1}" /><button class="remove-image" onclick="removeImage(${index})">&times;</button>`;
+  item.innerHTML = `
+    <img src="${src}" alt="Preview ${index + 1}" />
+    <button class="remove-image" onclick="removeImage(${index})" title="Remove">&times;</button>
+  `;
   grid.appendChild(item);
 }
 
@@ -1083,11 +1344,16 @@ async function uploadImages(userId) {
   for (const file of State.imageFiles) {
     const ext = file.name.split('.').pop();
     const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { error } = await db.storage.from('listing-images').upload(path, file, { cacheControl: '3600', upsert: false });
+    const { error } = await db.storage
+      .from('listing-images')
+      .upload(path, file, { cacheControl: '3600', upsert: false });
+    
     if (error) {
       console.error('Error uploading image:', error);
     } else {
-      const { data: { publicUrl } } = db.storage.from('listing-images').getPublicUrl(path);
+      const { data: { publicUrl } } = db.storage
+        .from('listing-images')
+        .getPublicUrl(path);
       urls.push(publicUrl);
     }
   }
@@ -1096,7 +1362,10 @@ async function uploadImages(userId) {
 
 async function submitListing(e) {
   e.preventDefault();
-  if (!State.user) { openAuthModal(); return; }
+  if (!State.user) {
+    openAuthModal();
+    return;
+  }
   
   const isEditing = !!State.editingListingId;
   const errEl = document.getElementById('create-error');
@@ -1111,7 +1380,11 @@ async function submitListing(e) {
     }
     
     const allImages = [...State.keepExistingImages, ...newImageUrls];
-    const paymentMethods = Array.from(document.querySelectorAll('input[name="payment"]:checked')).map(cb => cb.value);
+    
+    const paymentMethods = Array.from(
+      document.querySelectorAll('input[name="payment"]:checked')
+    ).map(cb => cb.value);
+    
     if (paymentMethods.length === 0) paymentMethods.push('cash');
     
     const price = parseFloat(document.getElementById('c-price')?.value || '0');
@@ -1121,18 +1394,8 @@ async function submitListing(e) {
     const tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean).slice(0, 10);
     const subcategoryEl = document.getElementById('c-subcategory');
     const subcategory = subcategoryEl && subcategoryEl.value ? subcategoryEl.value : null;
+    
     const isFair = msrp ? price <= msrp * 1.2 : true;
-    
-    // Get location and shipping - both required
-    const location = document.getElementById('c-location')?.value.trim();
-    if (!location) {
-      throw new Error('Location is required. Please enter your city and state.');
-    }
-    
-    const shipping = document.getElementById('c-shipping')?.value;
-    if (!shipping) {
-      throw new Error('Shipping method is required.');
-    }
     
     const listingData = {
       seller_id: State.user.id,
@@ -1144,8 +1407,8 @@ async function submitListing(e) {
       msrp: msrp,
       condition: document.getElementById('c-condition')?.value || '',
       type: document.getElementById('c-type')?.value || 'buy-now',
-      shipping: shipping,
-      location: location,
+      shipping: document.getElementById('c-shipping')?.value || 'paid',
+      location: document.getElementById('c-location')?.value.trim() || null,
       tags: tags,
       payment_methods: paymentMethods,
       is_fair: isFair,
@@ -1162,19 +1425,31 @@ async function submitListing(e) {
     let savedListing;
     if (isEditing) {
       delete listingData.seller_id;
-      const { data, error } = await db.from('listings').update(listingData).eq('id', State.editingListingId).eq('seller_id', State.user.id).select('*, profiles:seller_id(id, username, avatar_url, rating, location)').single();
+      const { data, error } = await db
+        .from('listings')
+        .update(listingData)
+        .eq('id', State.editingListingId)
+        .eq('seller_id', State.user.id)
+        .select('*, profiles:seller_id(id, username, avatar_url, rating, location)')
+        .single();
       if (error) throw error;
       savedListing = data;
+      
       const idx = State.listings.findIndex(l => l.id === State.editingListingId);
       if (idx !== -1) State.listings[idx] = savedListing;
     } else {
-      const { data, error } = await db.from('listings').insert(listingData).select('*, profiles:seller_id(id, username, avatar_url, rating, location)').single();
+      const { data, error } = await db
+        .from('listings')
+        .insert(listingData)
+        .select('*, profiles:seller_id(id, username, avatar_url, rating, location)')
+        .single();
       if (error) throw error;
       savedListing = data;
       State.listings.unshift(savedListing);
     }
     
-    document.getElementById('create-form')?.reset();
+    const form = document.getElementById('create-form');
+    if (form) form.reset();
     State.imageFiles = [];
     State.keepExistingImages = [];
     const previewGrid = document.getElementById('image-preview-grid');
@@ -1197,14 +1472,27 @@ async function submitListing(e) {
 
 // ==================== PROFILE MODULE ====================
 async function loadProfile() {
-  if (!State.user) { openAuthModal(); return; }
+  if (!State.user) {
+    openAuthModal();
+    return;
+  }
   
   const profileIdToLoad = window.selectedProfileId || State.user.id;
   const isOwnProfile = profileIdToLoad === State.user.id;
+  
   if (window.selectedProfileId) delete window.selectedProfileId;
   
-  const { data: profile, error } = await db.from('profiles').select('*').eq('id', profileIdToLoad).single();
-  if (error) { showToast("Could not load profile.", 'error'); navigate('shop'); return; }
+  const { data: profile, error } = await db
+    .from('profiles')
+    .select('*')
+    .eq('id', profileIdToLoad)
+    .single();
+  
+  if (error) {
+    showToast("Could not load profile.", 'error');
+    navigate('shop');
+    return;
+  }
   
   const avatarEl = document.getElementById('profile-avatar-lg');
   const usernameEl = document.getElementById('profile-username');
@@ -1213,6 +1501,7 @@ async function loadProfile() {
   const locationEl = document.getElementById('profile-location');
   
   const name = profile?.username || '?';
+  
   if (avatarEl) {
     if (profile?.avatar_url) {
       avatarEl.innerHTML = `<img src="${escHtml(profile.avatar_url)}" alt="${escHtml(name)}" />`;
@@ -1220,6 +1509,7 @@ async function loadProfile() {
       avatarEl.textContent = name.charAt(0).toUpperCase();
     }
   }
+  
   if (usernameEl) usernameEl.textContent = (profile?.username || name).toUpperCase();
   if (emailEl) emailEl.textContent = isOwnProfile ? profile.email : '';
   if (bioEl) bioEl.textContent = profile?.bio || '';
@@ -1230,9 +1520,11 @@ async function loadProfile() {
     if (isOwnProfile) {
       editButton.innerHTML = '✏️ Edit Profile';
       editButton.onclick = openEditProfile;
+      editButton.style.display = 'inline-block';
     } else if (profile) {
       editButton.innerHTML = '💬 Let\'s Chat';
       editButton.onclick = () => startChat(profile.id);
+      editButton.style.display = 'inline-block';
     }
   }
   
@@ -1246,6 +1538,7 @@ async function loadProfile() {
     const sBio = document.getElementById('s-bio');
     const sLocation = document.getElementById('s-location');
     const sPhone = document.getElementById('s-phone');
+    
     if (sUsername) sUsername.value = profile?.username || '';
     if (sBio) sBio.value = profile?.bio || '';
     if (sLocation) sLocation.value = profile?.location || '';
@@ -1253,7 +1546,12 @@ async function loadProfile() {
   }
   
   const activeTab = document.querySelector('.profile-tab.active');
-  showProfileTab(activeTab?.dataset.ptab || 'my-listings');
+  if (activeTab) {
+    const tabName = activeTab.dataset.ptab;
+    showProfileTab(tabName);
+  } else {
+    showProfileTab('my-listings');
+  }
 }
 
 function showProfileTab(tabName) {
@@ -1265,18 +1563,29 @@ function showProfileTab(tabName) {
   if (soldDiv) soldDiv.classList.add('hidden');
   if (settingsDiv) settingsDiv.classList.add('hidden');
   
-  if (tabName === 'my-listings' && myListingsDiv) myListingsDiv.classList.remove('hidden');
-  else if (tabName === 'sold' && soldDiv) { soldDiv.classList.remove('hidden'); if (State.user) loadProfileListings(State.user.id, true); }
-  else if (tabName === 'settings' && settingsDiv) settingsDiv.classList.remove('hidden');
+  if (tabName === 'my-listings' && myListingsDiv) {
+    myListingsDiv.classList.remove('hidden');
+  } else if (tabName === 'sold' && soldDiv) {
+    soldDiv.classList.remove('hidden');
+    if (State.user) loadProfileListings(State.user.id, true);
+  } else if (tabName === 'settings' && settingsDiv) {
+    settingsDiv.classList.remove('hidden');
+  }
 }
 
 async function loadProfileListings(profileId, isOwnProfile) {
   if (!profileId) return;
-  const { data } = await db.from('listings').select('*, profiles:seller_id(id, username, avatar_url, rating, location)').eq('seller_id', profileId).order('created_at', { ascending: false });
+  
+  const { data } = await db
+    .from('listings')
+    .select('*, profiles:seller_id(id, username, avatar_url, rating, location)')
+    .eq('seller_id', profileId)
+    .order('created_at', { ascending: false });
   
   const allListings = data || [];
   const active = allListings.filter(l => !l.is_sold);
   const sold = allListings.filter(l => l.is_sold);
+  
   const totalViews = allListings.reduce((s, l) => s + (l.view_count || 0), 0);
   const totalFavs = allListings.reduce((s, l) => s + (l.favorite_count || 0), 0);
   
@@ -1284,6 +1593,7 @@ async function loadProfileListings(profileId, isOwnProfile) {
   const statViews = document.getElementById('stat-views');
   const statFavs = document.getElementById('stat-favorites');
   const statSold = document.getElementById('stat-sold');
+  
   if (statListings) animateNumber(statListings, active.length);
   if (statViews) animateNumber(statViews, totalViews);
   if (statFavs) animateNumber(statFavs, totalFavs);
@@ -1292,7 +1602,7 @@ async function loadProfileListings(profileId, isOwnProfile) {
   const grid = document.getElementById('profile-listings-grid');
   if (grid) {
     if (active.length === 0) {
-      grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">NO ACTIVE LISTINGS</div></div>`;
+      grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">NO ACTIVE LISTINGS</div>${isOwnProfile ? '<div class="empty-sub">Click + CREATE to list your first item</div>' : ''}</div>`;
     } else {
       grid.innerHTML = '';
       active.forEach(l => grid.appendChild(createListingCard(l, isOwnProfile)));
@@ -1302,7 +1612,7 @@ async function loadProfileListings(profileId, isOwnProfile) {
   const soldGrid = document.getElementById('profile-sold-grid');
   if (soldGrid) {
     if (sold.length === 0) {
-      soldGrid.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">NO SOLD ITEMS YET</div></div>`;
+      soldGrid.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">NO SOLD ITEMS YET</div><div class="empty-sub">Items you sell will appear here</div></div>`;
     } else {
       soldGrid.innerHTML = '';
       sold.forEach(l => {
@@ -1316,7 +1626,10 @@ async function loadProfileListings(profileId, isOwnProfile) {
 
 async function saveProfile(e) {
   e.preventDefault();
-  if (!State.user) return;
+  if (!State.user) {
+    openAuthModal();
+    return;
+  }
   
   const errEl = document.getElementById('profile-save-error');
   if (errEl) errEl.classList.remove('show');
@@ -1327,7 +1640,10 @@ async function saveProfile(e) {
   const phone = document.getElementById('s-phone')?.value.trim() || null;
   
   if (username.length < 3) {
-    if (errEl) { errEl.textContent = 'Username must be at least 3 characters.'; errEl.classList.add('show'); }
+    if (errEl) { 
+      errEl.textContent = 'Username must be at least 3 characters.'; 
+      errEl.classList.add('show'); 
+    }
     showToast('Username must be at least 3 characters.', 'error');
     return;
   }
@@ -1337,16 +1653,39 @@ async function saveProfile(e) {
   if (saveBtn) setLoading(saveBtn, true, 'SAVING...');
   
   try {
-    const { error } = await db.from('profiles').update({ username, bio, location, phone, updated_at: new Date().toISOString() }).eq('id', State.user.id);
-    if (error) throw error;
-    State.profile = { ...State.profile, username, bio, location, phone };
-    updateAuthUI();
-    showToast('Profile updated successfully!', 'success');
-    await loadProfile();
-    if (errEl) errEl.classList.remove('show');
+    const updates = {
+      username: username,
+      bio: bio,
+      location: location,
+      phone: phone,
+      updated_at: new Date().toISOString()
+    };
+    
+    const { error } = await db
+      .from('profiles')
+      .update(updates)
+      .eq('id', State.user.id);
+    
+    if (error) {
+      const msg = error.message.includes('unique') ? 'That username is already taken.' : error.message;
+      if (errEl) { 
+        errEl.textContent = 'Failed to save profile: ' + msg; 
+        errEl.classList.add('show'); 
+      }
+      showToast('Failed to save profile: ' + msg, 'error');
+    } else {
+      State.profile = { ...State.profile, ...updates };
+      updateAuthUI();
+      showToast('Profile updated successfully!', 'success');
+      await loadProfile();
+      if (errEl) errEl.classList.remove('show');
+    }
   } catch (err) {
-    const msg = err.message.includes('unique') ? 'That username is already taken.' : err.message;
-    if (errEl) { errEl.textContent = 'Failed to save profile: ' + msg; errEl.classList.add('show'); }
+    console.error('Save profile error:', err);
+    if (errEl) {
+      errEl.textContent = 'An unexpected error occurred.';
+      errEl.classList.add('show');
+    }
     showToast('Failed to save profile.', 'error');
   } finally {
     if (saveBtn) setLoading(saveBtn, false, originalText);
@@ -1354,14 +1693,18 @@ async function saveProfile(e) {
 }
 
 function switchProfileTab(btn) {
+  const tabName = btn.dataset.ptab;
   document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
-  showProfileTab(btn.dataset.ptab);
+  showProfileTab(tabName);
 }
 
 function openEditProfile() {
   const settingsTab = document.querySelector('.profile-tab[data-ptab="settings"]');
-  if (settingsTab) { settingsTab.click(); settingsTab.scrollIntoView({ behavior: 'smooth' }); }
+  if (settingsTab) {
+    settingsTab.click();
+    settingsTab.scrollIntoView({ behavior: 'smooth' });
+  }
 }
 
 // ==================== MARK SOLD ====================
@@ -1377,16 +1720,31 @@ async function confirmMarkSold() {
   if (!listingId || !State.user) return;
   
   try {
-    const { error } = await db.from('listings').update({ is_sold: true, sold_at: new Date().toISOString(), sold_to: State.user.id }).eq('id', listingId).eq('seller_id', State.user.id);
+    const { error } = await db
+      .from('listings')
+      .update({ 
+        is_sold: true, 
+        sold_at: new Date().toISOString(),
+        sold_to: State.user.id
+      })
+      .eq('id', listingId)
+      .eq('seller_id', State.user.id);
+    
     if (error) throw error;
+    
     closeModal('mark-sold-modal');
     showToast('Listing marked as sold!', 'success');
+    
     const idx = State.listings.findIndex(l => l.id === listingId);
     if (idx !== -1) State.listings.splice(idx, 1);
     applyFilters();
-    if (State.currentPage === 'profile') await loadProfileListings(State.user.id, true);
+    
+    if (State.currentPage === 'profile') {
+      await loadProfileListings(State.user.id, true);
+    }
     if (State.currentPage === 'detail') navigate('profile');
   } catch (err) {
+    console.error('Error marking as sold:', err);
     showToast('Failed to mark as sold: ' + err.message, 'error');
   }
 }
@@ -1395,17 +1753,35 @@ async function confirmMarkSold() {
 async function openListing(listingId) {
   navigate('detail');
   State.currentListingId = listingId;
+  
   const content = document.getElementById('detail-content');
   if (content) content.innerHTML = '<div class="empty-state"><div class="spinner spinner-lg"></div></div>';
   
   try {
-    const { data: listing, error } = await db.from('listings').select('*, profiles:seller_id(id, username, avatar_url, rating, location, bio)').eq('id', listingId).single();
+    const { data: listing, error } = await db
+      .from('listings')
+      .select('*, profiles:seller_id(id, username, avatar_url, rating, location, bio)')
+      .eq('id', listingId)
+      .single();
+    
     if (error) throw error;
     State.selectedListing = listing;
-    try { await db.rpc('increment_view_count', { listing_id: listingId }); } catch(e) {}
+    
+    try {
+      await db.rpc('increment_view_count', { listing_id: listingId });
+    } catch (rpcErr) {
+      console.warn('RPC function not found');
+    }
+    
     renderDetail(listing);
     loadSimilarItems(listing);
+    
+    // Generate AI suggestion if not already present
+    if (!listing.ai_suggestions) {
+      generateAndSaveListingSuggestion(listingId);
+    }
   } catch (err) {
+    console.error('Detail error:', err);
     if (content) content.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">LISTING NOT FOUND</div></div>`;
   }
 }
@@ -1418,214 +1794,626 @@ function renderDetail(listing) {
   const isOwner = State.user && State.user.id === listing.seller_id;
   const isWished = State.wishlistIds.has(listing.id);
   
-  // Get shipping display
-  let shippingDisplay = '';
-  let shippingIcon = '';
-  if (listing.shipping === 'shipping') {
-    shippingDisplay = 'Shipping Only';
-    shippingIcon = '📦';
-  } else if (listing.shipping === 'pickup') {
-    shippingDisplay = 'Pickup Only';
-    shippingIcon = '📍';
-  } else if (listing.shipping === 'both') {
-    shippingDisplay = 'Shipping & Pickup Available';
-    shippingIcon = '🚚';
-  } else {
-    shippingDisplay = listing.shipping || 'Shipping';
-    shippingIcon = '📦';
-  }
-  
   let imagesHtml = '';
   if (listing.images && listing.images.length > 0) {
     if (listing.images.length === 1) {
-      imagesHtml = `<img src="${escHtml(listing.images[0])}" style="width:100%;border-radius:var(--radius-lg);" />`;
+      imagesHtml = `<img src="${escHtml(listing.images[0])}" alt="${escHtml(listing.name)}" style="width:100%;border-radius:var(--radius-lg);" />`;
     } else {
       const detailCarouselId = `detail-carousel-${listing.id}`;
-      imagesHtml = `<div class="image-carousel" id="${detailCarouselId}"><div class="carousel-container"><div class="carousel-slides" id="${detailCarouselId}-slides" style="display:flex;transition:transform 0.3s ease;">${listing.images.map(img => `<div class="carousel-slide" style="min-width:100%;"><img src="${escHtml(img)}" style="width:100%;border-radius:var(--radius-lg);" /></div>`).join('')}</div><button class="carousel-btn prev" onclick="changeSlide('${detailCarouselId}', -1)">‹</button><button class="carousel-btn next" onclick="changeSlide('${detailCarouselId}', 1)">›</button><div class="carousel-dots" id="${detailCarouselId}-dots">${listing.images.map((_, idx) => `<span class="carousel-dot ${idx === 0 ? 'active' : ''}" onclick="goToSlide('${detailCarouselId}', ${idx})"></span>`).join('')}</div><div class="image-count-badge">${listing.images.length} images</div></div></div>`;
-      setTimeout(() => { const slides = document.getElementById(`${detailCarouselId}-slides`); if (slides) slides.dataset.currentIndex = '0'; }, 100);
+      imagesHtml = `
+        <div class="image-carousel" id="${detailCarouselId}">
+          <div class="carousel-container">
+            <div class="carousel-slides" id="${detailCarouselId}-slides" style="display:flex;transition:transform 0.3s ease;">
+              ${listing.images.map((img, idx) => `
+                <div class="carousel-slide" style="min-width:100%;">
+                  <img src="${escHtml(img)}" alt="Image ${idx + 1}" style="width:100%;border-radius:var(--radius-lg);" />
+                </div>
+              `).join('')}
+            </div>
+            <button class="carousel-btn prev" onclick="changeSlide('${detailCarouselId}', -1)">‹</button>
+            <button class="carousel-btn next" onclick="changeSlide('${detailCarouselId}', 1)">›</button>
+            <div class="carousel-dots" id="${detailCarouselId}-dots">
+              ${listing.images.map((_, idx) => `<span class="carousel-dot ${idx === 0 ? 'active' : ''}" onclick="goToSlide('${detailCarouselId}', ${idx})"></span>`).join('')}
+            </div>
+            <div class="image-count-badge">${listing.images.length} images</div>
+          </div>
+        </div>
+      `;
+      setTimeout(() => {
+        const slides = document.getElementById(`${detailCarouselId}-slides`);
+        if (slides) slides.dataset.currentIndex = '0';
+      }, 100);
     }
   } else {
     imagesHtml = `<div class="card-no-image">📦</div>`;
   }
   
-  const paymentMethodsList = listing.payment_methods?.length ? listing.payment_methods.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' · ') : 'Cash';
+  const paymentMethodsList = listing.payment_methods && listing.payment_methods.length > 0
+    ? listing.payment_methods.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' · ')
+    : 'Cash';
   
   let actionsHtml;
   if (isOwner) {
-    actionsHtml = `<button class="btn btn-outline" onclick="editListing('${listing.id}')">✏️ EDIT LISTING</button>${!listing.is_sold ? `<button class="btn btn-primary" onclick="openMarkSoldModal('${listing.id}')">✅ MARK AS SOLD</button>` : ''}<button class="btn btn-danger" onclick="deleteListing('${listing.id}')">❌ DELETE</button>`;
+    actionsHtml = `
+      <button class="btn btn-outline" onclick="editListing('${listing.id}')">✏️ EDIT LISTING</button>
+      ${!listing.is_sold ? `<button class="btn btn-primary" onclick="openMarkSoldModal('${listing.id}')">✅ MARK AS SOLD</button>` : ''}
+      <button class="btn btn-danger" onclick="deleteListing('${listing.id}')">❌ DELETE</button>
+    `;
   } else {
-    const contactBtn = State.user ? `<button class="btn btn-primary btn-lg" onclick="startChat('${listing.seller_id}', '${listing.id}')">💬 CONTACT SELLER</button>` : `<button class="btn btn-primary btn-lg" onclick="openAuthModal()">🔐 LOGIN TO CONTACT</button>`;
-    const wishlistBtn = State.user ? `<button class="btn btn-outline wishlist-btn ${isWished ? 'active' : ''}" onclick="toggleWishlist(event, '${listing.id}')">${isWished ? '❤️ REMOVE FROM WISHLIST' : '🤍 ADD TO WISHLIST'}</button>` : `<button class="btn btn-outline" onclick="openAuthModal()">🤍 LOGIN TO SAVE</button>`;
+    const contactBtn = State.user 
+      ? `<button class="btn btn-primary btn-lg" onclick="startChat('${listing.seller_id}', '${listing.id}')">💬 CONTACT SELLER</button>`
+      : `<button class="btn btn-primary btn-lg" onclick="openAuthModal()">🔐 LOGIN TO CONTACT</button>`;
+    
+    const wishlistBtn = State.user 
+      ? `<button class="btn btn-outline wishlist-btn ${isWished ? 'active' : ''}" onclick="toggleWishlist(event, '${listing.id}')">
+          ${isWished ? '❤️ REMOVE FROM WISHLIST' : '🤍 ADD TO WISHLIST'}
+        </button>`
+      : `<button class="btn btn-outline" onclick="openAuthModal()">🤍 LOGIN TO SAVE</button>`;
+    
     actionsHtml = `${contactBtn}${wishlistBtn}`;
   }
   
-  content.innerHTML = `<div class="detail-grid">
-    <div class="detail-images">${imagesHtml}</div>
-    <div class="detail-info">
-      ${listing.is_sold ? '<div class="sold-banner" style="background:var(--danger);padding:8px;text-align:center;border-radius:8px;margin-bottom:16px;">SOLD</div>' : ''}
-      <h1 class="detail-title">${escHtml(listing.name)}</h1>
-      <div class="detail-price-row">
-        <span class="detail-price">$${parseFloat(listing.price).toFixed(2)}</span>
-        ${listing.msrp ? `<span class="detail-msrp" style="text-decoration:line-through;margin-left:12px;">$${parseFloat(listing.msrp).toFixed(2)} MSRP</span>` : ''}
-      </div>
-      
-      <!-- Shipping & Location Section - Prominent -->
-      <div class="detail-shipping-section" style="background:var(--bg-2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin:16px 0;">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
-          <span style="font-size:1.5rem;">${shippingIcon}</span>
-          <div>
-            <div style="font-weight:700;font-size:1rem;">${shippingDisplay}</div>
-            <div style="font-size:0.8rem;color:var(--text-muted);">How you'll receive this item</div>
+  content.innerHTML = `
+    <div class="detail-grid">
+      <div class="detail-images">${imagesHtml}</div>
+      <div class="detail-info">
+        ${listing.is_sold ? '<div class="sold-banner" style="background:var(--danger);padding:8px;text-align:center;border-radius:8px;margin-bottom:16px;">SOLD</div>' : ''}
+        <h1 class="detail-title">${escHtml(listing.name)}</h1>
+        <div class="detail-price-row">
+          <span class="detail-price">$${parseFloat(listing.price).toFixed(2)}</span>
+          ${listing.msrp ? `<span class="detail-msrp" style="text-decoration:line-through;color:var(--text-muted);margin-left:12px;">$${parseFloat(listing.msrp).toFixed(2)} MSRP</span>` : ''}
+        </div>
+        <div class="detail-meta-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0;">
+          ${listing.location ? `<div class="detail-meta-item"><strong>📍 Location</strong><br>${escHtml(listing.location)}</div>` : ''}
+          <div class="detail-meta-item"><strong>💳 Payment Methods</strong><br>${paymentMethodsList}</div>
+          <div class="detail-meta-item"><strong>📦 Condition</strong><br>${listing.condition || 'N/A'}</div>
+          <div class="detail-meta-item"><strong>🚚 Shipping</strong><br>${listing.shipping || 'paid'}</div>
+        </div>
+        <div class="detail-description">${escHtml(listing.description)}</div>
+        <div class="seller-card">
+          <div class="seller-avatar">${seller.username?.charAt(0) || '?'}</div>
+          <div><div class="seller-name">${escHtml(seller.username || 'Anonymous')}</div>
+          ${seller.rating > 0 ? `<div class="seller-rating">⭐ ${parseFloat(seller.rating).toFixed(1)}</div>` : ''}
+          ${seller.location ? `<div class="seller-location">📍 ${escHtml(seller.location)}</div>` : ''}</div>
+          <button onclick="viewSellerProfile('${seller.id}')" class="btn btn-outline btn-sm">View Profile</button>
+        </div>
+        <div class="detail-actions" style="display:flex;flex-direction:column;gap:10px;">${actionsHtml}</div>
+        
+        <!-- AI SUGGESTIONS PANEL - DYNAMICALLY GENERATED -->
+        <div id="ai-suggestions-${listing.id}">
+          <div style="text-align:center; padding:20px;">
+            <div class="spinner"></div> Loading AI analysis...
           </div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;padding-top:8px;border-top:1px solid var(--border);">
-          <span style="font-size:1.2rem;">📍</span>
-          <div>
-            <div style="font-weight:600;">Item Location</div>
-            <div style="font-size:0.9rem;">${escHtml(listing.location || 'Not specified')}</div>
-          </div>
-        </div>
       </div>
-      
-      <div class="detail-meta-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0;">
-        <div><strong>📦 Condition</strong><br>${listing.condition || 'N/A'}</div>
-        <div><strong>💳 Payment Methods</strong><br>${paymentMethodsList}</div>
-      </div>
-      <div class="detail-description">${escHtml(listing.description)}</div>
-      <div class="seller-card">
-        <div class="seller-avatar">${seller.username?.charAt(0) || '?'}</div>
-        <div>
-          <div class="seller-name">${escHtml(seller.username || 'Anonymous')}</div>
-          ${seller.rating > 0 ? `<div>⭐ ${seller.rating.toFixed(1)}</div>` : ''}
-          ${seller.location ? `<div>📍 ${escHtml(seller.location)}</div>` : ''}
-        </div>
-        <button onclick="viewSellerProfile('${seller.id}')" class="btn btn-outline btn-sm">View Profile</button>
-      </div>
-      <div class="detail-actions" style="display:flex;flex-direction:column;gap:10px;">${actionsHtml}</div>
     </div>
-  </div>`;
+  `;
+  
+  // Trigger AI suggestion display
+  setTimeout(() => {
+    displayListingSuggestion(listing.id);
+  }, 500);
 }
 
-function viewSellerProfile(sellerId) { window.selectedProfileId = sellerId; navigate('profile'); }
-async function editListing(listingId) { State.editingListingId = listingId; navigate('create'); }
-async function deleteListing(listingId) { if (!confirm('Delete permanently?')) return; try { await db.from('listings').delete().eq('id', listingId).eq('seller_id', State.user.id); State.listings = State.listings.filter(l => l.id !== listingId); applyFilters(); showToast('Listing deleted.', 'success'); if (State.currentPage === 'detail') navigate('profile'); } catch(err) { showToast('Failed to delete.', 'error'); } }
-async function loadSimilarItems(listing) { const scroll = document.getElementById('similar-scroll'); if (!scroll) return; scroll.innerHTML = 'Loading...'; try { const { data } = await db.from('listings').select('*, profiles:seller_id(id, username, avatar_url, rating, location)').eq('category', listing.category).eq('is_sold', false).neq('id', listing.id).limit(8); const items = data || []; if (items.length === 0) { document.getElementById('similar-section').style.display = 'none'; return; } scroll.innerHTML = ''; items.forEach(l => scroll.appendChild(createListingCard(l))); } catch(e) { document.getElementById('similar-section').style.display = 'none'; } }
+function viewSellerProfile(sellerId) {
+  window.selectedProfileId = sellerId;
+  navigate('profile');
+}
+
+async function editListing(listingId) {
+  State.editingListingId = listingId;
+  navigate('create');
+}
+
+async function deleteListing(listingId) {
+  if (!confirm('Are you sure you want to permanently delete this listing? This cannot be undone.')) return;
+  
+  try {
+    const { error } = await db
+      .from('listings')
+      .delete()
+      .eq('id', listingId)
+      .eq('seller_id', State.user.id);
+    if (error) throw error;
+    
+    State.listings = State.listings.filter(l => l.id !== listingId);
+    applyFilters();
+    
+    showToast('Listing deleted.', 'success');
+    if (State.currentPage === 'detail') navigate('profile');
+  } catch (err) {
+    console.error('Error deleting listing:', err);
+    showToast('Failed to delete listing: ' + err.message, 'error');
+  }
+}
+
+async function loadSimilarItems(listing) {
+  const scroll = document.getElementById('similar-scroll');
+  if (!scroll) return;
+  scroll.innerHTML = '<div style="padding:20px;">Loading...</div>';
+  
+  try {
+    const { data } = await db
+      .from('listings')
+      .select('*, profiles:seller_id(id, username, avatar_url, rating, location)')
+      .eq('category', listing.category)
+      .eq('is_sold', false)
+      .neq('id', listing.id)
+      .limit(8);
+    
+    const items = data || [];
+    if (items.length === 0) {
+      const section = document.getElementById('similar-section');
+      if (section) section.style.display = 'none';
+      return;
+    }
+    
+    scroll.innerHTML = '';
+    items.forEach(l => scroll.appendChild(createListingCard(l)));
+  } catch (err) {
+    const section = document.getElementById('similar-section');
+    if (section) section.style.display = 'none';
+  }
+}
 
 // ==================== RENDER ENGINE ====================
 function createListingCard(listing, showOwnerActions = false) {
   const card = document.createElement('div');
   card.className = 'listing-card animate-fade';
-  card.onclick = (e) => { if (e.target.closest('.wishlist-btn, .owner-btn, .carousel-btn, .carousel-dot')) return; openListing(listing.id); };
+  card.onclick = (e) => {
+    if (e.target.closest('.wishlist-btn, .owner-btn, .carousel-btn, .carousel-dot')) return;
+    openListing(listing.id);
+  };
   
   const isWished = State.wishlistIds.has(listing.id);
   const isOwner = State.user && State.user.id === listing.seller_id;
   const showActions = showOwnerActions !== undefined ? showOwnerActions : isOwner;
   
   let imageHtml;
-  if (listing.images?.length > 1) imageHtml = createImageCarousel(listing.images, listing.id);
-  else if (listing.images?.length === 1) imageHtml = `<img src="${escHtml(listing.images[0])}" style="width:100%;height:100%;object-fit:cover;" />`;
-  else imageHtml = `<div class="card-no-image">📦</div>`;
-  
-  const paymentIcons = { cash: '💵', card: '💳', paypal: '🅿️', venmo: 'V', crypto: '₿', trade: '🔄' };
-  const paymentDisplay = listing.payment_methods?.length ? listing.payment_methods.slice(0,3).map(p => paymentIcons[p] || p).join(' ') : '💵';
-  
-  // Get shipping display text and icon
-  let shippingDisplay = '';
-  let shippingIcon = '';
-  if (listing.shipping === 'shipping') {
-    shippingDisplay = 'Shipping Only';
-    shippingIcon = '📦';
-  } else if (listing.shipping === 'pickup') {
-    shippingDisplay = 'Pickup Only';
-    shippingIcon = '📍';
-  } else if (listing.shipping === 'both') {
-    shippingDisplay = 'Shipping & Pickup';
-    shippingIcon = '🚚';
+  if (listing.images && listing.images.length > 1) {
+    imageHtml = createImageCarousel(listing.images, listing.id);
+  } else if (listing.images && listing.images.length === 1) {
+    imageHtml = `<img src="${escHtml(listing.images[0])}" alt="${escHtml(listing.name)}" style="width:100%;height:100%;object-fit:cover;" />`;
   } else {
-    shippingDisplay = listing.shipping || 'Shipping';
-    shippingIcon = '📦';
+    imageHtml = `<div class="card-no-image">📦</div>`;
   }
+  
+  const paymentIcons = {
+    'cash': '💵', 'card': '💳', 'paypal': '🅿️', 'venmo': 'V', 'crypto': '₿', 'trade': '🔄'
+  };
+  const paymentDisplay = listing.payment_methods && listing.payment_methods.length > 0
+    ? listing.payment_methods.slice(0, 3).map(p => paymentIcons[p] || p).join(' ')
+    : '💵';
   
   let wishlistBtn = '';
   if (State.user && !isOwner) {
-    wishlistBtn = `<button class="wishlist-btn ${isWished ? 'active' : ''}" onclick="toggleWishlist(event, '${listing.id}')" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;z-index:20;">${isWished ? '❤️' : '🤍'}</button>`;
+    wishlistBtn = `
+      <button class="wishlist-btn ${isWished ? 'active' : ''}"
+        onclick="toggleWishlist(event, '${listing.id}')"
+        style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;z-index:20;transition:all 0.2s;"
+      >${isWished ? '❤️' : '🤍'}</button>
+    `;
   }
   
   let ownerActions = '';
   if (showActions && isOwner && !listing.is_sold) {
-    ownerActions = `<div style="display:flex;gap:8px;margin-top:8px;"><button class="owner-btn" onclick="event.stopPropagation(); editListing('${listing.id}')" style="background:var(--neon);color:#001a07;padding:4px 8px;border-radius:4px;font-size:11px;">EDIT</button><button class="owner-btn" onclick="event.stopPropagation(); openMarkSoldModal('${listing.id}')" style="background:var(--warning);color:#001a07;padding:4px 8px;border-radius:4px;font-size:11px;">SOLD</button></div>`;
+    ownerActions = `
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="owner-btn" onclick="event.stopPropagation(); editListing('${listing.id}')" style="background:var(--neon);color:#001a07;padding:4px 8px;border-radius:4px;border:none;cursor:pointer;font-size:11px;transition:all 0.2s;">EDIT</button>
+        <button class="owner-btn" onclick="event.stopPropagation(); openMarkSoldModal('${listing.id}')" style="background:var(--warning);color:#001a07;padding:4px 8px;border-radius:4px;border:none;cursor:pointer;font-size:11px;transition:all 0.2s;">SOLD</button>
+      </div>
+    `;
   }
   
-  const soldOverlay = listing.is_sold ? '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);padding:8px 16px;border-radius:8px;font-weight:bold;color:var(--danger);z-index:15;">SOLD</div>' : '';
-  const locationDisplay = listing.location ? `📍 ${listing.location.substring(0,25)}` : '📍 Location not specified';
+  // AI badge if suggestion exists
+  const hasAiSuggestion = listing.ai_suggestions ? true : false;
   
-  card.innerHTML = `<div class="card-image-wrap" style="position:relative;aspect-ratio:1;overflow:hidden;">${imageHtml}${listing.is_fair ? '<span style="position:absolute;top:8px;left:8px;background:var(--neon);color:#001a07;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:bold;z-index:20;">AI FAIR</span>' : ''}${soldOverlay}${wishlistBtn}</div>
-<div class="card-body" style="padding:12px;">
-  <div class="card-title" style="font-weight:700;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;">${escHtml(listing.name)}</div>
-  <div class="card-price" style="color:var(--neon);font-weight:bold;font-size:1.1rem;">$${listing.price.toFixed(2)}</div>
-  <div class="card-meta" style="font-size:0.7rem;color:var(--text-muted);display:flex;flex-wrap:wrap;gap:8px;margin:4px 0;">
-    <span>🏷️ ${listing.condition || 'N/A'}</span>
-    <span>📦 ${listing.type || 'buy-now'}</span>
-  </div>
-  <div class="card-location" style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;display:flex;align-items:center;gap:4px;">
-    <span>${locationDisplay}</span>
-  </div>
-  <div class="card-shipping" style="font-size:0.7rem;margin-bottom:4px;display:flex;align-items:center;gap:6px;background:rgba(0,255,65,0.1);padding:4px 8px;border-radius:4px;">
-    <span>${shippingIcon}</span>
-    <span style="font-weight:500;">${shippingDisplay}</span>
-  </div>
-  <div class="card-payment" style="font-size:0.7rem;display:flex;align-items:center;gap:6px;background:rgba(0,255,65,0.05);padding:4px 8px;border-radius:6px;margin-top:4px;">
-    <span>💳 Accepts:</span>
-    <span>${paymentDisplay}</span>
-  </div>
-  ${ownerActions}
-</div>`;
+  const soldOverlay = listing.is_sold ? '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);padding:8px 16px;border-radius:8px;font-weight:bold;color:var(--danger);z-index:15;">SOLD</div>' : '';
+  const locationDisplay = listing.location ? `📍 ${listing.location.substring(0, 25)}` : '';
+  
+  card.innerHTML = `
+    <div class="card-image-wrap" style="position:relative;aspect-ratio:1;background:var(--bg-3);overflow:hidden;">
+      ${imageHtml}
+      ${listing.is_fair ? '<span style="position:absolute;top:8px;left:8px;background:var(--neon);color:#001a07;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:bold;z-index:20;">AI FAIR</span>' : ''}
+      ${hasAiSuggestion ? '<span style="position:absolute;top:8px;left:70px;background:var(--blue);color:#001a07;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:bold;z-index:20;">🤖 AI ANALYZED</span>' : ''}
+      ${soldOverlay}
+      ${wishlistBtn}
+    </div>
+    <div class="card-body" style="padding:12px;">
+      <div class="card-title" style="font-weight:700;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;">${escHtml(listing.name)}</div>
+      <div class="card-price" style="color:var(--neon);font-weight:bold;font-size:1.1rem;margin-bottom:4px;">$${parseFloat(listing.price).toFixed(2)}</div>
+      <div class="card-meta" style="font-size:0.7rem;color:var(--text-muted);display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px;">
+        <span>🏷️ ${listing.condition || 'N/A'}</span>
+        <span>📦 ${listing.type || 'buy-now'}</span>
+      </div>
+      ${locationDisplay ? `<div class="card-location" style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;display:flex;align-items:center;gap:4px;">${locationDisplay}</div>` : ''}
+      <div class="card-payment" style="font-size:0.7rem;color:var(--text-muted);display:flex;align-items:center;gap:6px;background:rgba(0,255,65,0.08);padding:4px 8px;border-radius:6px;margin-top:4px;flex-wrap:wrap;">
+        <span>💳 Accepts:</span>
+        <span>${paymentDisplay}</span>
+      </div>
+      ${ownerActions}
+    </div>
+  `;
+  
   return card;
 }
 
 function renderListings(listings) {
   const grid = document.getElementById('listings-grid');
   if (!grid) return;
-  if (listings.length === 0) { grid.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">NO LISTINGS FOUND</div></div>`; return; }
+  
+  if (listings.length === 0) {
+    grid.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">NO LISTINGS FOUND</div></div>`;
+    return;
+  }
+  
   grid.innerHTML = '';
   listings.forEach(l => grid.appendChild(createListingCard(l)));
 }
 
-function showSkeletons() { const grid = document.getElementById('listings-grid'); if (grid) grid.innerHTML = Array(8).fill(0).map(() => `<div class="skeleton-card skeleton" style="height:280px;background:var(--bg-2);border-radius:var(--radius-lg);"></div>`).join(''); }
-function animateNumber(el, target) { const duration = 800, start = performance.now(), startVal = parseInt(el.textContent) || 0; function step(t) { const elapsed = t - start, progress = Math.min(elapsed / duration, 1), eased = 1 - Math.pow(1 - progress, 3); el.textContent = Math.round(startVal + (target - startVal) * eased); if (progress < 1) requestAnimationFrame(step); } requestAnimationFrame(step); }
-function toggleMobileSidebar() { const sidebar = document.getElementById('sidebar'); if (sidebar) sidebar.classList.toggle('mobile-open'); }
+function showSkeletons() {
+  const grid = document.getElementById('listings-grid');
+  if (!grid) return;
+  grid.innerHTML = Array(8).fill(0).map(() => `<div class="skeleton-card skeleton" style="height:280px;background:var(--bg-2);border-radius:var(--radius-lg);"></div>`).join('');
+}
+
+function animateNumber(el, target) {
+  const duration = 800;
+  const start = performance.now();
+  const startVal = parseInt(el.textContent) || 0;
+  
+  function step(timestamp) {
+    const elapsed = timestamp - start;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = Math.round(startVal + (target - startVal) * eased);
+    if (progress < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function toggleMobileSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  if (sidebar) sidebar.classList.toggle('mobile-open');
+}
 
 // ==================== CHAT SYSTEM ====================
-async function startChat(partnerId, listingId = null) { if (!State.user) { openAuthModal(); return; } if (partnerId === State.user.id) { showToast("Can't chat with yourself.", 'info'); return; } State.currentChatPartnerId = partnerId; State.currentListingId = listingId; navigate('messages'); }
-async function loadMessages() { if (!State.user) return; const { data, error } = await db.from('messages').select('*, sender:sender_id(id,username,avatar_url), receiver:receiver_id(id,username,avatar_url)').or(`sender_id.eq.${State.user.id},receiver_id.eq.${State.user.id}`).order('created_at', { ascending: false }); if (error) return; const convos = new Map(); data?.forEach(msg => { const partner = msg.sender.id === State.user.id ? msg.receiver : msg.sender; if (!convos.has(partner.id)) convos.set(partner.id, { partnerProfile: partner, lastMessage: msg }); }); const sorted = Array.from(convos.values()).sort((a,b) => new Date(b.lastMessage.created_at) - new Date(a.lastMessage.created_at)); const list = document.getElementById('conversationList'); if (!list) return; list.innerHTML = ''; if (sorted.length === 0) { list.innerHTML = '<div class="empty-state-small">No conversations yet.</div>'; } else { sorted.forEach(convo => { const isActive = State.currentChatPartnerId === convo.partnerProfile.id; const li = document.createElement('div'); li.className = `convo-item ${isActive ? 'active' : ''}`; li.setAttribute('data-id', convo.partnerProfile.id); li.onclick = () => loadConversationThread(convo.partnerProfile.id); const preview = convo.lastMessage.image_url ? '📷 Image' : convo.lastMessage.content; li.innerHTML = `<div class="convo-avatar">${convo.partnerProfile.username?.charAt(0) || '?'}</div><div class="convo-details"><div class="convo-username">${escHtml(convo.partnerProfile.username)}</div><div class="convo-preview">${escHtml(preview?.substring(0,35) || '...')}</div></div>`; list.appendChild(li); }); } if (State.currentChatPartnerId) await loadConversationThread(State.currentChatPartnerId, State.currentListingId); else { const header = document.getElementById('activeChatHeader'); const thread = document.getElementById('chatThread'); const form = document.getElementById('chatForm'); if (header) header.innerHTML = 'Select a conversation'; if (thread) thread.innerHTML = '<div class="empty-state-small">Your messages will appear here.</div>'; if (form) form.style.display = 'none'; } }
-async function loadConversationThread(partnerId, listingId = null) { State.currentChatPartnerId = partnerId; document.querySelectorAll('.convo-item').forEach(el => el.classList.toggle('active', el.getAttribute('data-id') === partnerId)); const { data: partnerProfile } = await db.from('profiles').select('*').eq('id', partnerId).single(); if (!partnerProfile) return; const header = document.getElementById('activeChatHeader'); const form = document.getElementById('chatForm'); if (header) header.innerHTML = `Chatting with <strong>${escHtml(partnerProfile.username)}</strong>`; if (form) form.style.display = 'flex'; if (listingId) { const { data: listing } = await db.from('listings').select('name, price').eq('id', listingId).single(); if (listing) { const input = document.getElementById('chatMessageInput'); if (input) input.value = `Hi, I'm interested in your "${listing.name}" for $${listing.price}.`; } State.currentListingId = null; } const { data: messages } = await db.from('messages').select('*').or(`and(sender_id.eq.${State.user.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${State.user.id})`).order('created_at', { ascending: true }); const thread = document.getElementById('chatThread'); if (!thread) return; thread.innerHTML = ''; messages?.forEach(msg => renderMessage(msg, State.user.id)); thread.scrollTop = thread.scrollHeight; }
-async function handleSendMessage(e) { e.preventDefault(); const input = document.getElementById('chatMessageInput'); const content = input?.value.trim(); if (!content || !State.currentChatPartnerId) return; await db.from('messages').insert({ sender_id: State.user.id, receiver_id: State.currentChatPartnerId, listing_id: State.currentListingId, content }); if (input) input.value = ''; await loadConversationThread(State.currentChatPartnerId); await loadMessages(); }
-async function handleSendImage(e) { const file = e.target.files[0]; if (!file || !State.currentChatPartnerId) return; const path = `${State.user.id}/${Date.now()}_${file.name}`; await db.storage.from('chat-images').upload(path, file); const { data: { publicUrl } } = db.storage.from('chat-images').getPublicUrl(path); await db.from('messages').insert({ sender_id: State.user.id, receiver_id: State.currentChatPartnerId, listing_id: State.currentListingId, image_url: publicUrl }); await loadConversationThread(State.currentChatPartnerId); await loadMessages(); }
-function renderMessage(msg, currentUserId) { const thread = document.getElementById('chatThread'); if (!thread) return; const isSent = msg.sender_id === currentUserId; const div = document.createElement('div'); div.className = `msg ${isSent ? 'sent' : 'received'}`; div.innerHTML = msg.image_url ? `<img src="${escHtml(msg.image_url)}" style="max-width:200px;border-radius:8px;cursor:pointer;" onclick="window.open(this.src)">` : escHtml(msg.content); thread.appendChild(div); thread.scrollTop = thread.scrollHeight; }
-function initChat() { if (!db) return; db.channel('public:messages').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => { const newMsg = payload.new; const relevant = newMsg.sender_id === State.user?.id || newMsg.receiver_id === State.user?.id; if (State.currentPage === 'messages' && relevant && State.user) { const fromPartner = newMsg.sender_id === State.currentChatPartnerId; const fromMe = newMsg.sender_id === State.user?.id; if (fromPartner || fromMe) renderMessage(newMsg, State.user?.id); loadMessages(); } }).subscribe(); }
+async function startChat(partnerId, listingId = null) {
+  if (!State.user) {
+    openAuthModal();
+    return;
+  }
+  if (partnerId === State.user.id) {
+    showToast("You can't start a chat with yourself.", "info");
+    return;
+  }
+  
+  State.currentChatPartnerId = partnerId;
+  State.currentListingId = listingId;
+  navigate('messages');
+}
+
+async function loadMessages() {
+  if (!State.user) return;
+  
+  const { data: allMessages, error } = await db
+    .from('messages')
+    .select(`
+      *,
+      sender:sender_id(id, username, avatar_url),
+      receiver:receiver_id(id, username, avatar_url)
+    `)
+    .or(`sender_id.eq.${State.user.id},receiver_id.eq.${State.user.id}`)
+    .order('created_at', { ascending: false });
+  
+  if (error) {
+    console.error("Error fetching conversations", error);
+    return;
+  }
+  
+  const conversations = new Map();
+  if (allMessages) {
+    allMessages.forEach(msg => {
+      const partner = msg.sender.id === State.user.id ? msg.receiver : msg.sender;
+      if (!conversations.has(partner.id)) {
+        conversations.set(partner.id, {
+          partnerProfile: partner,
+          lastMessage: msg
+        });
+      }
+    });
+  }
+  
+  const sortedConversations = Array.from(conversations.values())
+    .sort((a, b) => new Date(b.lastMessage.created_at) - new Date(a.lastMessage.created_at));
+  
+  const convoListEl = document.getElementById('conversationList');
+  if (!convoListEl) return;
+  convoListEl.innerHTML = '';
+  
+  if (sortedConversations.length === 0) {
+    convoListEl.innerHTML = '<div class="empty-state-small">No conversations yet.</div>';
+  } else {
+    sortedConversations.forEach(convo => {
+      const partnerProfile = convo.partnerProfile;
+      const isActive = State.currentChatPartnerId === partnerProfile.id;
+      
+      const li = document.createElement('div');
+      li.className = `convo-item ${isActive ? 'active' : ''}`;
+      li.setAttribute('data-id', partnerProfile.id);
+      li.onclick = () => loadConversationThread(partnerProfile.id);
+      
+      const previewText = convo.lastMessage.image_url ? '📷 Sent an image' : convo.lastMessage.content;
+      
+      li.innerHTML = `
+        <div class="convo-avatar">${partnerProfile.username?.charAt(0) || '?'}</div>
+        <div class="convo-details">
+          <div class="convo-username">${escHtml(partnerProfile.username)}</div>
+          <div class="convo-preview">${escHtml(previewText?.substring(0, 35) || '...')}</div>
+        </div>
+      `;
+      convoListEl.appendChild(li);
+    });
+  }
+  
+  if (State.currentChatPartnerId) {
+    await loadConversationThread(State.currentChatPartnerId, State.currentListingId);
+  } else {
+    const activeHeader = document.getElementById('activeChatHeader');
+    const chatThread = document.getElementById('chatThread');
+    const chatForm = document.getElementById('chatForm');
+    if (activeHeader) activeHeader.innerHTML = 'Select a conversation';
+    if (chatThread) chatThread.innerHTML = '<div class="empty-state-small">Your messages will appear here.</div>';
+    if (chatForm) chatForm.style.display = 'none';
+  }
+}
+
+async function loadConversationThread(partnerId, listingId = null) {
+  State.currentChatPartnerId = partnerId;
+  
+  document.querySelectorAll('.convo-item').forEach(el => {
+    el.classList.toggle('active', el.getAttribute('data-id') === partnerId);
+  });
+  
+  const { data: partnerProfile, error: pError } = await db.from('profiles').select('*').eq('id', partnerId).single();
+  if (pError || !partnerProfile) return;
+  
+  const activeHeader = document.getElementById('activeChatHeader');
+  const chatForm = document.getElementById('chatForm');
+  if (activeHeader) activeHeader.innerHTML = `Chatting with <strong>${escHtml(partnerProfile.username)}</strong>`;
+  if (chatForm) chatForm.style.display = 'flex';
+  
+  if (listingId) {
+    const { data: listing } = await db.from('listings').select('name, price').eq('id', listingId).single();
+    if (listing) {
+      const input = document.getElementById('chatMessageInput');
+      if (input) {
+        input.value = `Hi, I'm interested in your "${listing.name}" for $${listing.price}.`;
+        input.focus();
+      }
+    }
+    State.currentListingId = null;
+  }
+  
+  const { data: messages, error: mError } = await db
+    .from('messages')
+    .select('*')
+    .or(`and(sender_id.eq.${State.user.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${State.user.id})`)
+    .order('created_at', { ascending: true });
+  
+  if (mError) return console.error("Error loading messages", mError);
+  
+  const threadEl = document.getElementById('chatThread');
+  if (!threadEl) return;
+  threadEl.innerHTML = '';
+  if (messages) {
+    messages.forEach(msg => renderMessage(msg, State.user.id));
+  }
+  threadEl.scrollTop = threadEl.scrollHeight;
+}
+
+async function handleSendMessage(e) {
+  e.preventDefault();
+  const input = document.getElementById('chatMessageInput');
+  const content = input?.value.trim();
+  if (!content || !State.currentChatPartnerId) return;
+  
+  const { error } = await db.from('messages').insert([{
+    sender_id: State.user.id,
+    receiver_id: State.currentChatPartnerId,
+    listing_id: State.currentListingId,
+    content: content,
+  }]);
+  
+  if (error) showToast("Error: " + error.message, 'error');
+  else {
+    if (input) input.value = '';
+    await loadConversationThread(State.currentChatPartnerId);
+    await loadMessages();
+  }
+}
+
+async function handleSendImage(e) {
+  const file = e.target.files[0];
+  if (!file || !State.currentChatPartnerId) return;
+  
+  const filePath = `${State.user.id}/${Date.now()}_${file.name}`;
+  const { error: uploadError } = await db.storage.from('chat-images').upload(filePath, file);
+  
+  if (uploadError) {
+    showToast("Upload failed", 'error');
+    return;
+  }
+  
+  const { data: { publicUrl } } = db.storage.from('chat-images').getPublicUrl(filePath);
+  
+  await db.from('messages').insert([{
+    sender_id: State.user.id,
+    receiver_id: State.currentChatPartnerId,
+    listing_id: State.currentListingId,
+    image_url: publicUrl,
+  }]);
+  
+  await loadConversationThread(State.currentChatPartnerId);
+  await loadMessages();
+}
+
+function renderMessage(msg, currentUserId) {
+  const thread = document.getElementById('chatThread');
+  if (!thread) return;
+  const isSent = msg.sender_id === currentUserId;
+  const div = document.createElement('div');
+  div.className = `msg ${isSent ? 'sent' : 'received'}`;
+  
+  if (msg.image_url) {
+    div.innerHTML = `<img src="${escHtml(msg.image_url)}" class="msg-image" style="max-width:200px;border-radius:8px;cursor:pointer;" onclick="window.open(this.src)">`;
+  } else {
+    div.innerHTML = escHtml(msg.content);
+  }
+  
+  thread.appendChild(div);
+  thread.scrollTop = thread.scrollHeight;
+}
+
+function initChat() {
+  if (!db) return;
+  db.channel('public:messages')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+      const newMsg = payload.new;
+      const relevantToMe = newMsg.sender_id === State.user?.id || newMsg.receiver_id === State.user?.id;
+      
+      if (State.currentPage === 'messages' && relevantToMe && State.user) {
+        const fromPartner = newMsg.sender_id === State.currentChatPartnerId;
+        const fromMe = newMsg.sender_id === State.user?.id;
+        
+        if (fromPartner || fromMe) {
+          renderMessage(newMsg, State.user?.id);
+        }
+        loadMessages();
+      }
+    })
+    .subscribe();
+}
 
 // ==================== ERROR BANNER ====================
-function showErrorBanner() { const banner = document.getElementById('error-banner'); if (banner) banner.classList.add('show'); }
-function hideErrorBanner() { const banner = document.getElementById('error-banner'); if (banner) banner.classList.remove('show'); }
+function showErrorBanner() {
+  const banner = document.getElementById('error-banner');
+  if (banner) banner.classList.add('show');
+}
+
+function hideErrorBanner() {
+  const banner = document.getElementById('error-banner');
+  if (banner) banner.classList.remove('show');
+}
 
 // ==================== EVENT LISTENERS ====================
 function setupEventListeners() {
-  const themeBtn = document.getElementById('theme-toggle'); if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
-  const hamburger = document.getElementById('hamburger'); if (hamburger) hamburger.addEventListener('click', () => { const mobileNav = document.getElementById('mobile-nav'); if (mobileNav) mobileNav.classList.toggle('open'); });
-  let searchTimer; const searchInput = document.getElementById('search-input'); if (searchInput) searchInput.addEventListener('input', (e) => { clearTimeout(searchTimer); State.searchQuery = e.target.value; searchTimer = setTimeout(() => { if (State.currentPage !== 'shop') navigate('shop'); applyFilters(); }, 320); });
-  const desc = document.getElementById('c-desc'); if (desc) desc.addEventListener('input', updateDescCounter);
-  const catSelect = document.getElementById('c-category'); if (catSelect) catSelect.addEventListener('change', updateSubcategories);
-  const slider = document.getElementById('price-slider'); if (slider) slider.addEventListener('input', (e) => onPriceSlider(e.target));
-  const priceMin = document.getElementById('price-min'); const priceMax = document.getElementById('price-max'); const fairOnly = document.getElementById('fair-only'); const featuredOnly = document.getElementById('featured-only'); const sortSelect = document.getElementById('sort-select');
-  if (priceMin) priceMin.addEventListener('input', () => applyFilters()); if (priceMax) priceMax.addEventListener('input', () => applyFilters()); if (fairOnly) fairOnly.addEventListener('change', () => applyFilters()); if (featuredOnly) featuredOnly.addEventListener('change', () => applyFilters()); if (sortSelect) sortSelect.addEventListener('change', () => applyFilters());
-  const imageInput = document.getElementById('image-input'); const uploadZone = document.getElementById('upload-zone'); if (imageInput) imageInput.addEventListener('change', handleImageUpload); if (uploadZone) uploadZone.addEventListener('click', () => document.getElementById('image-input')?.click());
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open')); const mobileNav = document.getElementById('mobile-nav'); if (mobileNav) mobileNav.classList.remove('open'); } });
-  window.addEventListener('online', () => { hideErrorBanner(); showToast('Connection restored.', 'success'); loadListings(); });
-  window.addEventListener('offline', () => { showErrorBanner(); showToast('Offline. Some features may not work.', 'error'); });
-  const mobileFilterToggle = document.getElementById('mobile-filter-toggle'); const updateBtn = () => { if (mobileFilterToggle) mobileFilterToggle.style.display = window.innerWidth < 900 ? 'inline-flex' : 'none'; }; window.addEventListener('resize', updateBtn); updateBtn();
-  document.addEventListener('click', (e) => { const mobileNav = document.getElementById('mobile-nav'); const hamburger = document.getElementById('hamburger'); if (mobileNav?.classList.contains('open') && !mobileNav.contains(e.target) && !hamburger?.contains(e.target)) mobileNav.classList.remove('open'); });
-  const chatForm = document.getElementById('chatForm'); const chatImage = document.getElementById('chatImageInput'); const askBtn = document.getElementById('askAssistantBtn'); const assistantInput = document.getElementById('assistantInput');
-  if (chatForm) chatForm.addEventListener('submit', handleSendMessage); if (chatImage) chatImage.addEventListener('change', handleSendImage); if (askBtn) askBtn.addEventListener('click', askAssistant); if (assistantInput) assistantInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') askAssistant(); });
+  const themeBtn = document.getElementById('theme-toggle');
+  if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
+  
+  const hamburger = document.getElementById('hamburger');
+  if (hamburger) {
+    hamburger.addEventListener('click', () => {
+      const mobileNav = document.getElementById('mobile-nav');
+      if (mobileNav) mobileNav.classList.toggle('open');
+    });
+  }
+  
+  let searchTimer;
+  const searchInput = document.getElementById('search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      clearTimeout(searchTimer);
+      State.searchQuery = e.target.value;
+      searchTimer = setTimeout(() => {
+        if (State.currentPage !== 'shop') navigate('shop');
+        applyFilters();
+      }, 320);
+    });
+  }
+  
+  const descTextarea = document.getElementById('c-desc');
+  if (descTextarea) descTextarea.addEventListener('input', updateDescCounter);
+  
+  const categorySelect = document.getElementById('c-category');
+  if (categorySelect) categorySelect.addEventListener('change', updateSubcategories);
+  
+  const priceSlider = document.getElementById('price-slider');
+  if (priceSlider) priceSlider.addEventListener('input', (e) => onPriceSlider(e.target));
+  
+  const priceMin = document.getElementById('price-min');
+  const priceMax = document.getElementById('price-max');
+  const fairOnly = document.getElementById('fair-only');
+  const featuredOnly = document.getElementById('featured-only');
+  const sortSelect = document.getElementById('sort-select');
+  
+  if (priceMin) priceMin.addEventListener('input', () => applyFilters());
+  if (priceMax) priceMax.addEventListener('input', () => applyFilters());
+  if (fairOnly) fairOnly.addEventListener('change', () => applyFilters());
+  if (featuredOnly) featuredOnly.addEventListener('change', () => applyFilters());
+  if (sortSelect) sortSelect.addEventListener('change', () => applyFilters());
+  
+  const imageInput = document.getElementById('image-input');
+  const uploadZone = document.getElementById('upload-zone');
+  if (imageInput) imageInput.addEventListener('change', handleImageUpload);
+  if (uploadZone) {
+    uploadZone.addEventListener('click', () => {
+      const input = document.getElementById('image-input');
+      if (input) input.click();
+    });
+  }
+  
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+      const mobileNav = document.getElementById('mobile-nav');
+      if (mobileNav) mobileNav.classList.remove('open');
+    }
+  });
+  
+  window.addEventListener('online', () => {
+    hideErrorBanner();
+    showToast('Connection restored.', 'success');
+    loadListings();
+  });
+  
+  window.addEventListener('offline', () => {
+    showErrorBanner();
+    showToast('You are offline. Some features may not work.', 'error');
+  });
+  
+  const mobileFilterToggle = document.getElementById('mobile-filter-toggle');
+  const updateFilterBtnVisibility = () => {
+    if (mobileFilterToggle) {
+      mobileFilterToggle.style.display = window.innerWidth < 900 ? 'inline-flex' : 'none';
+    }
+  };
+  window.addEventListener('resize', updateFilterBtnVisibility);
+  updateFilterBtnVisibility();
+  
+  document.addEventListener('click', (e) => {
+    const mobileNav = document.getElementById('mobile-nav');
+    const hamburger = document.getElementById('hamburger');
+    if (mobileNav && mobileNav.classList.contains('open')) {
+      if (!mobileNav.contains(e.target) && !hamburger?.contains(e.target)) {
+        mobileNav.classList.remove('open');
+      }
+    }
+  });
+  
+  const chatForm = document.getElementById('chatForm');
+  const chatImageInput = document.getElementById('chatImageInput');
+  const askBtn = document.getElementById('askAssistantBtn');
+  const assistantInput = document.getElementById('assistantInput');
+  
+  if (chatForm) chatForm.addEventListener('submit', handleSendMessage);
+  if (chatImageInput) chatImageInput.addEventListener('change', handleSendImage);
+  if (askBtn) askBtn.addEventListener('click', askAssistant);
+  if (assistantInput) {
+    assistantInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') askAssistant();
+    });
+  }
 }
 
 // ==================== INITIALIZATION ====================
@@ -1636,26 +2424,42 @@ document.addEventListener('DOMContentLoaded', async () => {
   initChat();
   navigate('shop');
   
-  const catChips = document.getElementById('category-chips');
-  if (catChips) {
+  const categoryChips = document.getElementById('category-chips');
+  if (categoryChips) {
     const categories = ['all', 'Electronics', 'Clothing & Accessories', 'Collectibles', 'Toys & Figures', 'Sports & Outdoors', 'Books & Media', 'Home & Garden', 'Tools & Equipment', 'Other'];
-    catChips.innerHTML = categories.map(cat => `<button class="chip ${cat === 'all' ? 'active' : ''}" data-cat="${cat}" onclick="selectCategory(this, '${cat}')">${cat === 'all' ? 'All' : cat}</button>`).join('');
+    categoryChips.innerHTML = categories.map(cat => 
+      `<button class="chip ${cat === 'all' ? 'active' : ''}" data-cat="${cat}" onclick="selectCategory(this, '${cat}')">${cat === 'all' ? 'All' : cat}</button>`
+    ).join('');
   }
-  const condChips = document.getElementById('condition-chips');
-  if (condChips) {
+  
+  const conditionChips = document.getElementById('condition-chips');
+  if (conditionChips) {
     const conditions = ['all', 'new', 'like-new', 'good', 'fair', 'poor'];
-    condChips.innerHTML = conditions.map(cond => `<button class="chip ${cond === 'all' ? 'active' : ''}" data-cond="${cond}" onclick="selectCondition(this, '${cond}')">${cond === 'all' ? 'Any' : cond}</button>`).join('');
+    conditionChips.innerHTML = conditions.map(cond => 
+      `<button class="chip ${cond === 'all' ? 'active' : ''}" data-cond="${cond}" onclick="selectCondition(this, '${cond}')">${cond === 'all' ? 'Any' : cond}</button>`
+    ).join('');
   }
+  
   const typeChips = document.getElementById('type-chips');
   if (typeChips) {
     const types = ['all', 'buy-now', 'offers', 'auction'];
-    typeChips.innerHTML = types.map(type => `<button class="chip ${type === 'all' ? 'active' : ''}" data-type="${type}" onclick="selectType(this, '${type}')">${type === 'all' ? 'All' : type.replace('-', ' ').toUpperCase()}</button>`).join('');
+    typeChips.innerHTML = types.map(type => 
+      `<button class="chip ${type === 'all' ? 'active' : ''}" data-type="${type}" onclick="selectType(this, '${type}')">${type === 'all' ? 'All' : type.replace('-', ' ').toUpperCase()}</button>`
+    ).join('');
   }
-  const catSelect = document.getElementById('c-category');
-  if (catSelect) {
-    const cats = ['Electronics', 'Clothing & Accessories', 'Collectibles', 'Toys & Figures', 'Sports & Outdoors', 'Books & Media', 'Home & Garden', 'Tools & Equipment', 'Other'];
-    cats.forEach(cat => { const opt = document.createElement('option'); opt.value = cat; opt.textContent = cat; catSelect.appendChild(opt); });
+  
+  const categorySelect = document.getElementById('c-category');
+  if (categorySelect) {
+    const categories = ['Electronics', 'Clothing & Accessories', 'Collectibles', 'Toys & Figures', 'Sports & Outdoors', 'Books & Media', 'Home & Garden', 'Tools & Equipment', 'Other'];
+    categories.forEach(cat => {
+      const opt = document.createElement('option');
+      opt.value = cat;
+      opt.textContent = cat;
+      categorySelect.appendChild(opt);
+    });
   }
+  
   if (!navigator.onLine) showErrorBanner();
-  console.log('%c OBTAINUM INITIALIZED - Location & Shipping Displayed', 'background:#00ff41;color:#001a07;padding:4px 8px;');
+  
+  console.log('%c OBTAINUM INITIALIZED - AI Listing Suggestions Active', 'background:#00ff41;color:#001a07;font-family:monospace;padding:4px 8px;');
 });
