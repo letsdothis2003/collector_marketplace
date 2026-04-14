@@ -655,3 +655,39 @@ body.light-mode::after { opacity: 0; }
 .nav-btn {
   transition: opacity 0.2s ease, display 0.2s ease;
 }
+
+
+
+/* Make login button bigger and fixed width */
+#auth-btn-wrap .btn {
+  min-width: 100px;
+  padding: 10px 24px;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+/* Ensure header actions have consistent width */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 160px;
+  justify-content: flex-end;
+}
+
+/* Avatar same size as login button for consistency */
+.header-avatar {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+}
+
+/* Theme toggle wrapper - fixed width */
+.header-actions > div:last-child {
+  min-width: 60px;
+  text-align: center;
+}
+
+
+
+
