@@ -1,0 +1,214 @@
+/* ============================================================
+   SHOP.CSS - Marketplace listing page styles
+   ============================================================ */
+
+/* Shop Layout */
+.shop-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  min-height: calc(100vh - var(--header-h));
+}
+
+/* Sidebar Filters */
+.sidebar {
+  background: var(--bg-2);
+  border-right: 1px solid var(--border);
+  padding: 24px;
+  position: sticky;
+  top: var(--header-h);
+  height: calc(100vh - var(--header-h));
+  overflow-y: auto;
+  animation: slideIn 0.4s ease both;
+}
+
+.sidebar-title {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.filter-section {
+  margin-bottom: 28px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.filter-section:last-child { border-bottom: none; }
+
+.filter-title {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 0.88rem;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Filter Chips */
+.chip {
+  background: rgba(255, 50, 50, 0.1);
+  border: 1px solid rgba(255, 75, 75, 0.4);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all var(--transition);
+  color: #ff8888;
+  font-weight: 500;
+}
+body.light-mode .chip {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+.chip:hover {
+  border-color: var(--neon);
+  color: var(--neon);
+  background: rgba(0, 255, 65, 0.12);
+  transform: translateY(-2px);
+}
+.chip.active {
+  background: rgba(0, 255, 65, 0.18);
+  border-color: var(--neon);
+  color: var(--neon);
+  box-shadow: 0 0 10px var(--neon-glow);
+  font-weight: 600;
+}
+body.light-mode .chip.active { background: rgba(0, 138, 42, 0.12); }
+
+/* Price Range */
+.price-range {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.price-range input { flex: 1; }
+.price-range span { color: var(--text-muted); font-size: 0.85rem; }
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--neon);
+  cursor: pointer;
+}
+
+/* Source Toggle */
+.source-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.source-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 0;
+}
+.source-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--neon);
+  cursor: pointer;
+}
+.source-item span {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 500;
+}
+
+/* Shop Main Content */
+.shop-main {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.shop-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.results-info {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 500;
+}
+.results-count {
+  color: var(--neon);
+  font-weight: 700;
+}
+
+.sort-select {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.sort-select:focus { outline: none; border-color: var(--neon); }
+
+/* Listings Grid */
+.listings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+/* Mobile Filter Toggle */
+#mobile-filter-toggle {
+  display: none;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .shop-layout {
+    grid-template-columns: 1fr;
+  }
+  .sidebar {
+    position: relative;
+    top: 0;
+    height: auto;
+    display: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar.mobile-open {
+    display: block;
+  }
+  #mobile-filter-toggle {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 600px) {
+  .shop-main {
+    padding: 16px;
+  }
+  .listings-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+  }
+}

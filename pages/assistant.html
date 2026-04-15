@@ -1,0 +1,27 @@
+<!-- AI ASSISTANT PAGE -->
+<div class="assistant-container">
+  <div class="assistant-header">
+    <span class="assistant-icon">🤖</span>
+    <h2>OBTAINUM AI ASSISTANT</h2>
+    <p>Market insights · price checks · product recommendations</p>
+  </div>
+  <div class="assistant-chat-panel">
+    <div class="assistant-messages" id="assistantMessages">
+      <div class="assistant-message bot">✨ Hi! I'm your OBTAINUM AI assistant. Ask me anything about the marketplace!</div>
+    </div>
+    <div class="assistant-input-area">
+      <input type="text" id="assistantInput" placeholder="Ask anything (e.g., 'What's a fair price for used GPU?')" maxlength="300" />
+      <button class="btn btn-primary" id="askAssistantBtn">ASK</button>
+    </div>
+    <div class="assistant-suggestions">
+      <button class="suggestion-chip" data-suggestion="What are trending collectibles?">📈 Trending collectibles</button>
+      <button class="suggestion-chip" data-suggestion="How to avoid scams on marketplace?">🛡️ Avoid scams</button>
+      <button class="suggestion-chip" data-suggestion="Price check: vintage video game">🎮 Price check</button>
+      <button class="suggestion-chip" data-suggestion="Tell me about safe pickups">📍 Safe pickup tips</button>
+    </div>
+    <div id="assistant-login-notice" class="assistant-login-notice hidden" style="text-align:center;padding:16px;background:var(--bg-3);margin-top:12px;border-radius:var(--radius);">
+      <p>🔐 <strong>Login to use AI Assistant</strong> — Get personalized market insights!</p>
+      <button class="btn btn-primary btn-sm" id="assistant-login-btn">Login / Register</button>
+    </div>
+  </div>
+</div>
