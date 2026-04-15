@@ -1,3 +1,4 @@
+<!-- index.html - Updated with new features -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -30,24 +31,24 @@
       <input type="text" id="search-input" placeholder="Search collectibles, electronics, gear..." />
     </div>
 
+    <!-- Nav Toggle Button -->
+    <button class="nav-toggle-btn" id="nav-toggle-btn" onclick="toggleNavMode()" title="Toggle Navigation Mode">
+      <span class="nav-toggle-icon">🔘</span>
+    </button>
+
     <nav class="nav-menu" id="nav-menu">
-      <button class="nav-btn" id="nav-shop" onclick="navigate('shop')">🛒 SHOP</button>
+      <button class="nav-btn active" id="nav-shop" onclick="navigate('shop')">🛒 SHOP</button>
+      <button class="nav-btn nav-extra" id="nav-create" onclick="navigate('create')">+ CREATE</button>
+      <button class="nav-btn nav-extra" id="nav-wishlist" onclick="navigate('wishlist')">❤️ WISHLIST</button>
+      <button class="nav-btn nav-extra" id="nav-profile" onclick="navigate('profile')">⚙️ PROFILE</button>
+      <button class="nav-btn nav-extra" id="nav-assistant" onclick="navigate('assistant')">🤖 ASSISTANT</button>
+      <button class="nav-btn nav-extra" id="nav-messages" onclick="navigate('messages')">💬 MESSAGES</button>
       <button class="nav-btn" id="nav-about" onclick="navigate('about')">📖 ABOUT</button>
       <button class="nav-btn" id="nav-contact" onclick="navigate('contact')">📧 CONTACT</button>
-    </nav>
-
-    <!-- Extended Nav (Hidden by default, toggleable) -->
-    <nav class="nav-menu-extended hidden" id="nav-menu-extended">
-      <button class="nav-btn" onclick="navigate('create')">+ CREATE</button>
-      <button class="nav-btn" onclick="navigate('wishlist')">❤️ WISHLIST</button>
-      <button class="nav-btn" onclick="navigate('profile')">⚙️ PROFILE</button>
-      <button class="nav-btn" onclick="navigate('assistant')">🤖 ASSISTANT</button>
-      <button class="nav-btn" onclick="navigate('messages')">💬 MESSAGES</button>
-      <button class="nav-btn" onclick="navigate('donate')">🎁 DONATE</button>
+      <button class="nav-btn nav-extra" id="nav-donate" onclick="navigate('donate')">🎁 DONATE</button>
     </nav>
 
     <div class="header-actions">
-      <button class="nav-toggle-btn" id="nav-toggle-btn" onclick="toggleExtendedNav()" title="More">⋮</button>
       <div id="auth-btn-wrap">
         <button class="btn btn-primary btn-sm" onclick="openAuthModal()">LOGIN</button>
       </div>
@@ -68,14 +69,14 @@
   <!-- Mobile Nav Drawer -->
   <nav class="mobile-nav" id="mobile-nav">
     <button class="nav-btn" onclick="navigate('shop'); closeMobileNav()">🛒 SHOP</button>
-    <button class="nav-btn" onclick="navigate('create'); closeMobileNav()">+ CREATE</button>
-    <button class="nav-btn" onclick="navigate('wishlist'); closeMobileNav()">❤️ WISHLIST</button>
-    <button class="nav-btn" onclick="navigate('profile'); closeMobileNav()">⚙️ PROFILE</button>
-    <button class="nav-btn" onclick="navigate('assistant'); closeMobileNav()">🤖 ASSISTANT</button>
-    <button class="nav-btn" onclick="navigate('messages'); closeMobileNav()">💬 MESSAGES</button>
+    <button class="nav-btn mobile-nav-extra" onclick="navigate('create'); closeMobileNav()">+ CREATE</button>
+    <button class="nav-btn mobile-nav-extra" onclick="navigate('wishlist'); closeMobileNav()">❤️ WISHLIST</button>
+    <button class="nav-btn mobile-nav-extra" onclick="navigate('profile'); closeMobileNav()">⚙️ PROFILE</button>
+    <button class="nav-btn mobile-nav-extra" onclick="navigate('assistant'); closeMobileNav()">🤖 ASSISTANT</button>
+    <button class="nav-btn mobile-nav-extra" onclick="navigate('messages'); closeMobileNav()">💬 MESSAGES</button>
     <button class="nav-btn" onclick="navigate('about'); closeMobileNav()">📖 ABOUT</button>
     <button class="nav-btn" onclick="navigate('contact'); closeMobileNav()">📧 CONTACT</button>
-    <button class="nav-btn" onclick="navigate('donate'); closeMobileNav()">🎁 DONATE</button>
+    <button class="nav-btn mobile-nav-extra" onclick="navigate('donate'); closeMobileNav()">🎁 DONATE</button>
   </nav>
 
   <!-- ===================== APP PAGES ===================== -->
@@ -148,24 +149,6 @@
       <div class="detail-container">
         <button class="back-btn" onclick="navigate('shop')">← Back to Marketplace</button>
         <div id="detail-content"></div>
-        
-        <!-- Route Safety Calculator (NEW) -->
-        <div class="route-safety-section" id="route-safety-section" style="display:none;">
-          <h3 class="section-title">🗺️ Route & Safety Calculator</h3>
-          <div class="route-calculator">
-            <div class="route-input-group">
-              <label>📍 Your Location:</label>
-              <input type="text" id="route-user-location" placeholder="City, State or Zip Code" />
-              <button class="btn btn-sm btn-outline" onclick="calculateRouteAndSafety()">Calculate Route & Safety →</button>
-            </div>
-            <div id="route-result" class="route-result hidden">
-              <div class="route-info"></div>
-              <div class="safety-score"></div>
-              <div class="safety-details"></div>
-            </div>
-          </div>
-        </div>
-        
         <div class="similar-section" id="similar-section">
           <h3 class="section-title">✨ Similar Items</h3>
           <div class="similar-scroll" id="similar-scroll"></div>
@@ -585,6 +568,14 @@
       <input type="hidden" id="mark-sold-listing-id" />
       <button class="btn btn-primary w-full" onclick="confirmMarkSold()">YES, MARK AS SOLD</button>
       <button class="btn btn-ghost w-full" onclick="closeModal('mark-sold-modal')">CANCEL</button>
+    </div>
+  </div>
+
+  <!-- AI Route Safety Modal -->
+  <div class="modal-overlay" id="route-safety-modal" onclick="closeOnOverlay(event, 'route-safety-modal')">
+    <div class="modal" style="max-width:500px;"><button class="modal-close" onclick="closeModal('route-safety-modal')">&times;</button>
+      <div class="modal-logo" style="font-size:1.1rem;">🗺️ AI Route Safety Check</div>
+      <div id="route-safety-content"></div>
     </div>
   </div>
 
