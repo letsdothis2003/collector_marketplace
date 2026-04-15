@@ -30,19 +30,24 @@
       <input type="text" id="search-input" placeholder="Search collectibles, electronics, gear..." />
     </div>
 
-    <nav class="nav-menu">
-      <button class="nav-btn active" id="nav-shop" onclick="navigate('shop')">🛒 SHOP</button>
-      <button class="nav-btn" id="nav-create" onclick="navigate('create')">+ CREATE</button>
-      <button class="nav-btn" id="nav-wishlist" onclick="navigate('wishlist')">❤️ WISHLIST</button>
-      <button class="nav-btn" id="nav-profile" onclick="navigate('profile')">⚙️ PROFILE</button>
-      <button class="nav-btn" id="nav-assistant" onclick="navigate('assistant')">🤖 ASSISTANT</button>
-      <button class="nav-btn" id="nav-messages" onclick="navigate('messages')">💬 MESSAGES</button>
+    <nav class="nav-menu" id="nav-menu">
+      <button class="nav-btn" id="nav-shop" onclick="navigate('shop')">🛒 SHOP</button>
       <button class="nav-btn" id="nav-about" onclick="navigate('about')">📖 ABOUT</button>
       <button class="nav-btn" id="nav-contact" onclick="navigate('contact')">📧 CONTACT</button>
-      <button class="nav-btn" id="nav-donate" onclick="navigate('donate')">🎁 DONATE</button>
+    </nav>
+
+    <!-- Extended Nav (Hidden by default, toggleable) -->
+    <nav class="nav-menu-extended hidden" id="nav-menu-extended">
+      <button class="nav-btn" onclick="navigate('create')">+ CREATE</button>
+      <button class="nav-btn" onclick="navigate('wishlist')">❤️ WISHLIST</button>
+      <button class="nav-btn" onclick="navigate('profile')">⚙️ PROFILE</button>
+      <button class="nav-btn" onclick="navigate('assistant')">🤖 ASSISTANT</button>
+      <button class="nav-btn" onclick="navigate('messages')">💬 MESSAGES</button>
+      <button class="nav-btn" onclick="navigate('donate')">🎁 DONATE</button>
     </nav>
 
     <div class="header-actions">
+      <button class="nav-toggle-btn" id="nav-toggle-btn" onclick="toggleExtendedNav()" title="More">⋮</button>
       <div id="auth-btn-wrap">
         <button class="btn btn-primary btn-sm" onclick="openAuthModal()">LOGIN</button>
       </div>
@@ -143,6 +148,24 @@
       <div class="detail-container">
         <button class="back-btn" onclick="navigate('shop')">← Back to Marketplace</button>
         <div id="detail-content"></div>
+        
+        <!-- Route Safety Calculator (NEW) -->
+        <div class="route-safety-section" id="route-safety-section" style="display:none;">
+          <h3 class="section-title">🗺️ Route & Safety Calculator</h3>
+          <div class="route-calculator">
+            <div class="route-input-group">
+              <label>📍 Your Location:</label>
+              <input type="text" id="route-user-location" placeholder="City, State or Zip Code" />
+              <button class="btn btn-sm btn-outline" onclick="calculateRouteAndSafety()">Calculate Route & Safety →</button>
+            </div>
+            <div id="route-result" class="route-result hidden">
+              <div class="route-info"></div>
+              <div class="safety-score"></div>
+              <div class="safety-details"></div>
+            </div>
+          </div>
+        </div>
+        
         <div class="similar-section" id="similar-section">
           <h3 class="section-title">✨ Similar Items</h3>
           <div class="similar-scroll" id="similar-scroll"></div>
@@ -162,7 +185,6 @@
           <button class="btn btn-primary" onclick="openAuthModal()">Login / Register</button>
         </div>
         <form class="create-form" id="create-form" onsubmit="submitListing(event)">
-          <!-- ... rest of create form ... -->
           <div class="form-group">
             <label class="form-label">📸 Images (up to 10)</label>
             <div id="existing-images-section" class="hidden">
