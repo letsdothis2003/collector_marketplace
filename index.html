@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OBTAINUM — Next-Gen Marketplace</title>
+  <meta name="description" content="OBTAINUM — The techno marketplace for collectors and hobbyists. Fair prices, no scalping." />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@google/generative-ai@0.1.3/dist/index.min.js" defer></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+  <script src="script.js" defer></script>
+</head>
+<body data-page="shop">
+
+
+  <!-- Error Banner -->
+  <div id="error-banner">⚠️ OBTAINUM IS EXPERIENCING ISSUES — PLEASE WAIT WHILE WE RESTORE SERVICE</div>
+
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
+
+  <!-- ===================== HEADER ===================== -->
+  <header id="header">
+    <div class="logo glitch" data-text="OBTAINUM" onclick="navigate('shop')">OBTAINUM</div>
+
+    <div class="header-search">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="search-input" placeholder="Search collectibles, electronics, gear..." />
+    </div>
+
+    <nav class="nav-menu" id="nav-menu">
+      <button class="nav-btn active" id="nav-shop" onclick="navigate('shop')">🛒 SHOP</button>
+      <button class="nav-btn nav-extra" id="nav-create" onclick="navigate('create')">+ CREATE</button>
+      <button class="nav-btn nav-extra" id="nav-wishlist" onclick="navigate('wishlist')">❤️ WISHLIST</button>
+      <button class="nav-btn nav-extra" id="nav-profile" onclick="navigateProfile()">⚙️ PROFILE</button>
+      <button class="nav-btn nav-extra" id="nav-assistant" onclick="navigate('assistant')">🤖 ASSISTANT</button>
+      <button class="nav-btn nav-extra" id="nav-messages" onclick="navigate('messages')">💬 MESSAGES</button>
+      <button class="nav-btn" id="nav-about" onclick="navigate('about')">📖 ABOUT</button>
+      <button class="nav-btn" id="nav-contact" onclick="navigate('contact')">📧 CONTACT</button>
+      <button class="nav-btn nav-extra" id="nav-donate" onclick="navigate('donate')">🎁 DONATE</button>
+    </nav>
+
+    <div class="header-actions">
+      <div id="auth-btn-wrap">
+        <button class="btn btn-primary btn-sm" onclick="openAuthModal()">LOGIN</button>
+      </div>
+      <div id="user-avatar-wrap" class="hidden">
+        <div class="header-avatar" id="header-avatar" onclick="navigateProfile()">?</div>
+      </div>
+      <div class="theme-wrapper">
+        <button class="theme-toggle" id="theme-toggle"></button>
+        <div class="theme-toggle-label" id="theme-label">DARK</div>
+      </div>
+    </div>
+
+    <button class="hamburger" id="hamburger">
+      <span></span><span></span><span></span>
+    </button>
+  </header>
+
+  <!-- Mobile Nav Drawer -->
+  <nav class="mobile-nav" id="mobile-nav">
+    <button class="nav-btn" onclick="navigate('shop'); closeMobileNav()">🛒 SHOP</button>
+    <button class="nav-btn mobile-nav-extra" onclick="navigate('create'); closeMobileNav()">+ CREATE</button>
+    <button class="nav-btn mobile-nav-extra" onclick="navigate('wishlist'); closeMobileNav()">❤️ WISHLIST</button>
+    <button class="nav-btn mobile-nav-extra" onclick="navigate('profile'); closeMobileNav()">⚙️ PROFILE</button>
+    <button class="nav-btn mobile-nav-extra" onclick="navigate('assistant'); closeMobileNav()">🤖 ASSISTANT</button>
+    <button class="nav-btn mobile-nav-extra" onclick="navigate('messages'); closeMobileNav()">💬 MESSAGES</button>
+    <button class="nav-btn" onclick="navigate('about'); closeMobileNav()">📖 ABOUT</button>
+    <button class="nav-btn" onclick="navigate('contact'); closeMobileNav()">📧 CONTACT</button>
+    <button class="nav-btn mobile-nav-extra" onclick="navigate('donate'); closeMobileNav()">🎁 DONATE</button>
+  </nav>
+
+  <!-- ===================== APP PAGES ===================== -->
+  
+  <main id="app">
+
+    <!-- ====== SHOP PAGE ====== -->
+    <section class="page active" id="page-shop">
+      <div class="shop-layout">
+        <aside class="sidebar" id="sidebar">
+          <h3 class="sidebar-title">⚙️ FILTERS</h3>
+          <div class="filter-section">
+            <div class="filter-title">Category</div>
+            <div class="filter-chips" id="category-chips"></div>
+          </div>
+          <div class="filter-section">
+            <div class="filter-title">Condition</div>
+            <div class="filter-chips" id="condition-chips"></div>
+          </div>
+          <div class="filter-section">
+            <div class="filter-title">Listing Type</div>
+            <div class="filter-chips" id="type-chips"></div>
+          </div>
+          <div class="filter-section">
+            <div class="filter-title">Price Range</div>
+            <div class="price-range">
+              <input type="number" id="price-min" placeholder="Min" min="0" />
+              <span>to</span>
+              <input type="number" id="price-max" placeholder="Max" min="0" />
+            </div>
+            <input type="range" id="price-slider" min="0" max="2000" value="2000" />
+            <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 4px;">Up to <span id="price-slider-val">$2000</span></div>
+          </div>
+          <div class="filter-section">
+            <div class="filter-title">Quality</div>
+            <div class="source-toggle">
+              <label class="source-item">
+                <input type="checkbox" id="fair-only" />
+                <span>AI Fair Price Only</span>
+              </label>
+              <label class="source-item">
+                <input type="checkbox" id="featured-only" />
+                <span>Featured Only</span>
+              </label>
+            </div>
+          </div>
+          <button class="btn btn-ghost w-full" onclick="resetFilters()">RESET FILTERS</button>
+        </aside>
+
+        <div class="shop-main">
+          <div class="shop-header">
+            <div class="results-info">
+              <span class="results-count" id="results-count">—</span> listings found
+            </div>
+            <button class="btn btn-outline btn-sm" id="mobile-filter-toggle" onclick="toggleMobileSidebar()" style="display: none;">⚙️ Filters</button>
+            <select class="sort-select" id="sort-select">
+              <option value="newest">Newest First</option>
+              <option value="price-asc">Price: Low to High</option>
+              <option value="price-desc">Price: High to Low</option>
+              <option value="popular">Most Viewed</option>
+              <option value="favorites">Most Favorited</option>
+            </select>
+          </div>
+          <div class="listings-grid" id="listings-grid"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== DETAIL PAGE ====== -->
+    <section class="page" id="page-detail">
+      <div class="detail-container">
+        <button class="back-btn" onclick="navigate('shop')">← Back to Marketplace</button>
+        <div id="detail-content"></div>
+        <div class="similar-section" id="similar-section">
+          <h3 class="section-title">✨ Similar Items</h3>
+          <div class="similar-scroll" id="similar-scroll"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== CREATE PAGE ====== -->
+    <section class="page" id="page-create">
+      <div class="create-container">
+        <h1 class="page-title" id="create-page-title">+ Create New Listing</h1>
+        <div id="create-auth-notice" class="empty-state hidden">
+          <div class="empty-icon">🔒</div>
+          <div class="empty-title">LOGIN REQUIRED</div>
+          <div class="empty-sub">You need to be logged in to create listings.</div>
+          <br />
+          <button class="btn btn-primary" onclick="openAuthModal()">Login / Register</button>
+        </div>
+        <form class="create-form" id="create-form" onsubmit="submitListing(event)">
+          <div class="form-group">
+            <label class="form-label">📸 Images (up to 10)</label>
+            <div id="existing-images-section" class="hidden">
+              <div class="form-label" style="margin-bottom:6px;">Current Images</div>
+              <div class="image-preview-grid" id="existing-image-grid"></div>
+            </div>
+            <div class="image-upload-zone" id="upload-zone">
+              <div class="upload-icon">📷</div>
+              <div class="upload-text">Drop images here or <span>click to upload</span></div>
+              <input type="file" class="upload-input" id="image-input" multiple accept="image/*" />
+            </div>
+            <div class="image-preview-grid" id="image-preview-grid"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="c-name">Item Name *</label>
+              <input class="form-input" id="c-name" type="text" placeholder="e.g. Optimus Prime G1 Figure" required maxlength="100" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="c-category">Category *</label>
+              <select class="form-input" id="c-category" required>
+                <option value="">Select category...</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group" id="subcategory-group" style="display:none;">
+            <label class="form-label" for="c-subcategory">Subcategory</label>
+            <select class="form-input" id="c-subcategory"><option value="">Select subcategory...</option></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="c-desc">Description *</label>
+            <textarea class="form-input" id="c-desc" placeholder="Describe your item — condition, history, what's included..." required minlength="10" maxlength="2000" rows="5"></textarea>
+            <div style="font-size:0.75rem;color:var(--text-muted);text-align:right;" id="desc-char-count">0 / 2000</div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="c-price">Your Price ($) *</label>
+              <input class="form-input" id="c-price" type="number" placeholder="0.00" min="0" step="0.01" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="c-msrp">MSRP / Retail Price ($)</label>
+              <input class="form-input" id="c-msrp" type="number" placeholder="0.00" min="0" step="0.01" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="c-condition">Condition *</label>
+              <select class="form-input" id="c-condition" required>
+                <option value="">Select condition...</option>
+                <option value="new">New</option><option value="like-new">Like New</option>
+                <option value="good">Good</option><option value="fair">Fair</option><option value="poor">Poor</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="c-type">Listing Type *</label>
+              <select class="form-input" id="c-type" required>
+                <option value="buy-now">Buy Now</option>
+                <option value="offers">Accepting Offers</option>
+                <option value="auction">Auction</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="c-shipping">Shipping *</label>
+              <select class="form-input" id="c-shipping" required>
+                <option value="paid">Paid Shipping</option><option value="free">Free Shipping</option>
+                <option value="local">Local Delivery</option><option value="pickup">Pickup Only</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="c-location">Location</label>
+              <input class="form-input" id="c-location" type="text" placeholder="City, State" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Payment Methods Accepted</label>
+            <div class="payment-methods-grid" id="payment-methods-grid">
+              <label><input type="checkbox" name="payment" value="cash" checked /> Cash</label>
+              <label><input type="checkbox" name="payment" value="card" /> Card</label>
+              <label><input type="checkbox" name="payment" value="paypal" /> PayPal</label>
+              <label><input type="checkbox" name="payment" value="venmo" /> Venmo</label>
+              <label><input type="checkbox" name="payment" value="crypto" /> Crypto</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="c-tags">Tags (comma separated)</label>
+            <input class="form-input" id="c-tags" type="text" placeholder="vintage, sealed, rare" />
+          </div>
+          <div id="create-error" class="auth-error"></div>
+          <div class="form-row">
+            <button type="submit" class="btn btn-primary btn-lg" id="create-submit">PUBLISH LISTING</button>
+            <button type="button" class="btn btn-ghost btn-lg" id="create-cancel" onclick="cancelEdit()" style="display:none;">CANCEL</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- ====== PROFILE PAGE ====== -->
+    <section class="page" id="page-profile">
+      <div class="profile-container">
+        <div class="profile-banner">
+          <div class="profile-avatar-lg" id="profile-avatar-lg">?</div>
+          <div class="profile-info">
+            <div class="profile-username" id="profile-username">LOADING...</div>
+            <div class="profile-email" id="profile-email"></div>
+            <p class="profile-bio" id="profile-bio"></p>
+            <div class="profile-location" id="profile-location"></div>
+          </div>
+          <div class="profile-stats">
+            <div class="stat-item"><div class="stat-value" id="stat-listings">0</div><div class="stat-label">Listings</div></div>
+            <div class="stat-item"><div class="stat-value" id="stat-views">0</div><div class="stat-label">Views</div></div>
+            <div class="stat-item"><div class="stat-value" id="stat-favorites">0</div><div class="stat-label">Favorites</div></div>
+            <div class="stat-item"><div class="stat-value" id="stat-sold">0</div><div class="stat-label">Sold</div></div>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="openEditProfile()">✏️ Edit Profile</button>
+        </div>
+        <div class="profile-tabs">
+          <button class="profile-tab active" data-ptab="my-listings" onclick="switchProfileTab(this)">Active Listings</button>
+          <button class="profile-tab" data-ptab="sold" onclick="switchProfileTab(this)">Sold Items</button>
+          <button class="profile-tab" data-ptab="settings" onclick="switchProfileTab(this)">Settings</button>
+        </div>
+        <div id="ptab-my-listings"><div class="listings-grid" id="profile-listings-grid"></div></div>
+        <div id="ptab-sold" class="hidden"><div class="listings-grid" id="profile-sold-grid"></div></div>
+        <div id="ptab-settings" class="hidden">
+          <form class="create-form" onsubmit="saveProfile(event)" style="max-width:600px;">
+            <div class="form-group">
+              <label class="form-label">👤 Username *</label>
+              <input class="form-input" id="s-username" type="text" placeholder="Your username" required minlength="3" maxlength="30" />
+              <small style="color:var(--text-muted);font-size:0.7rem;">Letters, numbers, and underscores only</small>
+            </div>
+            <div class="form-group">
+              <label class="form-label">📝 Bio</label>
+              <textarea class="form-input" id="s-bio" rows="3" placeholder="Tell buyers about yourself..." maxlength="500"></textarea>
+              <small style="color:var(--text-muted);font-size:0.7rem;">Max 500 characters</small>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">📍 Location</label>
+                <input class="form-input" id="s-location" type="text" placeholder="City, State" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">📞 Phone Number</label>
+                <input class="form-input" id="s-phone" type="tel" placeholder="+1 555 000 0000" />
+              </div>
+            </div>
+            <div id="profile-save-error" class="auth-error"></div>
+            <div style="display:flex;gap:12px;margin-top:8px;">
+              <button type="submit" class="btn btn-primary">💾 SAVE PROFILE</button>
+              <button type="button" class="btn btn-danger" onclick="signOut()">🚪 SIGN OUT</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== WISHLIST PAGE ====== -->
+    <section class="page" id="page-wishlist">
+      <div class="wishlist-container">
+        <h1 class="page-title">❤️ My Wishlist</h1>
+        <div id="wishlist-auth-notice" class="empty-state hidden"><div class="empty-icon">❤️</div><div class="empty-title">LOGIN TO VIEW YOUR WISHLIST</div><button class="btn btn-primary" onclick="openAuthModal()">Login / Register</button></div>
+        <div class="listings-grid" id="wishlist-grid"></div>
+      </div>
+    </section>
+
+    <!-- ====== MESSAGES PAGE ====== -->
+    <section class="page" id="page-messages">
+      <div class="chat-container">
+        <aside class="chat-sidebar"><div class="chat-header">📬 Conversations</div><div id="conversationList" class="convo-list"></div></aside>
+        <main class="chat-window">
+          <div id="activeChatHeader" class="active-chat-header">Select a conversation...</div>
+          <div id="chatThread" class="chat-thread"></div>
+          <form id="chatForm" class="chat-input-area" style="display:none;">
+            <label for="chatImageInput" class="attach-btn">📎</label><input type="file" id="chatImageInput" accept="image/*" hidden>
+            <input type="text" id="chatMessageInput" placeholder="Write a message..." maxlength="1000"><button type="submit" class="btn btn-primary">SEND</button>
+          </form>
+          <div id="messages-login-notice" class="messages-login-notice hidden" style="text-align:center;padding:40px;background:var(--bg-2);">
+            <p>💬 <strong>Login to chat with sellers</strong> — Ask questions, negotiate, and track conversations.</p>
+            <button class="btn btn-primary" onclick="openAuthModal()">Login / Register</button>
+          </div>
+        </main>
+      </div>
+    </section>
+
+    <!-- ====== ASSISTANT PAGE ====== -->
+    <section class="page" id="page-assistant">
+      <div class="assistant-container">
+        <div class="assistant-header">
+          <span class="assistant-icon">🤖</span>
+          <h2>OBTAINUM AI ASSISTANT</h2>
+          <p>Market insights · price checks · product recommendations</p>
+        </div>
+        <div class="assistant-chat-panel">
+          <div class="assistant-messages" id="assistantMessages">
+            <div class="assistant-message bot">✨ Hi! I'm your OBTAINUM AI assistant. Ask me anything about the marketplace!</div>
+          </div>
+          <div class="assistant-input-area">
+            <input type="text" id="assistantInput" placeholder="Ask anything (e.g., 'What's a fair price for used GPU?')" maxlength="300" />
+            <button class="btn btn-primary" id="askAssistantBtn">ASK</button>
+          </div>
+          <div class="assistant-suggestions">
+            <button class="suggestion-chip" onclick="askSuggestion('What are trending collectibles?')">📈 Trending collectibles</button>
+            <button class="suggestion-chip" onclick="askSuggestion('How to avoid scams on marketplace?')">🛡️ Avoid scams</button>
+            <button class="suggestion-chip" onclick="askSuggestion('Price check: vintage video game')">🎮 Price check</button>
+          </div>
+          <div id="assistant-login-notice" class="assistant-login-notice hidden" style="text-align:center;padding:16px;background:var(--bg-3);margin-top:12px;border-radius:var(--radius);">
+            <p>🔐 <strong>Login to use AI Assistant</strong> — Get personalized market insights!</p>
+            <button class="btn btn-primary btn-sm" onclick="openAuthModal()">Login / Register</button>
+          </div>
+          <!-- AI Usage Counter -->
+          <div id="ai-usage-counter" style="text-align:center;padding:8px;font-size:0.7rem;color:var(--text-muted);border-top:1px solid var(--border);margin-top:8px;">
+            Today's AI uses: <span id="ai-usage-count">0</span> / <span id="ai-usage-limit">10</span> • Resets in <span id="ai-reset-timer">--:--:--</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== ABOUT PAGE ====== -->
+    <section class="page" id="page-about">
+      <div class="about-container">
+        <div class="about-hero">
+          <h1>📖 About OBTAINUM</h1>
+          <p>The techno marketplace for collectors and hobbyists</p>
+        </div>
+        <div class="about-content">
+          <div class="about-section">
+            <h2>🎯 Our Mission</h2>
+            <p>OBTAINUM was born from a simple idea: create a fair marketplace where collectors can buy and sell without fear of scalping or unfair pricing. We believe in transparency, community, and the thrill of the hunt.</p>
+          </div>
+          <div class="about-section">
+            <h2>✨ What Makes Us Different</h2>
+            <ul>
+              <li>🤖 <strong>AI-Powered Price Analysis</strong> - Our AI analyzes market value to help you make informed decisions</li>
+              <li>🛡️ <strong>No Scalping Policy</strong> - We actively monitor and prevent price gouging</li>
+              <li>💬 <strong>Direct Seller Communication</strong> - Chat directly with sellers, no middlemen</li>
+              <li>⭐ <strong>Community Driven</strong> - Built by collectors, for collectors</li>
+              <li>🔒 <strong>Secure Transactions</strong> - Your data and privacy are protected</li>
+            </ul>
+          </div>
+          <div class="about-section">
+            <h2>📜 Our Story</h2>
+            <p>Founded in 2024, OBTAINUM started as a passion project for vintage toy collectors who were tired of bots and scalpers ruining the hobby. Today, we've grown into a full-featured marketplace serving thousands of collectors across categories including electronics, collectibles, clothing, and more.</p>
+          </div>
+          <div class="about-section">
+            <h2>🌱 Future Plans</h2>
+            <p>We're constantly improving! Upcoming features include: blockchain authentication for rare items, expanded AI recommendations, mobile apps, and community forums.</p>
+          </div>
+          <div class="about-stats">
+            <div class="stat-card">
+              <span class="stat-number">1,000+</span>
+              <span class="stat-label">Active Listings</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-number">500+</span>
+              <span class="stat-label">Happy Collectors</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-number">50+</span>
+              <span class="stat-label">Categories</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== CONTACT PAGE ====== -->
+    <section class="page" id="page-contact">
+      <div class="contact-container">
+        <div class="contact-hero">
+          <h1>📧 Contact Us</h1>
+          <p>We'd love to hear from you!</p>
+        </div>
+        <div class="contact-grid">
+          <div class="contact-info">
+            <div class="contact-method">
+              <span class="contact-icon">✉️</span>
+              <div>
+                <h3>Email</h3>
+                <p>support@obtainum.com</p>
+                <small>Response within 24-48 hours</small>
+              </div>
+            </div>
+            <div class="contact-method">
+              <span class="contact-icon">💬</span>
+              <div>
+                <h3>Discord</h3>
+                <p>Join our community server</p>
+                <button class="btn btn-outline btn-sm" onclick="window.open('https://discord.gg/obtainum', '_blank')">Join Discord →</button>
+              </div>
+            </div>
+            <div class="contact-method">
+              <span class="contact-icon">🐦</span>
+              <div>
+                <h3>Twitter / X</h3>
+                <p>@obtainum</p>
+              </div>
+            </div>
+            <div class="contact-method">
+              <span class="contact-icon">📱</span>
+              <div>
+                <h3>Report an Issue</h3>
+                <p>Found a bug? Let us know!</p>
+                <button class="btn btn-outline btn-sm" onclick="showReportModal()">Report Bug →</button>
+              </div>
+            </div>
+          </div>
+          <div class="contact-form">
+            <h2>Send us a message</h2>
+            <form onsubmit="submitContactForm(event)">
+              <div class="form-group">
+                <label class="form-label">Name *</label>
+                <input class="form-input" id="contact-name" type="text" placeholder="Your name" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Email *</label>
+                <input class="form-input" id="contact-email" type="email" placeholder="your@email.com" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Subject *</label>
+                <select class="form-input" id="contact-subject" required>
+                  <option value="">Select a topic...</option>
+                  <option value="general">General Inquiry</option>
+                  <option value="support">Technical Support</option>
+                  <option value="bug">Bug Report</option>
+                  <option value="feature">Feature Request</option>
+                  <option value="business">Business Inquiry</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Message *</label>
+                <textarea class="form-input" id="contact-message" rows="6" placeholder="Tell us what's on your mind..." required maxlength="2000"></textarea>
+              </div>
+              <button type="submit" class="btn btn-primary btn-lg w-full">Send Message</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== DONATE PAGE ====== -->
+    <section class="page" id="page-donate">
+      <div class="donate-container">
+        <h1>☕ Support OBTAINUM</h1>
+        <p>Help us keep AI features free and fair. Donations keep the marketplace independent.</p>
+        <div class="donate-options">
+          <div class="donate-card">
+            <h3>💜 One-Time Donation</h3>
+            <p>Support our development efforts</p>
+            <div class="donate-buttons">
+              <button class="btn btn-outline" onclick="showToast('❤️ Thank you for your support!')">$5</button>
+              <button class="btn btn-outline" onclick="showToast('❤️ Thank you for your support!')">$10</button>
+              <button class="btn btn-outline" onclick="showToast('❤️ Thank you for your support!')">$25</button>
+              <button class="btn btn-outline" onclick="showToast('❤️ Thank you for your support!')">$50</button>
+            </div>
+          </div>
+          <div class="donate-card">
+            <h3>🔄 Monthly Supporter</h3>
+            <p>Become a sustaining member</p>
+            <div class="donate-buttons">
+              <button class="btn btn-primary" onclick="showToast('❤️ Thank you for becoming a supporter!')">Subscribe $5/mo</button>
+            </div>
+          </div>
+          <div class="donate-card">
+            <h3>🪙 Crypto Donations</h3>
+            <p>Bitcoin, Ethereum, and more</p>
+            <button class="btn btn-outline" onclick="showToast('Contact us for crypto address')">Get Crypto Address</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+
+  <!-- ===================== AUTH MODAL ===================== -->
+  <div class="modal-overlay" id="auth-modal" onclick="closeOnOverlay(event, 'auth-modal')">
+    <div class="modal"><button class="modal-close" onclick="closeModal('auth-modal')">&times;</button>
+      <div class="modal-logo">OBTAINUM</div><div class="modal-tagline">Enter the marketplace</div>
+      <div class="modal-tabs"><button class="modal-tab active" id="tab-login" onclick="switchAuthTab('login')">LOGIN</button><button class="modal-tab" id="tab-register" onclick="switchAuthTab('register')">REGISTER</button></div>
+      <div id="auth-login"><form class="auth-form" onsubmit="handleLogin(event)"><button type="button" class="btn btn-outline w-full" onclick="signInWithGoogle()">CONTINUE WITH GOOGLE</button><div class="auth-divider"><span>OR</span></div><input class="form-input" id="login-email" type="email" placeholder="Email" required><input class="form-input" id="login-pass" type="password" placeholder="Password" required><div id="login-error" class="auth-error"></div><button type="submit" class="btn btn-primary btn-lg w-full" id="login-btn">LOGIN</button></form></div>
+      <div id="auth-register" class="hidden"><form class="auth-form" onsubmit="handleRegister(event)"><button type="button" class="btn btn-outline w-full" onclick="signInWithGoogle()">CONTINUE WITH GOOGLE</button><div class="auth-divider"><span>OR</span></div><input class="form-input" id="reg-username" placeholder="Username" required><input class="form-input" id="reg-email" type="email" placeholder="Email" required><input class="form-input" id="reg-pass" type="password" placeholder="Password" required><div id="register-error" class="auth-error"></div><button type="submit" class="btn btn-primary btn-lg w-full" id="register-btn">CREATE ACCOUNT</button></form></div>
+    </div>
+  </div>
+
+  <!-- Report Bug Modal -->
+  <div class="modal-overlay" id="report-modal" onclick="closeOnOverlay(event, 'report-modal')">
+    <div class="modal" style="max-width:500px;"><button class="modal-close" onclick="closeModal('report-modal')">&times;</button>
+      <div class="modal-logo" style="font-size:1.1rem;">🐛 Report a Bug</div>
+      <form onsubmit="submitBugReport(event)">
+        <div class="form-group">
+          <input class="form-input" id="bug-title" placeholder="Bug title" required>
+        </div>
+        <div class="form-group">
+          <textarea class="form-input" id="bug-description" rows="4" placeholder="Describe the issue..." required></textarea>
+        </div>
+        <div class="form-group">
+          <input class="form-input" id="bug-url" placeholder="Page URL where it happened">
+        </div>
+        <button type="submit" class="btn btn-primary w-full">Submit Report</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Mark Sold Modal -->
+  <div class="modal-overlay" id="mark-sold-modal" onclick="closeOnOverlay(event, 'mark-sold-modal')">
+    <div class="modal" style="max-width:380px;"><button class="modal-close" onclick="closeModal('mark-sold-modal')">&times;</button>
+      <div class="modal-logo" style="font-size:1.1rem;">MARK AS SOLD</div>
+      <p>This will mark the listing as sold and remove it from the marketplace.</p>
+      <input type="hidden" id="mark-sold-listing-id" />
+      <button class="btn btn-primary w-full" onclick="confirmMarkSold()">YES, MARK AS SOLD</button>
+      <button class="btn btn-ghost w-full" onclick="closeModal('mark-sold-modal')">CANCEL</button>
+    </div>
+  </div>
+
+  <!-- AI Route Safety Modal with Map -->
+  <div class="modal-overlay" id="route-safety-modal" onclick="closeOnOverlay(event, 'route-safety-modal')">
+    <div class="modal" style="max-width: 600px; max-height: 90vh; overflow-y: auto;"><button class="modal-close" onclick="closeModal('route-safety-modal')">&times;</button>
+      <div class="modal-logo" style="font-size:1.1rem;">🗺️ AI Route Safety Check</div>
+      <div id="route-safety-content"></div>
+    </div>
+  </div>
+
+
+</body>
+</html>
