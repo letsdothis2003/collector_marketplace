@@ -244,6 +244,14 @@ function parseRouteFromHash() {
       return { page: 'detail', listingId: id };
     }
   }
+  // Allow direct profile links for viewing by anyone
+  // The loadProfile function will handle what content is visible based on auth state
+  // and whether it's the user's own profile.
+  // This was missing in the previous fix.
+  if (hash.startsWith('profile/')) {
+    const id = hash.split('/')[1];
+    return { page: 'profile', profileId: id };
+  }
   return { page: 'shop' };
 }
 
@@ -255,6 +263,11 @@ function handleHashChange() {
     openListing(route.listingId);
     return;
   }
+  if (route.page === 'profile' && route.profileId) {
+    window.selectedProfileId = route.profileId;
+    navigate('profile', { updateUrl: false }); // This will now correctly trigger loadProfile()
+    return;
+  }
   navigate(route.page, { updateUrl: false });
 }
 
@@ -264,7 +277,7 @@ function navigate(page, options = {}) {
   if (!pages.includes(page)) page = 'shop';
 
   // Guard restricted pages for unsigned users
-  const restricted = ['create', 'profile', 'wishlist', 'messages', 'assistant'];
+  const restricted = ['create', 'wishlist', 'messages', 'assistant']; // 'profile' removed from here
   if (restricted.includes(page) && !State.user) {
     openAuthModal();
     return;
@@ -2039,7 +2052,7 @@ function viewSellerProfile(sellerId, updateHash = true) {
     return;
   }
   window.selectedProfileId = sellerId;
-  navigate('profile', sellerId, false);
+  navigate('profile', { updateUrl: false });
 }
 
 async function editListing(listingId) {
@@ -2598,7 +2611,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     openListing(initialRoute.listingId);
   } else {
     navigate(initialRoute.page, { updateUrl: false });
-    if (initialRoute.page === 'profile' && State.user) {
+    if (initialRoute.page === 'profile') { // Removed '&& State.user'
       loadProfile();
     } else if (initialRoute.page === 'wishlist' && State.user) {
       loadWishlist();
