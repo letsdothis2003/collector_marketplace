@@ -2672,58 +2672,74 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // ==================== CONTACT & ABOUT FUNCTIONS ====================
 
-function sendContactMessage(e) {
+// Replace your existing functions with these
+async function sendContactMessage(e) {
   e.preventDefault();
-  const name = document.getElementById('contact-name')?.value || '';
-  const email = document.getElementById('contact-email')?.value || '';
-  const subject = document.getElementById('contact-subject')?.value || '';
-  const message = document.getElementById('contact-message')?.value || '';
   
-  // In a real implementation, this would send to your backend
-  // For now, we'll show a success message and log to console
+  const form = e.target;
+  const formData = new FormData(form);
   
-  console.log('Contact form submitted:', { name, email, subject, message });
-  showToast('Message sent! We\'ll get back to you soon.', 'success');
-  
-  // Clear form
-  document.getElementById('contact-name').value = '';
-  document.getElementById('contact-email').value = '';
-  document.getElementById('contact-message').value = '';
-  
-  // Optional: Save to Supabase
-  if (db && State.user) {
-    db.from('contact_messages').insert([{
-      name: name,
-      email: email,
-      subject: subject,
-      message: message,
-      user_id: State.user.id,
-      created_at: new Date().toISOString()
-    }]).catch(err => console.error('Failed to save message:', err));
+  // Get values for Supabase/Toast logic
+  const name = formData.get('name');
+  const email = formData.get('email');
+  const subject = formData.get('subject');
+  const message = formData.get('message');
+
+  // 1. Add your access key and admin cc list programmatically
+  formData.append("access_key", "de95b588-e25e-4674-be05-a869867fa7ff");
+  formData.append("cc", "ftanvir2025@gmail.com,ronnyip1997@gmail.com,khalidissa530@gmail.com,Jadenthompson076@gmail.com");
+
+  try {
+    // 2. Submit to Web3Forms
+    const response = await fetch("https://api.web3forms.com/submit", {
+      method: "POST",
+      body: formData
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      showToast('Message sent! We\'ll get back to you soon.', 'success');
+      form.reset(); // Clears all fields automatically
+      
+      // 3. Optional: Save to Supabase (Legacy Logic)
+      if (typeof db !== 'undefined' && State.user) {
+        db.from('contact_messages').insert([{
+          name, email, subject, message,
+          user_id: State.user.id,
+          created_at: new Date().toISOString()
+        }]).catch(err => console.error('DB Sync Error:', err));
+      }
+    } else {
+      showToast('Submission failed. Please try again.', 'error');
+    }
+  } catch (error) {
+    console.error("Form Error:", error);
+    showToast('Network error. Check your connection.', 'error');
   }
 }
 
-function showReportModal() {
-  document.getElementById('report-modal').classList.add('open');
-}
-
-function submitBugReport(e) {
+// Applying the same logic to Bug Reports
+async function submitBugReport(e) {
   e.preventDefault();
-  const title = document.getElementById('bug-title')?.value || '';
-  const description = document.getElementById('bug-description')?.value || '';
-  const url = document.getElementById('bug-url')?.value || window.location.href;
-  
-  console.log('Bug report:', { title, description, url, user: State.user?.email });
-  showToast('Bug report submitted! Thank you for helping improve OBTAINUM.', 'success');
-  
-  closeModal('report-modal');
-  
-  // Clear form
-  document.getElementById('bug-title').value = '';
-  document.getElementById('bug-description').value = '';
-  document.getElementById('bug-url').value = '';
-}
+  const form = e.target;
+  const formData = new FormData(form);
 
+  formData.append("access_key", "de95b588-e25e-4674-be05-a869867fa7ff");
+  formData.append("subject", "New Bug Report - OBTAINUM");
+  formData.append("cc", "ftanvir2025@gmail.com,ronnyip1997@gmail.com,khalidissa530@gmail.com,Jadenthompson076@gmail.com");
+
+  const response = await fetch("https://api.web3forms.com/submit", {
+    method: "POST",
+    body: formData
+  });
+
+  if (response.ok) {
+    showToast('Bug report submitted! Thank you.', 'success');
+    closeModal('report-modal');
+    form.reset();
+  }
+}
 // ==================== NAV TOGGLE ====================
 function toggleNavMode() {
   const extraBtns = document.querySelectorAll('.nav-extra, .mobile-nav-extra');
