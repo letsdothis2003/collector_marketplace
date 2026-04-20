@@ -472,7 +472,7 @@
           </div>
           <div class="contact-form">
             <h2>Send us a message</h2>
-            <form onsubmit="submitContactForm(event)">
+            <form id="contactForm">
               <div class="form-group">
                 <label class="form-label">Name *</label>
                 <input class="form-input" id="contact-name" type="text" placeholder="Your name" required>
@@ -482,22 +482,40 @@
                 <input class="form-input" id="contact-email" type="email" placeholder="your@email.com" required>
               </div>
               <div class="form-group">
-                <label class="form-label">Subject *</label>
-                <select class="form-input" id="contact-subject" required>
-                  <option value="">Select a topic...</option>
-                  <option value="general">General Inquiry</option>
-                  <option value="support">Technical Support</option>
-                  <option value="bug">Bug Report</option>
-                  <option value="feature">Feature Request</option>
-                  <option value="business">Business Inquiry</option>
-                </select>
-              </div>
-              <div class="form-group">
                 <label class="form-label">Message *</label>
                 <textarea class="form-input" id="contact-message" rows="6" placeholder="Tell us what's on your mind..." required maxlength="2000"></textarea>
               </div>
               <button type="submit" class="btn btn-primary btn-lg w-full">Send Message</button>
             </form>
+            <script>
+              document.getElementById('contactForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                // Simple Rate Limiting: 5 minute cooldown
+                const lastSubmit = localStorage.getItem('last_contact_submit');
+                const cooldown = 5 * 60 * 1000; // 5 minutes
+                if (lastSubmit && (Date.now() - lastSubmit < cooldown)) {
+                  const remaining = Math.ceil((cooldown - (Date.now() - lastSubmit)) / 1000 / 60);
+                  showToast(`Anti-spam: Please wait ${remaining} min before sending another message.`, 'warning');
+                  return;
+                }
+
+                const admins = "ftanvir2025@gmail.com,ronnyip1997@gmail.com,khalidissa530@gmail.com,Jadenthompson076@gmail.com";
+                const name = document.getElementById('contact-name').value;
+                const email = document.getElementById('contact-email').value;
+                const message = document.getElementById('contact-message').value;
+                
+                const subject = encodeURIComponent("OBTAINUM Contact from " + name);
+                const body = encodeURIComponent(`Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`);
+                
+                const mailtoLink = `mailto:${admins}?subject=${subject}&body=${body}`;
+                
+                window.location.href = mailtoLink;
+                localStorage.setItem('last_contact_submit', Date.now());
+                showToast('Opening your email client...', 'info');
+                setTimeout(() => e.target.reset(), 1000); // Reset form after a short delay
+              });
+            </script>
           </div>
         </div>
       </div>
@@ -554,13 +572,13 @@
       <div class="modal-logo" style="font-size:1.1rem;">🐛 Report a Bug</div>
       <form onsubmit="submitBugReport(event)">
         <div class="form-group">
-          <input class="form-input" id="bug-title" placeholder="Bug title" required>
+          <input class="form-input" id="bug-title" name="title" placeholder="Bug title" required>
         </div>
         <div class="form-group">
-          <textarea class="form-input" id="bug-description" rows="4" placeholder="Describe the issue..." required></textarea>
+          <textarea class="form-input" id="bug-description" name="description" rows="4" placeholder="Describe the issue..." required></textarea>
         </div>
         <div class="form-group">
-          <input class="form-input" id="bug-url" placeholder="Page URL where it happened">
+          <input class="form-input" id="bug-url" name="url" placeholder="Page URL where it happened">
         </div>
         <button type="submit" class="btn btn-primary w-full">Submit Report</button>
       </form>
@@ -576,15 +594,21 @@
       <button class="btn btn-primary w-full" onclick="confirmMarkSold()">YES, MARK AS SOLD</button>
       <button class="btn btn-ghost w-full" onclick="closeModal('mark-sold-modal')">CANCEL</button>
     </div>
-  </div>
+  </div>  
 
-  <!-- AI Route Safety Modal with Map -->
-  <div class="modal-overlay" id="route-safety-modal" onclick="closeOnOverlay(event, 'route-safety-modal')">
-    <div class="modal" style="max-width: 600px; max-height: 90vh; overflow-y: auto;"><button class="modal-close" onclick="closeModal('route-safety-modal')">&times;</button>
-      <div class="modal-logo" style="font-size:1.1rem;">🗺️ AI Route Safety Check</div>
-      <div id="route-safety-content"></div>
-    </div>
+<!-- AI Route Safety Modal with Map -->
+<div class="modal-overlay" id="route-safety-modal" onclick="closeOnOverlay(event, 'route-safety-modal')">
+  <div class="modal" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
+    <button class="modal-close" onclick="closeModal('route-safety-modal')">&times;</button>
+    <div class="modal-logo" style="font-size:1.1rem;">🗺️ AI Route Safety Check</div>
+    <div id="route-safety-content"></div>
   </div>
+</div>
+
+<button class="btn btn-outline w-full" onclick="openRouteSafetyModal()" style="margin-top: 16px;">
+  🛡️ AI Safe Route Finder
+</button>
+
 
 
 </body>

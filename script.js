@@ -1,13 +1,11 @@
 /* ============================================================
-   FILE: script.js
-   OBTAINUM MARKETPLACE — Hardcoded Supabase, Gemini placeholder
+   FILE: script.js (FULL VERSION with AI Route Safety + Pickup Planner)
+   OBTAINUM MARKETPLACE — Complete logic for all pages
    ============================================================ */
 
 // ==================== DATABASE CONFIG ====================
 const SUPABASE_URL = "https://gotzmuobwuubsugnowxq.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
-
-
 const GEMINI_API_KEY = "AIzaSyBxjVGywD_5Nuqz-1ls628_s4dN1K-5gj8";  
 
 let db;
@@ -113,32 +111,20 @@ function toggleTheme() {
   showToast(isLight ? 'Dark mode activated' : 'Light mode activated', 'info');
 }
 
-// ==================== IMAGE CAROUSEL FUNCTION ====================
+// ==================== IMAGE CAROUSEL ====================
 function createImageCarousel(images, listingId) {
-  if (!images || images.length === 0) {
-    return `<div class="card-no-image">📦</div>`;
-  }
-  
-  if (images.length === 1) {
-    return `<img src="${escHtml(images[0])}" alt="Listing image" style="width:100%;height:100%;object-fit:cover;" />`;
-  }
-  
+  if (!images || images.length === 0) return `<div class="card-no-image">📦</div>`;
+  if (images.length === 1) return `<img src="${escHtml(images[0])}" alt="Listing image" style="width:100%;height:100%;object-fit:cover;" />`;
   const carouselId = `carousel-${listingId}`;
   return `
     <div class="image-carousel" id="${carouselId}">
       <div class="carousel-container">
         <div class="carousel-slides" id="${carouselId}-slides">
-          ${images.map((img, idx) => `
-            <div class="carousel-slide" data-index="${idx}">
-              <img src="${escHtml(img)}" alt="Image ${idx + 1}" loading="lazy" />
-            </div>
-          `).join('')}
+          ${images.map((img, idx) => `<div class="carousel-slide" data-index="${idx}"><img src="${escHtml(img)}" alt="Image ${idx + 1}" loading="lazy" /></div>`).join('')}
         </div>
         <button class="carousel-btn prev" onclick="event.stopPropagation(); changeSlide('${carouselId}', -1)">‹</button>
         <button class="carousel-btn next" onclick="event.stopPropagation(); changeSlide('${carouselId}', 1)">›</button>
-        <div class="carousel-dots" id="${carouselId}-dots">
-          ${images.map((_, idx) => `<span class="carousel-dot ${idx === 0 ? 'active' : ''}" onclick="event.stopPropagation(); goToSlide('${carouselId}', ${idx})"></span>`).join('')}
-        </div>
+        <div class="carousel-dots" id="${carouselId}-dots">${images.map((_, idx) => `<span class="carousel-dot ${idx === 0 ? 'active' : ''}" onclick="event.stopPropagation(); goToSlide('${carouselId}', ${idx})"></span>`).join('')}</div>
         <div class="image-count-badge">${images.length} images</div>
       </div>
     </div>
@@ -149,22 +135,16 @@ window.changeSlide = function(carouselId, direction) {
   const slides = document.getElementById(`${carouselId}-slides`);
   const dots = document.getElementById(`${carouselId}-dots`);
   if (!slides) return;
-  
   const currentIndex = parseInt(slides.dataset.currentIndex || '0');
   const totalSlides = slides.children.length;
   let newIndex = currentIndex + direction;
-  
   if (newIndex < 0) newIndex = totalSlides - 1;
   if (newIndex >= totalSlides) newIndex = 0;
-  
   slides.style.transform = `translateX(-${newIndex * 100}%)`;
   slides.dataset.currentIndex = newIndex;
-  
   if (dots) {
     const dotElements = dots.querySelectorAll('.carousel-dot');
-    dotElements.forEach((dot, idx) => {
-      dot.classList.toggle('active', idx === newIndex);
-    });
+    dotElements.forEach((dot, idx) => dot.classList.toggle('active', idx === newIndex));
   }
 };
 
@@ -172,15 +152,11 @@ window.goToSlide = function(carouselId, index) {
   const slides = document.getElementById(`${carouselId}-slides`);
   const dots = document.getElementById(`${carouselId}-dots`);
   if (!slides) return;
-  
   slides.style.transform = `translateX(-${index * 100}%)`;
   slides.dataset.currentIndex = index;
-  
   if (dots) {
     const dotElements = dots.querySelectorAll('.carousel-dot');
-    dotElements.forEach((dot, idx) => {
-      dot.classList.toggle('active', idx === index);
-    });
+    dotElements.forEach((dot, idx) => dot.classList.toggle('active', idx === index));
   }
 };
 
@@ -203,6 +179,9 @@ function getRouteHash(page, meta = {}) {
   if (page === 'detail' && meta.listingId && meta.listingName) {
     const slug = slugify(meta.listingName);
     return `#shop-${slug}-${meta.listingId}`;
+  }
+  if (page === 'profile' && meta.profileId) {
+    return `#profile/${meta.profileId}`;
   }
   return `#${page}`;
 }
@@ -244,10 +223,6 @@ function parseRouteFromHash() {
       return { page: 'detail', listingId: id };
     }
   }
-  // Allow direct profile links for viewing by anyone
-  // The loadProfile function will handle what content is visible based on auth state
-  // and whether it's the user's own profile.
-  // This was missing in the previous fix.
   if (hash.startsWith('profile/')) {
     const id = hash.split('/')[1];
     return { page: 'profile', profileId: id };
@@ -265,7 +240,7 @@ function handleHashChange() {
   }
   if (route.page === 'profile' && route.profileId) {
     window.selectedProfileId = route.profileId;
-    navigate('profile', { updateUrl: false }); // This will now correctly trigger loadProfile()
+    navigate('profile', { updateUrl: false });
     return;
   }
   navigate(route.page, { updateUrl: false });
@@ -277,7 +252,7 @@ function navigate(page, options = {}) {
   if (!pages.includes(page)) page = 'shop';
 
   // Guard restricted pages for unsigned users
-  const restricted = ['create', 'wishlist', 'messages', 'assistant']; // 'profile' removed from here
+  const restricted = ['create', 'wishlist', 'messages', 'assistant'];
   if (restricted.includes(page) && !State.user) {
     openAuthModal();
     return;
@@ -611,18 +586,22 @@ async function loadAIChatHistory() {
     
     if (error) throw error;
     
-    State.aiMessages = data || [];
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentMessages = (data || []).filter(msg => new Date(msg.created_at) >= cutoff);
+    State.aiMessages = recentMessages;
     
     const messagesDiv = document.getElementById('assistantMessages');
     if (messagesDiv) {
-      if (State.aiMessages.length === 0) {
+      if (recentMessages.length === 0) {
         messagesDiv.innerHTML = '<div class="assistant-message bot">✨ Hi! I\'m your OBTAINUM AI assistant. Ask me anything about the marketplace!</div>';
       } else {
         messagesDiv.innerHTML = '';
-        State.aiMessages.forEach(msg => {
+        recentMessages.forEach(msg => {
           const msgDiv = document.createElement('div');
           msgDiv.className = `assistant-message ${msg.sender_type === 'user' ? 'user' : 'bot'}`;
-          msgDiv.innerHTML = msg.content.replace(/\n/g, '<br>');
+          const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          msgDiv.innerHTML = msg.content.replace(/\n/g, '<br>') + 
+            `<div style="font-size:0.65rem; opacity:0.6; margin-top:4px;">${time}</div>`;
           messagesDiv.appendChild(msgDiv);
         });
       }
@@ -671,18 +650,17 @@ async function askAssistant() {
   const messagesDiv = document.getElementById('assistantMessages');
   if (!messagesDiv) return;
   
-  // Add user message to UI
   const userMsgDiv = document.createElement('div');
   userMsgDiv.className = 'assistant-message user';
-  userMsgDiv.textContent = question;
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  userMsgDiv.innerHTML = escHtml(question) + `<div style="font-size:0.65rem; opacity:0.6; margin-top:4px;">${timeStr}</div>`;
   messagesDiv.appendChild(userMsgDiv);
   
-  // Save user message to database
   await saveAIMessage('user', question);
   
   if (input) input.value = '';
   
-  // Show typing indicator
   const typingDiv = document.createElement('div');
   typingDiv.className = 'assistant-message bot';
   typingDiv.innerHTML = '<span class="spinner" style="width:16px;height:16px;"></span> Thinking...';
@@ -691,24 +669,21 @@ async function askAssistant() {
   
   try {
     let aiResponse;
-    
-    // Use Gemini API if available
     if (genAI) {
       aiResponse = await getGeminiResponse(question);
     } else {
       aiResponse = "⚠️ Gemini API is not configured yet. The AI assistant will be available once the API key is added.\n\nIn the meantime, you can still browse listings, create listings, and chat with other users!";
     }
     
-    // Remove typing indicator
     typingDiv.remove();
     
-    // Add AI response to UI
     const botMsgDiv = document.createElement('div');
     botMsgDiv.className = 'assistant-message bot';
-    botMsgDiv.innerHTML = aiResponse.replace(/\n/g, '<br>');
+    const botTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    botMsgDiv.innerHTML = aiResponse.replace(/\n/g, '<br>') + 
+      `<div style="font-size:0.65rem; opacity:0.6; margin-top:4px;">${botTime}</div>`;
     messagesDiv.appendChild(botMsgDiv);
     
-    // Save AI response to database
     await saveAIMessage('ai', aiResponse);
     
   } catch (err) {
@@ -763,7 +738,6 @@ function askSuggestion(suggestion) {
 async function generateAndSaveListingSuggestion(listingId) {
   if (!db) return null;
   
-  // Check if suggestion already exists
   const { data: existingListing } = await db
     .from('listings')
     .select('ai_suggestions')
@@ -774,7 +748,6 @@ async function generateAndSaveListingSuggestion(listingId) {
     return existingListing.ai_suggestions;
   }
   
-  // Get the full listing data
   const { data: listing, error } = await db
     .from('listings')
     .select('*, profiles:seller_id(username, rating, location)')
@@ -788,7 +761,6 @@ async function generateAndSaveListingSuggestion(listingId) {
   
   let suggestion = null;
   
-  // Try Gemini API first
   if (genAI) {
     try {
       suggestion = await analyzeListingWithGemini(listing);
@@ -800,7 +772,6 @@ async function generateAndSaveListingSuggestion(listingId) {
     suggestion = getFallbackListingAnalysis(listing);
   }
   
-  // Save to database
   if (suggestion) {
     const { error: updateError } = await db
       .from('listings')
@@ -1400,7 +1371,6 @@ function handleImageUpload(event) {
   if (files.length > remaining) {
     showToast(`Max ${maxImages} images total. ${remaining} slot(s) remaining.`, 'info');
   }
-  // Reset value so the same file can be selected again if needed
   event.target.value = '';
 }
 
@@ -1468,7 +1438,6 @@ async function submitListing(e) {
   if (btn) setLoading(btn, true, isEditing ? 'SAVING...' : 'PUBLISHING...');
   
   try {
-    // 1. Validate first before doing expensive image uploads
     const price = parseFloat(document.getElementById('c-price')?.value || '0');
     const name = document.getElementById('c-name')?.value.trim() || '';
     const category = document.getElementById('c-category')?.value || '';
@@ -1481,7 +1450,6 @@ async function submitListing(e) {
       throw new Error('Description must be at least 10 characters.');
     }
 
-    // 2. Upload images only if validation passes
     let newImageUrls = [];
     if (State.imageFiles.length > 0) {
       newImageUrls = await uploadImages(State.user.id);
@@ -1572,7 +1540,6 @@ async function submitListing(e) {
 
 // ==================== PROFILE MODULE ====================
 async function loadProfile() {
-  // If navigating to generic profile without an ID and not logged in, redirect
   if (!State.user && !window.selectedProfileId) {
     navigate('shop');
     return;
@@ -1860,9 +1827,8 @@ async function initListingMap(locationStr, elementId) {
     
     if (results && results.length > 0) {
       const { lat, lon } = results[0];
-      container.innerHTML = ''; // Clear loading spinner
+      container.innerHTML = '';
 
-      // Custom Neon Marker Icon
       const neonIcon = L.divIcon({
         className: 'custom-neon-marker',
         html: `<div style="background-color:var(--neon); width:15px; height:15px; border-radius:50%; border:2px solid #000; box-shadow:0 0 10px var(--neon), 0 0 20px var(--neon);"></div>`,
@@ -1876,7 +1842,6 @@ async function initListingMap(locationStr, elementId) {
       }).addTo(map);
       L.marker([lat, lon], { icon: neonIcon }).addTo(map);
       
-      // Fix for map tiles not loading correctly in dynamic layouts
       setTimeout(() => map.invalidateSize(), 400);
     } else {
       container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:0.8rem;">📍 Location coordinates not found</div>';
@@ -1916,7 +1881,6 @@ async function openListing(listingId) {
     updateUrlForPage('detail', { listingId: listingId, listingName: listing.name });
     setTimeout(() => { ignoreHashChange = false; }, 0);
     
-    // Generate AI suggestion if not already present
     if (!listing.ai_suggestions) {
       generateAndSaveListingSuggestion(listingId);
     }
@@ -1925,6 +1889,7 @@ async function openListing(listingId) {
     if (content) content.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">LISTING NOT FOUND</div></div>`;
   }
 }
+
 function renderDetail(listing) {
   const content = document.getElementById('detail-content');
   if (!content) return;
@@ -2026,6 +1991,19 @@ function renderDetail(listing) {
           </div>
         </div>
 
+        <div class="pickup-route-planner" style="margin: 24px 0; padding: 24px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); animation: fadeIn 0.5s ease-out;">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+            <span style="font-size:1.5rem;">🗺️</span>
+            <h3 style="color: var(--neon); font-family: 'Orbitron', sans-serif; font-size: 1.1rem;">AI PICKUP ROUTE PLANNER</h3>
+          </div>
+          <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 20px;">Planning a pickup? Get AI-powered travel routes and area safety assessments.</p>
+          <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            <input type="text" id="pickup-start-loc-${listing.id}" placeholder="Your location (City or neighborhood)..." style="flex:1; min-width:200px;">
+            <button class="btn btn-primary" onclick="generatePickupRoute('${listing.id}')">PLAN ROUTE</button>
+          </div>
+          <div id="route-planner-result-${listing.id}" style="margin-top:20px;"></div>
+        </div>
+
         <div class="seller-card">
           <div class="seller-avatar">${seller.username?.charAt(0) || '?'}</div>
           <div><div class="seller-name">${escHtml(seller.username || 'Anonymous')}</div>
@@ -2038,13 +2016,11 @@ function renderDetail(listing) {
     </div>
   `;
   
-  // Trigger AI suggestion display
   setTimeout(() => {
     displayListingSuggestion(listing.id);
     if (listing.location) initListingMap(listing.location, `map-${listing.id}`);
   }, 500);
 }
-
 
 function viewSellerProfile(sellerId, updateHash = true) {
   if (updateHash) {
@@ -2052,7 +2028,7 @@ function viewSellerProfile(sellerId, updateHash = true) {
     return;
   }
   window.selectedProfileId = sellerId;
-  navigate('profile', { updateUrl: false });
+  navigate('profile', { updateUrl: false, meta: { profileId: sellerId } });
 }
 
 async function editListing(listingId) {
@@ -2418,11 +2394,19 @@ function renderMessage(msg, currentUserId) {
   const isSent = msg.sender_id === currentUserId;
   const div = document.createElement('div');
   div.className = `msg ${isSent ? 'sent' : 'received'}`;
+
+  let timestampHtml = '';
+  if (msg.created_at) {
+    const date = new Date(msg.created_at);
+    const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const dateStr = new Date().toDateString() === date.toDateString() ? '' : date.toLocaleDateString() + ' ';
+    timestampHtml = `<div style="font-size:0.65rem; opacity:0.6; margin-top:4px; text-align:${isSent ? 'right' : 'left'}">${dateStr}${time}</div>`;
+  }
   
   if (msg.image_url) {
-    div.innerHTML = `<img src="${escHtml(msg.image_url)}" class="msg-image" style="max-width:200px;border-radius:8px;cursor:pointer;" onclick="window.open(this.src)">`;
+    div.innerHTML = `<img src="${escHtml(msg.image_url)}" class="msg-image" style="max-width:200px;border-radius:8px;cursor:pointer;" onclick="window.open(this.src)">${timestampHtml}`;
   } else {
-    div.innerHTML = escHtml(msg.content);
+    div.innerHTML = `${escHtml(msg.content)}${timestampHtml}`;
   }
   
   thread.appendChild(div);
@@ -2463,6 +2447,8 @@ function hideErrorBanner() {
 // ==================== EVENT LISTENERS ====================
 function setupEventListeners() {
   const themeBtn = document.getElementById('theme-toggle');
+  const createForm = document.getElementById('create-form');
+  if (createForm) createForm.addEventListener('submit', submitListing);
   if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
   
   const hamburger = document.getElementById('hamburger');
@@ -2594,9 +2580,6 @@ function setupEventListeners() {
       if (e.key === 'Enter') askAssistant();
     });
   }
-
-  const createForm = document.getElementById('create-form');
-  if (createForm) createForm.addEventListener('submit', submitListing);
 }
 
 // ==================== INITIALIZATION ====================
@@ -2610,8 +2593,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (initialRoute.page === 'detail' && initialRoute.listingId) {
     openListing(initialRoute.listingId);
   } else {
+    if (initialRoute.page === 'profile' && initialRoute.profileId) {
+      window.selectedProfileId = initialRoute.profileId;
+    }
+
     navigate(initialRoute.page, { updateUrl: false });
-    if (initialRoute.page === 'profile') { // Removed '&& State.user'
+    if (initialRoute.page === 'profile') {
       loadProfile();
     } else if (initialRoute.page === 'wishlist' && State.user) {
       loadWishlist();
@@ -2627,7 +2614,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
   
-  // The rest of the init for shop
   const categoryChips = document.getElementById('category-chips');
   if (categoryChips) {
     const categories = ['all', 'Electronics', 'Clothing & Accessories', 'Collectibles', 'Toys & Figures', 'Sports & Outdoors', 'Books & Media', 'Home & Garden', 'Tools & Equipment', 'Other'];
@@ -2668,79 +2654,67 @@ document.addEventListener('DOMContentLoaded', async () => {
   console.log('%c OBTAINUM INITIALIZED - Ready', 'background:#00ff41;color:#001a07;font-family:monospace;padding:4px 8px;');
 });
 
-
-
 // ==================== CONTACT & ABOUT FUNCTIONS ====================
+const ADMIN_EMAILS = "ftanvir2025@gmail.com,ronnyip1997@gmail.com,khalidissa530@gmail.com,Jadenthompson076@gmail.com";
 
-// Replace your existing functions with these
-async function sendContactMessage(e) {
-  e.preventDefault();
-  
-  const form = e.target;
-  const formData = new FormData(form);
-  
-  // Get values for Supabase/Toast logic
-  const name = formData.get('name');
-  const email = formData.get('email');
-  const subject = formData.get('subject');
-  const message = formData.get('message');
-
-  // 1. Add your access key and admin cc list programmatically
-  formData.append("access_key", "de95b588-e25e-4674-be05-a869867fa7ff");
-  formData.append("cc", "ftanvir2025@gmail.com,ronnyip1997@gmail.com,khalidissa530@gmail.com,Jadenthompson076@gmail.com");
-
-  try {
-    // 2. Submit to Web3Forms
-    const response = await fetch("https://api.web3forms.com/submit", {
-      method: "POST",
-      body: formData
-    });
-
-    const result = await response.json();
-
-    if (result.success) {
-      showToast('Message sent! We\'ll get back to you soon.', 'success');
-      form.reset(); // Clears all fields automatically
-      
-      // 3. Optional: Save to Supabase (Legacy Logic)
-      if (typeof db !== 'undefined' && State.user) {
-        db.from('contact_messages').insert([{
-          name, email, subject, message,
-          user_id: State.user.id,
-          created_at: new Date().toISOString()
-        }]).catch(err => console.error('DB Sync Error:', err));
-      }
-    } else {
-      showToast('Submission failed. Please try again.', 'error');
-    }
-  } catch (error) {
-    console.error("Form Error:", error);
-    showToast('Network error. Check your connection.', 'error');
-  }
-}
-
-// Applying the same logic to Bug Reports
 async function submitBugReport(e) {
   e.preventDefault();
   const form = e.target;
+  const btn = form.querySelector('button[type="submit"]');
+
+  const lastSubmit = localStorage.getItem('last_bug_submit');
+  const cooldown = 2 * 60 * 1000;
+  if (lastSubmit && (Date.now() - lastSubmit < cooldown)) {
+    showToast('Please wait before sending another report.', 'warning');
+    return;
+  }
+
   const formData = new FormData(form);
+  const recipients = ADMIN_EMAILS.split(',').map(email => email.trim());
+  const accessKey = "de95b588-e25e-4674-be05-a869867fa7ff";
+  const bugSubject = `OBTAINUM Bug Report - ${State.user?.email || 'Guest'}`;
+  
+  setLoading(btn, true, 'SUBMITTING...');
 
-  formData.append("access_key", "de95b588-e25e-4674-be05-a869867fa7ff");
-  formData.append("subject", "New Bug Report - OBTAINUM");
-  formData.append("cc", "ftanvir2025@gmail.com,ronnyip1997@gmail.com,khalidissa530@gmail.com,Jadenthompson076@gmail.com");
+  try {
+    let anySucceeded = false;
 
-  const response = await fetch("https://api.web3forms.com/submit", {
-    method: "POST",
-    body: formData
-  });
+    for (const recipientEmail of recipients) {
+      const payload = new FormData();
+      for (const [key, value] of formData.entries()) {
+        payload.append(key, value);
+      }
+      payload.append("access_key", accessKey);
+      payload.append("to", recipientEmail);
+      payload.append("subject", bugSubject);
 
-  if (response.ok) {
-    showToast('Bug report submitted! Thank you.', 'success');
-    closeModal('report-modal');
-    form.reset();
+      const response = await fetch("https://api.web3forms.com/submit", {
+        method: "POST",
+        body: payload
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) anySucceeded = true;
+      }
+    }
+
+    if (anySucceeded) {
+      showToast('Bug report submitted! Thank you.', 'success');
+      closeModal('report-modal');
+      form.reset();
+      localStorage.setItem('last_bug_submit', Date.now());
+    } else {
+      showToast('Bug report submission failed. Please try again.', 'error');
+    }
+  } catch (err) {
+    console.error("Bug Report Error:", err);
+    showToast('Error connecting to server.', 'error');
+  } finally {
+    setLoading(btn, false, 'Submit Report');
   }
 }
-// ==================== NAV TOGGLE ====================
+
 function toggleNavMode() {
   const extraBtns = document.querySelectorAll('.nav-extra, .mobile-nav-extra');
   const toggleBtn = document.getElementById('nav-toggle-btn');
@@ -2757,5 +2731,482 @@ function toggleNavMode() {
   if (toggleBtn) toggleBtn.classList.toggle('minimized');
 }
 
-// Initialize nav mode on load
-// toggleNavMode(); // Commented out to keep nav-extra visible by default
+// ==================== AI ROUTE SAFETY MODULE ====================
+const safetyDatabase = {
+  "downtown,new york": 65,
+  "midtown,new york": 70,
+  "upper east side,new york": 85,
+  "harlem,new york": 55,
+  "bronx,new york": 45,
+  "south side,chicago": 40,
+  "loop,chicago": 70,
+  "lincoln park,chicago": 80,
+  "hollywood,los angeles": 65,
+  "beverly hills,los angeles": 85,
+  "skid row,los angeles": 25,
+  "default": 50
+};
+
+function getSafetyScore(location) {
+  if (!location) return safetyDatabase.default;
+  const lowerLoc = location.toLowerCase();
+  let bestScore = safetyDatabase.default;
+  for (const [key, score] of Object.entries(safetyDatabase)) {
+    if (lowerLoc.includes(key)) {
+      bestScore = Math.max(bestScore, score);
+    }
+  }
+  return bestScore;
+}
+
+function buildSafetyContext(start, end) {
+  const startScore = getSafetyScore(start);
+  const endScore = getSafetyScore(end);
+  const startSafe = startScore >= 70 ? "safe" : (startScore >= 50 ? "moderately safe" : "unsafe");
+  const endSafe = endScore >= 70 ? "safe" : (endScore >= 50 ? "moderately safe" : "unsafe");
+  return `
+Local safety data:
+- Starting area (${start}): ${startSafe} (score ${startScore}/100)
+- Destination area (${end}): ${endSafe} (score ${endScore}/100)
+
+Consider typical crime rates, lighting, foot traffic, and public transportation safety. Suggest a route that avoids known high-crime zones, uses well-lit streets, and prefers busy areas.
+`;
+}
+
+async function openRouteSafetyModal() {
+  const modal = document.getElementById('route-safety-modal');
+  const contentDiv = document.getElementById('route-safety-content');
+  if (!modal || !contentDiv) return;
+
+  contentDiv.innerHTML = `
+    <form id="route-safety-form" onsubmit="event.preventDefault(); findSafeRoute();">
+      <div class="form-group">
+        <label class="form-label">📍 Starting point</label>
+        <input type="text" id="route-start" placeholder="e.g., Downtown, Los Angeles" required class="form-input">
+      </div>
+      <div class="form-group">
+        <label class="form-label">🏁 Destination</label>
+        <input type="text" id="route-end" placeholder="e.g., Beverly Hills, CA" required class="form-input">
+      </div>
+      <button type="submit" class="btn btn-primary w-full" id="route-find-btn">🔍 Find Safe Route</button>
+    </form>
+    <div id="route-result" style="margin-top: 20px;"></div>
+  `;
+  modal.classList.add('open');
+}
+
+async function findSafeRoute() {
+  const start = document.getElementById('route-start')?.value.trim();
+  const end = document.getElementById('route-end')?.value.trim();
+  if (!start || !end) {
+    showToast("Please enter both start and destination.", "error");
+    return;
+  }
+
+  const resultDiv = document.getElementById('route-result');
+  const findBtn = document.getElementById('route-find-btn');
+  if (!resultDiv || !findBtn) return;
+
+  setLoading(findBtn, true, "Analyzing...");
+  resultDiv.innerHTML = '<div class="spinner"></div> Generating safe route...';
+
+  try {
+    let aiResponse;
+    if (genAI) {
+      aiResponse = await getSafeRouteFromGemini(start, end);
+    } else {
+      aiResponse = await getFallbackSafeRoute(start, end);
+    }
+
+    resultDiv.innerHTML = `
+      <div style="background:var(--bg-3); border-radius:var(--radius); padding:16px;">
+        <h3 style="color:var(--neon); margin-bottom:12px;">🛡️ AI Suggested Safe Route</h3>
+        <div style="line-height:1.6;">${aiResponse.replace(/\n/g, '<br>')}</div>
+        <div id="route-map-preview" style="height: 200px; margin-top: 16px; border-radius: 8px;"></div>
+        <p class="msg-timestamp" style="margin-top:12px;">⚠️ Always verify local conditions. AI suggestions are advisory only.</p>
+      </div>
+    `;
+    const mapContainer = document.getElementById('route-map-preview');
+    if (mapContainer && typeof L !== 'undefined') {
+      const map = L.map(mapContainer).setView([40.7128, -74.0060], 10);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; CartoDB'
+      }).addTo(map);
+      mapContainer.innerHTML = '<p style="text-align:center; padding:20px;">📍 Interactive map could show suggested route. For demo, enter real addresses for better results.</p>';
+    }
+  } catch (err) {
+    console.error("Route safety error:", err);
+    resultDiv.innerHTML = `<div class="auth-error show">⚠️ Error: ${err.message || "Could not fetch safe route."}</div>`;
+  } finally {
+    setLoading(findBtn, false, "🔍 Find Safe Route");
+  }
+}
+
+async function getSafeRouteFromGemini(start, end) {
+  if (!genAI) throw new Error("Gemini not configured");
+
+  const ragContext = buildSafetyContext(start, end);
+  const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+  const prompt = `You are OBTAINUM's route safety AI. Using the following local safety context, suggest a safe route from "${start}" to "${end}".
+
+${ragContext}
+
+Provide a clear, bullet-point list of recommendations:
+- General safe corridors or streets to take
+- Areas to avoid (if any)
+- Time-of-day advice
+- Alternative safer paths
+
+Keep it practical and concise. If exact streets are unknown, suggest types of routes (e.g., "use main highways, avoid side alleys").`;
+
+  const result = await model.generateContent(prompt);
+  const response = await result.response;
+  return response.text();
+}
+
+async function getFallbackSafeRoute(start, end) {
+  const startScore = getSafetyScore(start);
+  const endScore = getSafetyScore(end);
+  let advice = `**Safe route suggestions from ${start} to ${end}**\n\n`;
+  if (startScore < 50) advice += `⚠️ Starting area has lower safety rating. Consider using ride-share or traveling during daylight.\n`;
+  if (endScore < 50) advice += `⚠️ Destination area has lower safety rating. Plan to arrive before dark.\n`;
+  advice += `\n✅ General advice: Stick to main roads, use well-lit paths, avoid shortcuts through isolated areas.`;
+  if (startScore >= 70 && endScore >= 70) advice += `\n✅ Both areas are relatively safe – direct routes should be fine, but remain aware.`;
+  return advice;
+}
+
+// ==================== PICKUP ROUTE PLANNER (for listing page) ====================
+async function generatePickupRoute(listingId) {
+  if (!listingId) {
+    showToast("Invalid listing ID.", "error");
+    return;
+  }
+
+  const { data: listing, error } = await db
+    .from('listings')
+    .select('location')
+    .eq('id', listingId)
+    .single();
+
+  if (error || !listing || !listing.location) {
+    showToast("Listing location not available.", "error");
+    return;
+  }
+
+  const destination = listing.location;
+  const startInput = document.getElementById(`pickup-start-loc-${listingId}`);
+  if (!startInput) {
+    showToast("Please enter your starting location.", "info");
+    return;
+  }
+
+  const start = startInput.value.trim();
+  if (!start) {
+    showToast("Please enter your starting location.", "info");
+    startInput.focus();
+    return;
+  }
+
+  const resultContainer = document.getElementById(`route-planner-result-${listingId}`);
+  if (!resultContainer) return;
+
+  resultContainer.innerHTML = '<div class="spinner"></div> Analyzing safe route...';
+
+  try {
+    let aiResponse;
+    if (genAI) {
+      const ragContext = buildSafetyContext(start, destination);
+      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      const prompt = `You are OBTAINUM's route safety AI. Suggest a safe route from "${start}" to "${destination}" for a physical pickup of an item.
+
+${ragContext}
+
+Provide a clear, actionable response with:
+- Best route recommendations (main roads, public transit if applicable)
+- Areas to avoid (if any)
+- Time-of-day safety advice
+- Any alternative safer paths
+Keep it concise and practical.`;
+
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      aiResponse = response.text();
+    } else {
+      aiResponse = await getFallbackSafeRoute(start, destination);
+    }
+
+    resultContainer.innerHTML = `
+      <div style="background:var(--bg-3); border-radius:var(--radius); padding:16px; margin-top:12px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+          <span>🛡️</span>
+          <strong style="color:var(--neon);">AI Safe Route Suggestion</strong>
+        </div>
+        <div style="line-height:1.6;">${aiResponse.replace(/\n/g, '<br>')}</div>
+        <div style="margin-top:12px; font-size:0.7rem; color:var(--text-muted);">⚠️ Always verify local conditions. AI suggestions are advisory only.</div>
+      </div>
+    `;
+  } catch (err) {
+    console.error("Pickup route error:", err);
+    resultContainer.innerHTML = `<div class="auth-error show">⚠️ Error: ${err.message || "Could not generate route."}</div>`;
+  }
+}
+
+// Expose global functions
+window.openRouteSafetyModal = openRouteSafetyModal;
+window.findSafeRoute = findSafeRoute;
+window.generatePickupRoute = generatePickupRoute;
+
+
+
+// ==================== GEOCODING & OSRM ROUTING HELPERS ====================
+async function geocodeLocation(location) {
+  // Returns { lat, lon } for a location string
+  const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}&limit=1`);
+  const data = await response.json();
+  if (data && data.length > 0) {
+    return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+  }
+  throw new Error(`Could not geocode: ${location}`);
+}
+
+async function getDrivingRoute(startLat, startLon, endLat, endLon) {
+  // OSRM driving route
+  const url = `https://router.project-osrm.org/route/v1/driving/${startLon},${startLat};${endLon},${endLat}?overview=full&geometries=geojson&steps=true`;
+  const response = await fetch(url);
+  const data = await response.json();
+  if (data.code !== 'Ok') throw new Error('Routing failed');
+  return data;
+}
+
+// ==================== UPDATED PICKUP ROUTE PLANNER ====================
+async function generatePickupRoute(listingId) {
+  if (!listingId) {
+    showToast("Invalid listing ID.", "error");
+    return;
+  }
+
+  // Get listing location
+  const { data: listing, error } = await db
+    .from('listings')
+    .select('location')
+    .eq('id', listingId)
+    .single();
+
+  if (error || !listing || !listing.location) {
+    showToast("Listing location not available.", "error");
+    return;
+  }
+
+  const destination = listing.location;
+  const startInput = document.getElementById(`pickup-start-loc-${listingId}`);
+  if (!startInput) {
+    showToast("Please enter your starting location.", "info");
+    return;
+  }
+
+  const start = startInput.value.trim();
+  if (!start) {
+    showToast("Please enter your starting location.", "info");
+    startInput.focus();
+    return;
+  }
+
+  const resultContainer = document.getElementById(`route-planner-result-${listingId}`);
+  if (!resultContainer) return;
+
+  resultContainer.innerHTML = '<div class="spinner"></div> Geocoding locations...';
+
+  try {
+    // 1. Geocode both locations
+    const [startCoords, endCoords] = await Promise.all([
+      geocodeLocation(start),
+      geocodeLocation(destination)
+    ]);
+
+    resultContainer.innerHTML = '<div class="spinner"></div> Fetching driving route...';
+
+    // 2. Get driving route from OSRM
+    const routeData = await getDrivingRoute(startCoords.lat, startCoords.lon, endCoords.lat, endCoords.lon);
+    const route = routeData.routes[0];
+    const distanceKm = (route.distance / 1000).toFixed(1);
+    const durationMin = Math.round(route.duration / 60);
+
+    // Extract step-by-step instructions
+    let stepsHtml = '<ul style="margin: 8px 0 0 20px;">';
+    route.legs[0].steps.forEach(step => {
+      stepsHtml += `<li>${step.maneuver.instruction} (${(step.distance / 1000).toFixed(1)} km)</li>`;
+    });
+    stepsHtml += '</ul>';
+
+    // 3. Generate transit directions using Gemini (no API key needed for free transit data)
+    let transitHtml = '';
+    if (genAI) {
+      resultContainer.innerHTML = '<div class="spinner"></div> Generating transit directions...';
+      const transitPrompt = `You are a public transit assistant. Suggest the best public transit route from "${start}" to "${destination}" in the New York City area (or general US city). Provide specific subway/bus lines, station names, number of stops, and estimated travel time. Use real MTA lines (e.g., 6 train, Q44 bus) if plausible. Keep it concise with bullet points.`;
+      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      const transitResult = await model.generateContent(transitPrompt);
+      const transitResponse = await transitResult.response;
+      transitHtml = `
+        <div style="margin-top: 20px; padding: 16px; background: var(--bg-2); border-radius: var(--radius); border-left: 3px solid var(--blue);">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+            <span>🚇</span>
+            <strong style="color: var(--blue);">Public Transit Directions</strong>
+          </div>
+          <div style="line-height: 1.6;">${transitResponse.text().replace(/\n/g, '<br>')}</div>
+          <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 8px;">⚠️ Transit suggestions are AI-generated; verify with local transit apps.</div>
+        </div>
+      `;
+    } else {
+      transitHtml = '<div style="margin-top: 20px; padding: 16px; background: var(--bg-2); border-radius: var(--radius);">⚠️ Enable Gemini API for transit directions.</div>';
+    }
+
+    // 4. Create map with the driving route
+    const mapId = `route-map-${listingId}-${Date.now()}`;
+    const mapHtml = `
+      <div id="${mapId}" style="height: 300px; margin-top: 16px; border-radius: var(--radius); border: 1px solid var(--border);"></div>
+    `;
+
+    resultContainer.innerHTML = `
+      <div style="background: var(--bg-3); border-radius: var(--radius); padding: 16px; margin-top: 12px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+          <span>🚗</span>
+          <strong style="color: var(--neon);">Driving Route</strong>
+          <span style="margin-left: auto; font-size: 0.85rem;">${distanceKm} km • ${durationMin} min</span>
+        </div>
+        ${mapHtml}
+        <details style="margin-top: 12px;">
+          <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.85rem;">Turn-by-turn directions</summary>
+          ${stepsHtml}
+        </details>
+        ${transitHtml}
+        <div style="margin-top: 12px; font-size: 0.7rem; color: var(--text-muted);">⚠️ Always verify local conditions. AI suggestions are advisory only.</div>
+      </div>
+    `;
+
+    // Initialize the map after DOM update
+    setTimeout(() => {
+      if (typeof L !== 'undefined') {
+        const map = L.map(mapId).setView([startCoords.lat, startCoords.lon], 12);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; CartoDB'
+        }).addTo(map);
+
+        // Add start and end markers
+        const startIcon = L.divIcon({ html: '<div style="background: #00ff41; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff;"></div>', iconSize: [12, 12] });
+        const endIcon = L.divIcon({ html: '<div style="background: #ff2d55; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff;"></div>', iconSize: [12, 12] });
+        L.marker([startCoords.lat, startCoords.lon], { icon: startIcon }).addTo(map).bindPopup(`Start: ${start}`);
+        L.marker([endCoords.lat, endCoords.lon], { icon: endIcon }).addTo(map).bindPopup(`Destination: ${destination}`);
+
+        // Draw the route line
+        const routeGeoJSON = route.geometry;
+        const routeLayer = L.geoJSON(routeGeoJSON, {
+          style: { color: 'var(--neon)', weight: 5, opacity: 0.8 }
+        }).addTo(map);
+        map.fitBounds(routeLayer.getBounds());
+      } else {
+        console.warn('Leaflet not loaded');
+      }
+    }, 100);
+
+  } catch (err) {
+    console.error("Pickup route error:", err);
+    resultContainer.innerHTML = `<div class="auth-error show">⚠️ Error: ${err.message || "Could not generate route."}</div>`;
+  }
+}
+
+async function findSafeRoute() {
+  const start = document.getElementById('route-start')?.value.trim();
+  const end = document.getElementById('route-end')?.value.trim();
+  if (!start || !end) {
+    showToast("Please enter both start and destination.", "error");
+    return;
+  }
+
+  const resultDiv = document.getElementById('route-result');
+  const findBtn = document.getElementById('route-find-btn');
+  if (!resultDiv || !findBtn) return;
+
+  setLoading(findBtn, true, "Analyzing...");
+  resultDiv.innerHTML = '<div class="spinner"></div> Geocoding...';
+
+  try {
+    // Geocode start and end
+    const [startCoords, endCoords] = await Promise.all([
+      geocodeLocation(start),
+      geocodeLocation(end)
+    ]);
+
+    resultDiv.innerHTML = '<div class="spinner"></div> Fetching driving route...';
+
+    // Get OSRM route
+    const routeData = await getDrivingRoute(startCoords.lat, startCoords.lon, endCoords.lat, endCoords.lon);
+    const route = routeData.routes[0];
+    const distanceKm = (route.distance / 1000).toFixed(1);
+    const durationMin = Math.round(route.duration / 60);
+
+    let stepsHtml = '<ul style="margin: 8px 0 0 20px;">';
+    route.legs[0].steps.forEach(step => {
+      stepsHtml += `<li>${step.maneuver.instruction} (${(step.distance / 1000).toFixed(1)} km)</li>`;
+    });
+    stepsHtml += '</ul>';
+
+    // Gemini transit suggestion
+    let transitHtml = '';
+    if (genAI) {
+      resultDiv.innerHTML = '<div class="spinner"></div> Generating transit suggestions...';
+      const transitPrompt = `Suggest public transit from "${start}" to "${end}". Include line names, station names, and estimated time. Be specific and concise.`;
+      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      const transitResult = await model.generateContent(transitPrompt);
+      const transitResponse = await transitResult.response;
+      transitHtml = `
+        <div style="margin-top: 20px; padding: 16px; background: var(--bg-2); border-radius: var(--radius); border-left: 3px solid var(--blue);">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+            <span>🚇</span>
+            <strong style="color: var(--blue);">Public Transit Suggestions</strong>
+          </div>
+          <div style="line-height: 1.6;">${transitResponse.text().replace(/\n/g, '<br>')}</div>
+        </div>
+      `;
+    }
+
+    const mapId = `route-map-modal-${Date.now()}`;
+    resultDiv.innerHTML = `
+      <div style="background:var(--bg-3); border-radius:var(--radius); padding:16px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+          <span>🚗</span>
+          <strong style="color:var(--neon);">Driving Route</strong>
+          <span style="margin-left: auto;">${distanceKm} km • ${durationMin} min</span>
+        </div>
+        <div id="${mapId}" style="height: 300px; border-radius: var(--radius); margin-bottom: 12px;"></div>
+        <details>
+          <summary style="cursor: pointer;">Turn-by-turn directions</summary>
+          ${stepsHtml}
+        </details>
+        ${transitHtml}
+        <div style="margin-top: 12px; font-size:0.7rem; color:var(--text-muted);">⚠️ Always verify local conditions.</div>
+      </div>
+    `;
+
+    // Render map
+    setTimeout(() => {
+      if (typeof L !== 'undefined') {
+        const map = L.map(mapId).setView([startCoords.lat, startCoords.lon], 12);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+          attribution: '&copy; OSM & CartoDB'
+        }).addTo(map);
+        L.marker([startCoords.lat, startCoords.lon]).addTo(map).bindPopup(`Start: ${start}`);
+        L.marker([endCoords.lat, endCoords.lon]).addTo(map).bindPopup(`Destination: ${end}`);
+        const routeLayer = L.geoJSON(route.geometry, { style: { color: 'var(--neon)', weight: 5 } }).addTo(map);
+        map.fitBounds(routeLayer.getBounds());
+      }
+    }, 100);
+
+  } catch (err) {
+    resultDiv.innerHTML = `<div class="auth-error show">⚠️ Error: ${err.message}</div>`;
+  } finally {
+    setLoading(findBtn, false, "🔍 Find Safe Route");
+  }
+}
+
+
+

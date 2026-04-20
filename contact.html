@@ -118,7 +118,7 @@
           </div>
           <div class="contact-form">
             <h3>Send us a message</h3>
-            <form id="contact-form" onsubmit="sendContactMessage(event)">
+            <form id="contactForm">
               <div class="form-group">
                 <input type="text" id="contact-name" placeholder="Your Name" required>
               </div>
@@ -126,18 +126,39 @@
                 <input type="email" id="contact-email" placeholder="Your Email" required>
               </div>
               <div class="form-group">
-                <select id="contact-subject">
-                  <option value="general">General Inquiry</option>
-                  <option value="support">Technical Support</option>
-                  <option value="report">Report a Listing</option>
-                  <option value="partnership">Partnership Opportunity</option>
-                </select>
-              </div>
-              <div class="form-group">
                 <textarea id="contact-message" rows="5" placeholder="Your message..." required></textarea>
               </div>
               <button type="submit" class="btn btn-primary w-full">Send Message</button>
             </form>
+            <script>
+              document.getElementById('contactForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                // Simple Rate Limiting: 5 minute cooldown
+                const lastSubmit = localStorage.getItem('last_contact_submit');
+                const cooldown = 5 * 60 * 1000; // 5 minutes
+                if (lastSubmit && (Date.now() - lastSubmit < cooldown)) {
+                  const remaining = Math.ceil((cooldown - (Date.now() - lastSubmit)) / 1000 / 60);
+                  showToast(`Anti-spam: Please wait ${remaining} min before sending another message.`, 'warning');
+                  return;
+                }
+
+                const admins = "ftanvir2025@gmail.com,ronnyip1997@gmail.com,khalidissa530@gmail.com,Jadenthompson076@gmail.com";
+                const name = document.getElementById('contact-name').value;
+                const email = document.getElementById('contact-email').value;
+                const message = document.getElementById('contact-message').value;
+                
+                const subject = encodeURIComponent("OBTAINUM Contact from " + name);
+                const body = encodeURIComponent(`Name: ${name}\nEmail: ${email}\n\nMessage:\n${message}`);
+                
+                const mailtoLink = `mailto:${admins}?subject=${subject}&body=${body}`;
+                
+                window.location.href = mailtoLink;
+                localStorage.setItem('last_contact_submit', Date.now());
+                showToast('Opening your email client...', 'info');
+                setTimeout(() => e.target.reset(), 1000); // Reset form after a short delay
+              });
+            </script>
           </div>
         </div>
       </div>
