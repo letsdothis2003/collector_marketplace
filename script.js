@@ -24,7 +24,7 @@ async function callGemini(prompt, responseType = 'text/plain') {
   }
 
   const models = [
-    'gemini-2.0-flash-exp',
+    'gemini-3-flash-preview',
     'gemini-1.5-flash',
     'gemini-1.5-pro',
     'gemini-pro'
