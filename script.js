@@ -705,7 +705,7 @@ async function getGeminiResponse(userMessage) {
   }
   
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
     
     const prompt = `You are OBTAINUM AI, a friendly and helpful assistant for a marketplace website. 
 Your role is to help users with general questions about buying, selling, collectibles, pricing, safety tips, and marketplace navigation.
@@ -789,7 +789,7 @@ async function generateAndSaveListingSuggestion(listingId) {
 async function analyzeListingWithGemini(listing) {
   if (!genAI) return getFallbackListingAnalysis(listing);
   
-  const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+  const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
   
   const prompt = `You are OBTAINUM's pricing AI. Analyze this marketplace listing and provide a JSON response.
 
@@ -2846,7 +2846,7 @@ async function getSafeRouteFromGemini(start, end) {
   if (!genAI) throw new Error("Gemini not configured");
 
   const ragContext = buildSafetyContext(start, end);
-  const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+  const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
   const prompt = `You are OBTAINUM's route safety AI. Using the following local safety context, suggest a safe route from "${start}" to "${end}".
 
 ${ragContext}
@@ -2916,7 +2916,7 @@ async function generatePickupRoute(listingId) {
     let aiResponse;
     if (genAI) {
       const ragContext = buildSafetyContext(start, destination);
-      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
       const prompt = `You are OBTAINUM's route safety AI. Suggest a safe route from "${start}" to "${destination}" for a physical pickup of an item.
 
 ${ragContext}
@@ -3043,7 +3043,7 @@ async function generatePickupRoute(listingId) {
     if (genAI) {
       resultContainer.innerHTML = '<div class="spinner"></div> Generating transit directions...';
       const transitPrompt = `You are a public transit assistant. Suggest the best public transit route from "${start}" to "${destination}" in the New York City area (or general US city). Provide specific subway/bus lines, station names, number of stops, and estimated travel time. Use real MTA lines (e.g., 6 train, Q44 bus) if plausible. Keep it concise with bullet points.`;
-      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
       const transitResult = await model.generateContent(transitPrompt);
       const transitResponse = await transitResult.response;
       transitHtml = `
@@ -3155,7 +3155,7 @@ async function findSafeRoute() {
     if (genAI) {
       resultDiv.innerHTML = '<div class="spinner"></div> Generating transit suggestions...';
       const transitPrompt = `Suggest public transit from "${start}" to "${end}". Include line names, station names, and estimated time. Be specific and concise.`;
-      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
       const transitResult = await model.generateContent(transitPrompt);
       const transitResponse = await transitResult.response;
       transitHtml = `
