@@ -6,7 +6,7 @@
 // ==================== DATABASE CONFIG ====================
 const SUPABASE_URL = "https://gotzmuobwuubsugnowxq.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
-const GEMINI_API_KEY = "AIzaSyBxjVGywD_5Nuqz-1ls628_s4dN1K-5gj8";  
+const GEMINI_API_KEY = "AIzaSyBhLr1W09j234x1xAqPdKaGXTLI2huC-Zs";  
 
 let db;
 
