@@ -6,7 +6,7 @@
 // ==================== DATABASE CONFIG ====================
 const SUPABASE_URL = "https://gotzmuobwuubsugnowxq.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
-const GEMINI_API_KEY = " ";  
+const GEMINI_API_KEY = "AIzaSyBhLr1W09j234x1xAqPdKaGXTLI2huC-Zs";  
 
 let db;
 
@@ -90,7 +90,12 @@ const State = {
   currentChatPartnerId: null,
   currentListingId: null,
   aiSessionId: null,
-  aiMessages: []
+  aiMessages: [],
+  currentReviewSellerId: null,
+  reviewImageFiles: [],
+  selectedReviewListingId: null,
+  allSellerItems: [],
+  viewingProfileId: null
 };
 
 // ==================== HELPER FUNCTIONS ====================
@@ -291,11 +296,11 @@ function handleHashChange() {
 
 // ==================== NAVIGATION ====================
 function navigate(page, options = {}) {
-  const pages = ['shop', 'detail', 'create', 'profile', 'wishlist', 'messages', 'assistant', 'about', 'contact', 'donate'];
+  const pages = ['shop', 'detail', 'create', 'profile', 'wishlist', 'messages', 'assistant', 'about', 'contact', 'donate', 'review'];
   if (!pages.includes(page)) page = 'shop';
 
   // Guard restricted pages for unsigned users
-  const restricted = ['create', 'wishlist', 'messages', 'assistant'];
+  const restricted = ['create', 'wishlist', 'messages', 'assistant', 'review'];
   if (restricted.includes(page) && !State.user) {
     openAuthModal();
     return;
@@ -315,6 +320,7 @@ function navigate(page, options = {}) {
   if (page === 'profile') loadProfile();
   if (page === 'wishlist' && State.user) loadWishlist();
   if (page === 'create' && State.user) initCreatePage();
+  if (page === 'review') loadReviewPage(options.meta?.sellerId);
   if (page === 'messages' && State.user) loadMessages();
   if (page === 'assistant') {
     updateAssistantUI();
@@ -737,25 +743,27 @@ async function askAssistant() {
 }
 
 async function getGeminiResponse(userMessage) {
-  const historyContext = State.aiMessages.slice(-6).map(m => 
-    `${m.sender_type === 'user' ? 'User' : 'Assistant'}: ${m.content}`
-  ).join('\n');
-
-  const prompt = `You are OBTAINUM AI, a friendly and helpful assistant for a marketplace website. 
-Your role is to help users with general questions about buying, selling, collectibles, pricing, safety tips, and marketplace navigation.
-
-Keep responses:
-- Concise and helpful
-- Friendly and approachable
-- Use bullet points when listing multiple items
-
-CONVERSATION HISTORY:
-${historyContext}
-
-User question: ${userMessage}
-Assistant:`;
-
-  return await callGemini(prompt);
+  // Simple direct pass-through to Gemini - assume user talks about products
+  const systemPrompt = `You are OBTAINUM AI assistant, helping users with marketplace questions about products, pricing, and buying/selling. Be concise and helpful.`;
+  
+  // Build simple conversation context
+  const messages = [];
+  messages.push({ role: 'user', content: systemPrompt });
+  
+  // Add last few messages for context
+  State.aiMessages.slice(-4).forEach(m => {
+    messages.push({ 
+      role: m.sender_type === 'user' ? 'user' : 'assistant', 
+      content: m.content 
+    });
+  });
+  
+  messages.push({ role: 'user', content: userMessage });
+  
+  // Simplified prompt - just the user message with minimal context
+  const finalPrompt = `${systemPrompt}\n\nUser: ${userMessage}`;
+  
+  return await callGemini(finalPrompt);
 }
 
 function askSuggestion(suggestion) {
@@ -1564,10 +1572,16 @@ async function loadProfile() {
     navigate('shop');
     return;
   }
-  
-  const profileIdToLoad = window.selectedProfileId || State.user.id;
-  const isOwnProfile = profileIdToLoad === State.user.id;
-  
+
+  const profileIdToLoad = window.selectedProfileId || State.user?.id;
+  if (!profileIdToLoad) {
+    navigate('shop');
+    return;
+  }
+
+  State.viewingProfileId = profileIdToLoad;
+  const isOwnProfile = State.user && profileIdToLoad === State.user.id;
+
   if (window.selectedProfileId) delete window.selectedProfileId;
   
   const { data: profile, error } = await db
@@ -1614,11 +1628,32 @@ async function loadProfile() {
       editButton.onclick = () => startChat(profile.id);
       editButton.style.display = 'inline-block';
     }
+
+    // Add Review Button for other users
+    if (!isOwnProfile && profile) {
+      const actionsWrap = editButton.parentElement;
+      if (actionsWrap && !document.getElementById('btn-review-seller')) {
+        actionsWrap.insertAdjacentHTML('beforeend', `<button id="btn-review-seller" class="btn btn-outline ml-sm" onclick="navigate('review', { meta: { sellerId: '${profile.id}' } })">⭐ Review</button>`);
+      }
+    }
+  }
+
+  // Ensure Reviews Tab exists
+  const reviewsTab = document.querySelector('.profile-tab[data-ptab="reviews"]');
+  if (!reviewsTab) {
+    const tabContainer = document.querySelector('.profile-tabs');
+    if (tabContainer) {
+      tabContainer.insertAdjacentHTML('beforeend', `<button class="profile-tab" data-ptab="reviews" onclick="switchProfileTab(this)">⭐ Reviews</button>`);
+    }
   }
   
+  // Show/Hide settings tab based on ownership
+  const settingsTabBtn = document.querySelector('.profile-tab[data-ptab="settings"]');
+  if (settingsTabBtn) settingsTabBtn.style.display = isOwnProfile ? 'inline-block' : 'none';
+
   const profileTabs = document.querySelector('.profile-tabs');
-  if (profileTabs) profileTabs.style.display = isOwnProfile ? 'flex' : 'none';
-  
+  if (profileTabs) profileTabs.style.display = 'flex';
+
   await loadProfileListings(profileIdToLoad, isOwnProfile);
   
   if (isOwnProfile) {
@@ -1633,29 +1668,42 @@ async function loadProfile() {
     if (sPhone) sPhone.value = profile?.phone || '';
   }
   
-  const activeTab = document.querySelector('.profile-tab.active');
-  if (activeTab) {
-    const tabName = activeTab.dataset.ptab;
-    showProfileTab(tabName);
-  } else {
-    showProfileTab('my-listings');
-  }
+  // Default to listings tab if settings is active but not allowed
+  const activeTabBtn = document.querySelector('.profile-tab.active');
+  let tabToOpen = activeTabBtn ? activeTabBtn.dataset.ptab : 'my-listings';
+  if (tabToOpen === 'settings' && !isOwnProfile) tabToOpen = 'my-listings';
+  
+  showProfileTab(tabToOpen);
 }
 
 function showProfileTab(tabName) {
   const myListingsDiv = document.getElementById('ptab-my-listings');
   const soldDiv = document.getElementById('ptab-sold');
   const settingsDiv = document.getElementById('ptab-settings');
+  const reviewsDiv = document.getElementById('ptab-reviews');
   
+  const targetId = State.viewingProfileId;
+  const isOwnProfile = State.user && targetId === State.user.id;
+
+  // Security: Prevent access to settings if not own profile
+  if (tabName === 'settings' && !isOwnProfile) {
+    showProfileTab('my-listings');
+    return;
+  }
+
   if (myListingsDiv) myListingsDiv.classList.add('hidden');
   if (soldDiv) soldDiv.classList.add('hidden');
   if (settingsDiv) settingsDiv.classList.add('hidden');
+  if (reviewsDiv) reviewsDiv.classList.add('hidden');
   
   if (tabName === 'my-listings' && myListingsDiv) {
     myListingsDiv.classList.remove('hidden');
+  } else if (tabName === 'reviews' && reviewsDiv) {
+    reviewsDiv.classList.remove('hidden');
+    loadSellerReviews(targetId);
   } else if (tabName === 'sold' && soldDiv) {
     soldDiv.classList.remove('hidden');
-    if (State.user) loadProfileListings(State.user.id, true);
+    loadProfileListings(targetId, isOwnProfile);
   } else if (tabName === 'settings' && settingsDiv) {
     settingsDiv.classList.remove('hidden');
   }
@@ -1794,6 +1842,256 @@ function openEditProfile() {
     settingsTab.scrollIntoView({ behavior: 'smooth' });
   }
 }
+
+// ==================== REVIEW SYSTEM ====================
+window.removeReviewImage = function(index) {
+  if (State.reviewImageFiles) {
+    State.reviewImageFiles.splice(index, 1);
+    const preview = document.getElementById('review-image-previews');
+    const countEl = document.getElementById('review-image-count');
+    
+    if (preview) {
+      preview.innerHTML = (State.reviewImageFiles || []).map((f, idx) => `
+        <div style="position:relative; width:80px; height:80px;">
+          <img src="${URL.createObjectURL(f)}" style="width:100%; height:100%; object-fit:cover; border-radius:4px; display:block;">
+          <button type="button" onclick="removeReviewImage(${idx})" style="position:absolute; top:-8px; right:-8px; width:24px; height:24px; border-radius:50%; background:var(--danger); border:none; color:white; cursor:pointer; font-size:1rem; padding:0; display:flex; align-items:center; justify-content:center;">×</button>
+        </div>
+      `).join('');
+    }
+    
+    if (countEl) countEl.textContent = `${State.reviewImageFiles.length} / 3 images`;
+  }
+};
+
+async function loadReviewPage(sellerId) {
+  if (!sellerId || !State.user || sellerId === State.user.id) {
+    showToast("You cannot review yourself.", "warning");
+    navigate('shop');
+    return;
+  }
+
+  State.currentReviewSellerId = sellerId;
+  State.reviewImageFiles = [];
+  document.getElementById('toggle-sold-items').checked = false;
+
+  const header = document.getElementById('review-seller-info');
+  const itemsGrid = document.getElementById('seller-items-grid');
+  if (!header || !itemsGrid) return;
+
+  header.innerHTML = '<div class="spinner"></div> Loading seller...';
+  itemsGrid.innerHTML = '<div class="spinner"></div>';
+
+  try {
+    const [sellerRes, itemsRes] = await Promise.all([
+      db.from('profiles').select('*').eq('id', sellerId).single(),
+      db.from('listings').select('*').eq('seller_id', sellerId).eq('is_sold', false).order('created_at', { ascending: false })
+    ]);
+
+    if (sellerRes.error) throw sellerRes.error;
+    const seller = sellerRes.data;
+    header.innerHTML = `
+      <div style="display:flex; align-items:center; gap:16px; padding:16px; background:var(--bg-2); border-radius:var(--radius-lg);">
+        <div class="seller-avatar" style="width:50px; height:50px; font-size:1.2rem; background:var(--bg-3);">${seller.username?.charAt(0).toUpperCase()}</div>
+        <div>
+          <h3 style="margin:0 0 4px 0; font-family:'Orbitron';">REVIEWING: ${escHtml(seller.username).toUpperCase()}</h3>
+          <div style="font-size:0.8rem; color:var(--text-muted);">⭐ ${seller.rating || 'New seller'} | 📍 ${seller.location || 'N/A'}</div>
+        </div>
+      </div>
+    `;
+
+    // Load active items only first
+    const items = itemsRes.data || [];
+    State.allSellerItems = items;
+    renderSellerItems(items);
+  } catch (err) {
+    console.error('Error loading review context:', err);
+    showToast('Failed to load seller info.', 'error');
+  }
+}
+
+function renderSellerItems(items) {
+  const itemsGrid = document.getElementById('seller-items-grid');
+  if (!itemsGrid) return;
+  
+  if (items.length === 0) {
+    itemsGrid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:24px; color:var(--text-muted);">No items to display</div>';
+  } else {
+    itemsGrid.innerHTML = items.map(item => `
+      <div style="border-radius:var(--radius); overflow:hidden; background:var(--bg-2); transition:all 0.2s; cursor:pointer;" title="${escHtml(item.name)}">
+        <img src="${item.images?.[0] || 'placeholder.png'}" style="width:100%; aspect-ratio:1; object-fit:cover; display:block;">
+        <div style="padding:8px; font-size:0.75rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center; color:var(--text-secondary);">${escHtml(item.name)}</div>
+        ${item.is_sold ? '<div style="position:absolute; top:4px; right:4px; background:var(--danger); color:white; font-size:0.65rem; padding:3px 6px; border-radius:4px; font-weight:bold;">SOLD</div>' : ''}
+      </div>
+    `).join('');
+  }
+}
+
+window.toggleSoldItems = async function() {
+  const checkbox = document.getElementById('toggle-sold-items');
+  if (!State.currentReviewSellerId) return;
+
+  try {
+    if (checkbox.checked) {
+      const { data: allItems, error } = await db
+        .from('listings')
+        .select('*')
+        .eq('seller_id', State.currentReviewSellerId)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      State.allSellerItems = allItems || [];
+    } else {
+      const { data: activeItems, error } = await db
+        .from('listings')
+        .select('*')
+        .eq('seller_id', State.currentReviewSellerId)
+        .eq('is_sold', false)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      State.allSellerItems = activeItems || [];
+    }
+    renderSellerItems(State.allSellerItems);
+  } catch (err) {
+    showToast('Failed to load items.', 'error');
+  }
+};
+
+async function handleReviewSubmit(e) {
+  e.preventDefault();
+  const btn = document.getElementById('submit-review-btn');
+  const errEl = document.getElementById('review-form-error');
+  
+  if (!State.user) {
+    openAuthModal();
+    return;
+  }
+
+  const rating = document.querySelector('input[name="rating"]:checked')?.value;
+  if (!rating) {
+    showToast("Please provide a star rating.", "warning");
+    return;
+  }
+
+  const body = document.getElementById('review-body').value.trim();
+  if (!body || body.length < 10) {
+    showToast("Review must be at least 10 characters.", "warning");
+    return;
+  }
+
+  setLoading(btn, true, 'SUBMITTING...');
+  if (errEl) errEl.style.display = 'none';
+
+  try {
+    const { data: review, error: rError } = await db
+      .from('reviews')
+      .insert({
+        seller_id: State.currentReviewSellerId,
+        reviewer_id: State.user.id,
+        rating: parseInt(rating),
+        body: body
+      })
+      .select()
+      .single();
+
+    if (rError) throw rError;
+
+    // Handle Review Images (max 3)
+    if (State.reviewImageFiles && State.reviewImageFiles.length > 0) {
+      for (let i = 0; i < Math.min(State.reviewImageFiles.length, 3); i++) {
+        const file = State.reviewImageFiles[i];
+        const ext = file.name.split('.').pop();
+        const path = `${State.user.id}/${review.id}/${Date.now()}_${i}.${ext}`;
+        
+        const { error: uError } = await db.storage.from('review-images').upload(path, file);
+        
+        if (!uError) {
+          const { data: { publicUrl } } = db.storage.from('review-images').getPublicUrl(path);
+          await db.from('review_images').insert({ 
+            review_id: review.id, 
+            object_path: publicUrl 
+          });
+        }
+      }
+    }
+
+    showToast('✓ Review posted successfully!', 'success');
+    navigate('profile', { meta: { profileId: State.currentReviewSellerId } });
+  } catch (err) {
+    console.error('Submit error:', err);
+    if (errEl) {
+      errEl.textContent = err.message.includes('unique') ? 'You have already reviewed this seller.' : err.message;
+      errEl.style.display = 'block';
+    }
+  } finally {
+    setLoading(btn, false, '✓ SUBMIT REVIEW');
+  }
+}
+
+async function loadSellerReviews(sellerId) {
+  const container = document.getElementById('ptab-reviews');
+  const noReviewsMsg = document.getElementById('no-reviews-message');
+  if (!container) return;
+  
+  container.innerHTML = '<div class="spinner"></div>';
+  noReviewsMsg.style.display = 'none';
+
+  try {
+    const { data: reviews, error } = await db
+      .from('reviews')
+      .select('*, reviewer:reviewer_id(username), review_images(*)')
+      .eq('seller_id', sellerId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    if (!reviews || reviews.length === 0) {
+      container.innerHTML = '';
+      noReviewsMsg.style.display = 'block';
+      
+      // Show write review button if logged in and not the seller
+      if (State.user && State.user.id !== sellerId) {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-primary';
+        btn.textContent = '✍️ Write a Review';
+        btn.style.marginTop = '16px';
+        btn.onclick = () => navigate('review', { meta: { sellerId: sellerId } });
+        noReviewsMsg.appendChild(btn);
+      }
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="reviews-list" style="display:grid; gap:16px;">
+        ${reviews.map(r => `
+          <div style="background:var(--bg-2); padding:20px; border-radius:var(--radius-lg); border:1px solid var(--border);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <div>
+                <strong style="color:var(--text);">${escHtml(r.reviewer?.username || 'Anonymous')}</strong>
+              </div>
+              <div style="color:var(--neon); font-size:0.9rem; letter-spacing:1px;">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</div>
+            </div>
+            <p style="color:var(--text-secondary); line-height:1.6; margin:0 0 12px 0; word-break:break-word;">${escHtml(r.body)}</p>
+            ${r.review_images?.length > 0 ? `
+              <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+                ${r.review_images.map(img => `<img src="${img.object_path}" style="width:80px; height:80px; border-radius:4px; object-fit:cover; cursor:pointer;" onclick="window.open('${img.object_path}')">`).join('')}
+              </div>
+            ` : ''}
+            <div style="font-size:0.75rem; color:var(--text-muted);">
+              ${new Date(r.created_at).toLocaleDateString()}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } catch (err) {
+    console.error('Error loading reviews:', err);
+    container.innerHTML = '';
+    noReviewsMsg.innerHTML = '<div style="font-size:2rem; margin-bottom:12px;">⚠️</div><p>Failed to load reviews.</p>';
+    noReviewsMsg.style.display = 'block';
+  }
+}
+
 
 // ==================== MARK SOLD ====================
 function openMarkSoldModal(listingId) {
@@ -2600,6 +2898,66 @@ function setupEventListeners() {
       if (e.key === 'Enter') askAssistant();
     });
   }
+
+  // Star Rating Input Animation
+  document.querySelectorAll('.star-rating-input label').forEach(label => {
+    label.addEventListener('click', () => {
+      const val = parseInt(label.getAttribute('for').replace('star', ''));
+      document.querySelectorAll('.star-rating-input label').forEach((l, idx) => {
+        const starVal = 5 - idx;
+        l.style.color = starVal <= val ? 'var(--neon)' : 'var(--text-muted)';
+      });
+    });
+  });
+
+  // Review image handling (max 3 images)
+  const reviewImgInput = document.getElementById('review-image-input');
+  if (reviewImgInput) {
+    reviewImgInput.onchange = (e) => {
+      const files = Array.from(e.target.files).slice(0, 3); // Max 3 images
+      State.reviewImageFiles = files;
+      const preview = document.getElementById('review-image-previews');
+      const countEl = document.getElementById('review-image-count');
+      
+      preview.innerHTML = files.map((f, idx) => `
+        <div style="position:relative; width:80px; height:80px;">
+          <img src="${URL.createObjectURL(f)}" style="width:100%; height:100%; object-fit:cover; border-radius:4px; display:block;">
+          <button type="button" onclick="removeReviewImage(${idx})" style="position:absolute; top:-8px; right:-8px; width:24px; height:24px; border-radius:50%; background:var(--danger); border:none; color:white; cursor:pointer; font-size:1rem; padding:0; display:flex; align-items:center; justify-content:center;">×</button>
+        </div>
+      `).join('');
+      
+      if (countEl) countEl.textContent = `${files.length} / 3 images`;
+    };
+  }
+
+  // Review body character counter
+  const reviewBody = document.getElementById('review-body');
+  if (reviewBody) {
+    reviewBody.addEventListener('input', (e) => {
+      const count = e.target.value.length;
+      const countEl = document.getElementById('review-char-count');
+      if (countEl) countEl.textContent = `${count} / 2000 characters`;
+    });
+  }
+
+  // Star rating display
+  document.querySelectorAll('input[name="rating"]').forEach(star => {
+    star.addEventListener('change', (e) => {
+      const display = document.getElementById('star-value-display');
+      if (display) {
+        display.textContent = `${e.target.value} star${e.target.value !== '1' ? 's' : ''} selected`;
+        display.style.color = 'var(--neon)';
+      }
+    });
+  });
+
+  // Review upload zone click handler
+  const reviewUploadZone = document.getElementById('review-upload-zone');
+  if (reviewUploadZone) {
+    reviewUploadZone.addEventListener('click', () => {
+      document.getElementById('review-image-input')?.click();
+    });
+  }
 }
 
 // ==================== INITIALIZATION ====================
@@ -3245,6 +3603,3 @@ async function findSafeRoute() {
     setLoading(findBtn, false, "🔍 Find Safe Route");
   }
 }
-
-
-

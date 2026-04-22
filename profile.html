@@ -7,7 +7,7 @@
   <meta name="description" content="Manage your OBTAINUM profile and listings." />
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/@google/generative-ai@0.1.3/dist/index.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@google/generative-ai@0.12.0/dist/index.min.js" defer></script>
   <script src="script.js" defer></script>
 </head>
 <body data-page="profile">
@@ -97,10 +97,20 @@
         <div class="profile-tabs">
           <button class="profile-tab active" data-ptab="my-listings" onclick="switchProfileTab(this)">Active Listings</button>
           <button class="profile-tab" data-ptab="sold" onclick="switchProfileTab(this)">Sold Items</button>
+          <button class="profile-tab" data-ptab="reviews" onclick="switchProfileTab(this)">⭐ Reviews</button>
           <button class="profile-tab" data-ptab="settings" onclick="switchProfileTab(this)">Settings</button>
         </div>
         <div id="ptab-my-listings"><div class="listings-grid" id="profile-listings-grid"></div></div>
         <div id="ptab-sold" class="hidden"><div class="listings-grid" id="profile-sold-grid"></div></div>
+        <div id="ptab-reviews" class="hidden">
+          <div id="seller-reviews-container">
+            <!-- Reviews populated by JS -->
+          </div>
+          <div id="no-reviews-message" style="text-align:center; padding:40px; color:var(--text-muted);">
+            <div style="font-size:2rem; margin-bottom:12px;">📭</div>
+            <p>No reviews yet. Be the first to review this seller!</p>
+          </div>
+        </div>
         <div id="ptab-settings" class="hidden">
           <form class="create-form" onsubmit="saveProfile(event)" style="max-width:600px;">
             <div class="form-group">
@@ -127,6 +137,79 @@
             <div style="display:flex;gap:12px;margin-top:8px;">
               <button type="submit" class="btn btn-primary">💾 SAVE PROFILE</button>
               <button type="button" class="btn btn-danger" onclick="signOut()">🚪 SIGN OUT</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== REVIEW PAGE ====== -->
+    <section class="page" id="page-review">
+      <div class="container">
+        <div class="section-header">
+          <h2 class="section-title">⭐ REVIEW SELLER</h2>
+          <button class="btn btn-outline btn-sm" onclick="navigate('profile', { meta: { profileId: State.currentReviewSellerId } })">BACK TO PROFILE</button>
+        </div>
+
+        <div id="review-seller-info" class="seller-card mb-lg" style="background: var(--bg-2);">
+          <!-- Seller info populated by JS -->
+        </div>
+
+        <!-- Toggle to show all seller items -->
+        <div style="margin-bottom: 24px; padding: 16px; background: var(--bg-2); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: space-between;">
+          <div>
+            <h3 style="margin: 0 0 4px 0;">📦 Items from this seller</h3>
+            <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Click an item to reference in your review</p>
+          </div>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="toggle-sold-items" onchange="toggleSoldItems()" style="width: 18px; height: 18px; cursor: pointer;">
+            <span style="font-size: 0.9rem;">Show sold items</span>
+          </label>
+        </div>
+
+        <div id="seller-items-grid" class="listings-grid" style="margin-bottom: 32px; max-height: 500px; overflow-y: auto; padding: 12px; background: var(--bg-3); border-radius: var(--radius-lg);">
+          <!-- Seller items populated by JS -->
+        </div>
+
+        <div class="review-box" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px;">
+          <h3 style="margin: 0 0 16px 0; color: var(--neon);">✍️ Write Your Review</h3>
+          <form id="review-form" onsubmit="handleReviewSubmit(event)">
+            
+            <div class="form-group">
+              <label class="form-label">Rating *</label>
+              <div class="star-rating-input" style="display: flex; gap: 8px; font-size: 2.2rem;">
+                <input type="radio" name="rating" value="5" id="star5" hidden><label for="star5" style="cursor: pointer; color: var(--text-muted); transition: color 0.2s;">★</label>
+                <input type="radio" name="rating" value="4" id="star4" hidden><label for="star4" style="cursor: pointer; color: var(--text-muted); transition: color 0.2s;">★</label>
+                <input type="radio" name="rating" value="3" id="star3" hidden><label for="star3" style="cursor: pointer; color: var(--text-muted); transition: color 0.2s;">★</label>
+                <input type="radio" name="rating" value="2" id="star2" hidden><label for="star2" style="cursor: pointer; color: var(--text-muted); transition: color 0.2s;">★</label>
+                <input type="radio" name="rating" value="1" id="star1" hidden><label for="star1" style="cursor: pointer; color: var(--text-muted); transition: color 0.2s;">★</label>
+              </div>
+              <div id="star-value-display" style="margin-top: 8px; font-size: 0.9rem; color: var(--text-muted);">Select a rating</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Your Review *</label>
+              <textarea id="review-body" class="form-input" rows="6" placeholder="Share your experience with this seller. Was the item as described? How was communication? Be helpful and honest." required minlength="10" maxlength="2000"></textarea>
+              <small style="color: var(--text-muted); font-size: 0.75rem;" id="review-char-count">0 / 2000 characters</small>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Photos (Optional - up to 3)</label>
+              <div class="upload-zone" id="review-upload-zone" style="padding: 24px; border: 2px dashed var(--border); text-align: center; cursor: pointer; border-radius: 8px; transition: border-color 0.2s;">
+                <div style="font-size: 2rem; margin-bottom: 8px;">📸</div>
+                <div style="font-size: 0.9rem; font-weight: 600;">Click to upload photos</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Max 3 images (JPG, PNG)</div>
+                <input type="file" id="review-image-input" multiple accept="image/jpeg,image/png" hidden>
+              </div>
+              <div id="review-image-previews" style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px;"></div>
+              <div id="review-image-count" style="margin-top: 8px; font-size: 0.85rem; color: var(--text-muted);">0 / 3 images</div>
+            </div>
+
+            <div id="review-form-error" class="auth-error mb-md" style="display:none; padding: 12px; background: rgba(255,45,85,0.1); border-radius: 8px; border-left: 4px solid var(--danger);"></div>
+            
+            <div style="display: flex; gap: 12px; margin-top: 24px;">
+              <button type="submit" class="btn btn-primary btn-lg" id="submit-review-btn" style="flex: 1;">✓ SUBMIT REVIEW</button>
+              <button type="button" class="btn btn-outline" onclick="navigate('profile', { meta: { profileId: State.currentReviewSellerId } })">Cancel</button>
             </div>
           </form>
         </div>
