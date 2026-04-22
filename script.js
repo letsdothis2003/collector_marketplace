@@ -9,20 +9,63 @@ const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
 const GEMINI_API_KEY = "AIzaSyBxjVGywD_5Nuqz-1ls628_s4dN1K-5gj8";  
 
 let db;
-let genAI;
 
 try {
   db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   console.log('[OBTAINUM] Supabase connected');
-  
-  if (GEMINI_API_KEY && GEMINI_API_KEY !== null) {
-    genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    console.log('[OBTAINUM] Gemini AI initialized');
-  } else {
-    console.warn('[OBTAINUM] Gemini API key not configured - AI features will use fallback mode');
-  }
 } catch (e) {
   console.error('[OBTAINUM] Init failed:', e);
+}
+
+// ==================== DIRECT API HELPER (REPLACES LIBRARY) ====================
+async function callGemini(prompt, responseType = 'text/plain') {
+  if (!GEMINI_API_KEY) {
+    throw new Error('API Key missing');
+  }
+
+  const models = [
+    'gemini-2.0-flash-exp',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+    'gemini-pro'
+  ];
+
+  for (const model of models) {
+    try {
+      console.log(`[OBTAINUM AI] Calling ${model}...`);
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': GEMINI_API_KEY
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: prompt }]
+          }],
+          generationConfig: {
+            responseMimeType: responseType
+          }
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.error) {
+        console.warn(`Model ${model} error:`, data.error.message);
+        continue;
+      }
+
+      if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+        console.log(`[OBTAINUM AI] Success with ${model}`);
+        return data.candidates[0].content.parts[0].text;
+      }
+    } catch (err) {
+      console.error(`Fetch error with ${model}:`, err);
+      continue;
+    }
+  }
+  throw new Error('All Gemini models failed to respond.');
 }
 
 // ==================== STATE MANAGEMENT ====================
@@ -668,31 +711,25 @@ async function askAssistant() {
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
   
   try {
-    let aiResponse;
-    if (genAI) {
-      aiResponse = await getGeminiResponse(question);
-    } else {
-      aiResponse = "⚠️ Gemini API is not configured yet. The AI assistant will be available once the API key is added.\n\nIn the meantime, you can still browse listings, create listings, and chat with other users!";
-    }
-    
+    const aiResponse = await getGeminiResponse(question);
     typingDiv.remove();
     
     const botMsgDiv = document.createElement('div');
     botMsgDiv.className = 'assistant-message bot';
     const botTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    botMsgDiv.innerHTML = aiResponse.replace(/\n/g, '<br>') + 
+    botMsgDiv.innerHTML = formatMarkdown(aiResponse) + 
       `<div style="font-size:0.65rem; opacity:0.6; margin-top:4px;">${botTime}</div>`;
     messagesDiv.appendChild(botMsgDiv);
     
     await saveAIMessage('ai', aiResponse);
     
   } catch (err) {
-    console.error('AI Assistant error:', err);
+    console.error('[OBTAINUM Assistant] Error:', err);
     typingDiv.remove();
     
     const errorMsg = document.createElement('div');
     errorMsg.className = 'assistant-message bot';
-    errorMsg.textContent = '⚠️ Sorry, I encountered an error. Please try again later.';
+    errorMsg.textContent = '⚠️ ' + err.message;
     messagesDiv.appendChild(errorMsg);
   }
   
@@ -700,14 +737,11 @@ async function askAssistant() {
 }
 
 async function getGeminiResponse(userMessage) {
-  if (!genAI) {
-    return "⚠️ Gemini API is not configured. Once the API key is added, I'll be able to help you with marketplace questions!";
-  }
-  
-  try {
-    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
-    
-    const prompt = `You are OBTAINUM AI, a friendly and helpful assistant for a marketplace website. 
+  const historyContext = State.aiMessages.slice(-6).map(m => 
+    `${m.sender_type === 'user' ? 'User' : 'Assistant'}: ${m.content}`
+  ).join('\n');
+
+  const prompt = `You are OBTAINUM AI, a friendly and helpful assistant for a marketplace website. 
 Your role is to help users with general questions about buying, selling, collectibles, pricing, safety tips, and marketplace navigation.
 
 Keep responses:
@@ -715,16 +749,13 @@ Keep responses:
 - Friendly and approachable
 - Use bullet points when listing multiple items
 
-User question: ${userMessage}`;
-    
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    return response.text();
-    
-  } catch (err) {
-    console.error('Gemini API error:', err);
-    return "⚠️ Sorry, I'm having trouble connecting right now. Please try again in a moment.";
-  }
+CONVERSATION HISTORY:
+${historyContext}
+
+User question: ${userMessage}
+Assistant:`;
+
+  return await callGemini(prompt);
 }
 
 function askSuggestion(suggestion) {
@@ -761,14 +792,10 @@ async function generateAndSaveListingSuggestion(listingId) {
   
   let suggestion = null;
   
-  if (genAI) {
-    try {
-      suggestion = await analyzeListingWithGemini(listing);
-    } catch (err) {
-      console.error('Gemini analysis failed:', err);
-      suggestion = getFallbackListingAnalysis(listing);
-    }
-  } else {
+  try {
+    suggestion = await analyzeListingWithGemini(listing);
+  } catch (err) {
+    console.error('Gemini analysis failed:', err);
     suggestion = getFallbackListingAnalysis(listing);
   }
   
@@ -787,10 +814,6 @@ async function generateAndSaveListingSuggestion(listingId) {
 }
 
 async function analyzeListingWithGemini(listing) {
-  if (!genAI) return getFallbackListingAnalysis(listing);
-  
-  const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
-  
   const prompt = `You are OBTAINUM's pricing AI. Analyze this marketplace listing and provide a JSON response.
 
 LISTING DETAILS:
@@ -812,16 +835,13 @@ Return ONLY valid JSON with this exact structure:
 }`;
   
   try {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const result = await callGemini(prompt, 'application/json');
+    const jsonMatch = result.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       return JSON.parse(jsonMatch[0]);
     }
     return getFallbackListingAnalysis(listing);
   } catch (err) {
-    console.error('Gemini analysis error:', err);
     return getFallbackListingAnalysis(listing);
   }
 }
@@ -2811,13 +2831,8 @@ async function findSafeRoute() {
   resultDiv.innerHTML = '<div class="spinner"></div> Generating safe route...';
 
   try {
-    let aiResponse;
-    if (genAI) {
-      aiResponse = await getSafeRouteFromGemini(start, end);
-    } else {
-      aiResponse = await getFallbackSafeRoute(start, end);
-    }
-
+    const aiResponse = await getSafeRouteFromGemini(start, end);
+    
     resultDiv.innerHTML = `
       <div style="background:var(--bg-3); border-radius:var(--radius); padding:16px;">
         <h3 style="color:var(--neon); margin-bottom:12px;">🛡️ AI Suggested Safe Route</h3>
@@ -2843,10 +2858,7 @@ async function findSafeRoute() {
 }
 
 async function getSafeRouteFromGemini(start, end) {
-  if (!genAI) throw new Error("Gemini not configured");
-
   const ragContext = buildSafetyContext(start, end);
-  const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
   const prompt = `You are OBTAINUM's route safety AI. Using the following local safety context, suggest a safe route from "${start}" to "${end}".
 
 ${ragContext}
@@ -2858,10 +2870,12 @@ Provide a clear, bullet-point list of recommendations:
 - Alternative safer paths
 
 Keep it practical and concise. If exact streets are unknown, suggest types of routes (e.g., "use main highways, avoid side alleys").`;
-
-  const result = await model.generateContent(prompt);
-  const response = await result.response;
-  return response.text();
+  
+  try {
+    return await callGemini(prompt);
+  } catch (e) {
+    return await getFallbackSafeRoute(start, end);
+  }
 }
 
 async function getFallbackSafeRoute(start, end) {
@@ -2873,6 +2887,35 @@ async function getFallbackSafeRoute(start, end) {
   advice += `\n✅ General advice: Stick to main roads, use well-lit paths, avoid shortcuts through isolated areas.`;
   if (startScore >= 70 && endScore >= 70) advice += `\n✅ Both areas are relatively safe – direct routes should be fine, but remain aware.`;
   return advice;
+}
+
+function formatMarkdown(text) {
+  // Convert markdown to HTML for better readability
+  let formatted = text;
+  
+  // Headers (###)
+  formatted = formatted.replace(/### (.*?)(\n|$)/g, '<h3>$1</h3>');
+  
+  // Bold (**text**)
+  formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  
+  // Bullet lists (*)
+  formatted = formatted.replace(/^\* (.*?)$/gm, '<li>$1</li>');
+  formatted = formatted.replace(/(<li>.*?<\/li>\n?)+/g, '<ul>$&</ul>');
+  
+  // Numbered lists
+  formatted = formatted.replace(/^\d+\. (.*?)$/gm, '<li>$1</li>');
+  
+  // Add line breaks for paragraphs
+  formatted = formatted.replace(/\n\n/g, '</p><p>');
+  formatted = '<p>' + formatted + '</p>';
+  
+  // Clean up empty paragraphs
+  formatted = formatted.replace(/<p>\s*<\/p>/g, '');
+  formatted = formatted.replace(/<p>(<[ou]l>)/g, '$1');
+  formatted = formatted.replace(/(<\/[ou]l>)<\/p>/g, '$1');
+  
+  return formatted;
 }
 
 // ==================== PICKUP ROUTE PLANNER (for listing page) ====================
@@ -2913,11 +2956,8 @@ async function generatePickupRoute(listingId) {
   resultContainer.innerHTML = '<div class="spinner"></div> Analyzing safe route...';
 
   try {
-    let aiResponse;
-    if (genAI) {
-      const ragContext = buildSafetyContext(start, destination);
-      const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
-      const prompt = `You are OBTAINUM's route safety AI. Suggest a safe route from "${start}" to "${destination}" for a physical pickup of an item.
+    const ragContext = buildSafetyContext(start, destination);
+    const prompt = `You are OBTAINUM's route safety AI. Suggest a safe route from "${start}" to "${destination}" for a physical pickup of an item.
 
 ${ragContext}
 
@@ -2928,10 +2968,10 @@ Provide a clear, actionable response with:
 - Any alternative safer paths
 Keep it concise and practical.`;
 
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      aiResponse = response.text();
-    } else {
+    let aiResponse;
+    try {
+      aiResponse = await callGemini(prompt);
+    } catch (e) {
       aiResponse = await getFallbackSafeRoute(start, destination);
     }
 
@@ -3040,24 +3080,22 @@ async function generatePickupRoute(listingId) {
 
     // 3. Generate transit directions using Gemini (no API key needed for free transit data)
     let transitHtml = '';
-    if (genAI) {
+    try {
       resultContainer.innerHTML = '<div class="spinner"></div> Generating transit directions...';
       const transitPrompt = `You are a public transit assistant. Suggest the best public transit route from "${start}" to "${destination}" in the New York City area (or general US city). Provide specific subway/bus lines, station names, number of stops, and estimated travel time. Use real MTA lines (e.g., 6 train, Q44 bus) if plausible. Keep it concise with bullet points.`;
-      const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
-      const transitResult = await model.generateContent(transitPrompt);
-      const transitResponse = await transitResult.response;
+      const transitResult = await callGemini(transitPrompt);
       transitHtml = `
         <div style="margin-top: 20px; padding: 16px; background: var(--bg-2); border-radius: var(--radius); border-left: 3px solid var(--blue);">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
             <span>🚇</span>
             <strong style="color: var(--blue);">Public Transit Directions</strong>
           </div>
-          <div style="line-height: 1.6;">${transitResponse.text().replace(/\n/g, '<br>')}</div>
+          <div style="line-height: 1.6;">${formatMarkdown(transitResult)}</div>
           <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 8px;">⚠️ Transit suggestions are AI-generated; verify with local transit apps.</div>
         </div>
       `;
-    } else {
-      transitHtml = '<div style="margin-top: 20px; padding: 16px; background: var(--bg-2); border-radius: var(--radius);">⚠️ Enable Gemini API for transit directions.</div>';
+    } catch (e) {
+      transitHtml = '<div style="margin-top: 20px; padding: 16px; background: var(--bg-2); border-radius: var(--radius);">⚠️ Public transit data currently unavailable.</div>';
     }
 
     // 4. Create map with the driving route
