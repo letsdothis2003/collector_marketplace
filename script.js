@@ -6,7 +6,7 @@
 // ==================== DATABASE CONFIG ====================
 const SUPABASE_URL = "https://gotzmuobwuubsugnowxq.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
-const GEMINI_API_KEY = "AIzaSyBhLr1W09j234x1xAqPdKaGXTLI2huC-Zs";  
+const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_PLACEHOLDER";  
 
 let db;
 
@@ -275,6 +275,10 @@ function parseRouteFromHash() {
     const id = hash.split('/')[1];
     return { page: 'profile', profileId: id };
   }
+  if (hash.startsWith('review/')) {
+    const id = hash.split('/')[1];
+    return { page: 'review', sellerId: id };
+  }
   return { page: 'shop' };
 }
 
@@ -289,6 +293,10 @@ function handleHashChange() {
   if (route.page === 'profile' && route.profileId) {
     window.selectedProfileId = route.profileId;
     navigate('profile', { updateUrl: false });
+    return;
+  }
+  if (route.page === 'review' && route.sellerId) {
+    navigate('review', { meta: { sellerId: route.sellerId }, updateUrl: false });
     return;
   }
   navigate(route.page, { updateUrl: false });
@@ -313,6 +321,10 @@ function navigate(page, options = {}) {
   document.getElementById(`page-${page}`)?.classList.add('active');
   State.currentPage = page;
   updateNavActive(page);
+
+  // Fix: Hide global AI route finder button unless on detail page
+  const globalRouteBtn = document.getElementById('btn-global-route-safety');
+  if (globalRouteBtn) globalRouteBtn.style.display = (page === 'detail') ? 'inline-flex' : 'none';
   
   updateRestrictedPageUI();
   
@@ -1628,12 +1640,17 @@ async function loadProfile() {
       editButton.onclick = () => startChat(profile.id);
       editButton.style.display = 'inline-block';
     }
+    
+    // Handle Review Button logic
+    const existingReviewBtn = document.getElementById('btn-review-action');
+    if (existingReviewBtn) existingReviewBtn.remove();
 
-    // Add Review Button for other users
-    if (!isOwnProfile && profile) {
+    if (profile) {
       const actionsWrap = editButton.parentElement;
-      if (actionsWrap && !document.getElementById('btn-review-seller')) {
-        actionsWrap.insertAdjacentHTML('beforeend', `<button id="btn-review-seller" class="btn btn-outline ml-sm" onclick="navigate('review', { meta: { sellerId: '${profile.id}' } })">⭐ Review</button>`);
+      if (isOwnProfile) {
+        actionsWrap.insertAdjacentHTML('beforeend', `<button id="btn-review-action" class="btn btn-outline ml-sm" onclick="switchProfileTab(document.querySelector('[data-ptab=\\'reviews\\']'))">⭐ My Reviews</button>`);
+      } else {
+        actionsWrap.insertAdjacentHTML('beforeend', `<button id="btn-review-action" class="btn btn-outline ml-sm" onclick="navigate('review', { meta: { sellerId: '${profile.id}' } })">⭐ Review</button>`);
       }
     }
   }
@@ -2039,7 +2056,7 @@ async function loadSellerReviews(sellerId) {
   try {
     const { data: reviews, error } = await db
       .from('reviews')
-      .select('*, reviewer:reviewer_id(username), review_images(*)')
+      .select('*, reviewer:reviewer_id(username), review_images(*), listing:listing_id(name, sold_to)')
       .eq('seller_id', sellerId)
       .order('created_at', { ascending: false });
 
@@ -2068,6 +2085,11 @@ async function loadSellerReviews(sellerId) {
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
               <div>
                 <strong style="color:var(--text);">${escHtml(r.reviewer?.username || 'Anonymous')}</strong>
+                ${(r.listing && r.reviewer_id === r.listing.sold_to) ? `
+                  <span class="verified-badge" style="background:var(--neon); color:#001a07; font-size:0.6rem; padding:2px 6px; border-radius:4px; font-weight:bold; margin-left:8px; display:inline-block; vertical-align:middle;">
+                    ✓ VERIFIED BUYER
+                  </span>
+                ` : ''}
               </div>
               <div style="color:var(--neon); font-size:0.9rem; letter-spacing:1px;">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</div>
             </div>
