@@ -99,10 +99,7 @@ const State = {
   selectedReviewListingId: null,
   allSellerItems: [],
   viewingProfileId: null,
-  isSubmittingListing: false,
-  profileCache: {}, // New: Store profiles to avoid redundant DB calls
-  typingTimeout: null,
-  chatChannel: null
+  isSubmittingListing: false
 };
 
 // ==================== HELPER FUNCTIONS ====================
@@ -664,24 +661,6 @@ function injectCustomStyles() {
     }
     /* Hardware Acceleration for smoother page transitions */
     .page { backface-visibility: hidden; transform: translateZ(0); }
-
-    /* Typing Indicator Styles */
-    .typing-indicator {
-      padding: 8px 12px;
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      display: none;
-      align-items: center;
-      gap: 5px;
-    }
-    .typing-indicator.active { display: flex; }
-    .dot {
-      width: 4px; height: 4px; background: var(--text-muted); border-radius: 50%;
-      animation: typing 1.4s infinite inline;
-    }
-    .dot:nth-child(2) { animation-delay: 0.2s; }
-    .dot:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes typing { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
   `;
   document.head.appendChild(style);
 
@@ -1688,11 +1667,6 @@ async function loadProfile() {
     return;
   }
 
-  // New: Check Profile Cache to load page instantly
-  if (State.profileCache[profileIdToLoad] && !window.selectedProfileId) {
-    renderProfileUI(State.profileCache[profileIdToLoad]);
-  }
-
   State.viewingProfileId = profileIdToLoad;
   const isOwnProfile = State.user && profileIdToLoad === State.user.id;
 
@@ -1709,9 +1683,6 @@ async function loadProfile() {
     navigate('shop');
     return;
   }
-
-  // New: Save to Cache
-  State.profileCache[profileIdToLoad] = profile;
   renderProfileUI(profile);
 }
 
@@ -2893,14 +2864,6 @@ async function loadMessages() {
   if (sortedConversations.length === 0) {
     convoListEl.innerHTML = '<div class="empty-state-small">No conversations yet.</div>';
   } else {
-    // Add "Mark all as read" button
-    const markReadBtn = document.createElement('button');
-    markReadBtn.className = 'btn btn-outline btn-sm w-full mb-md';
-    markReadBtn.style.fontSize = '0.7rem';
-    markReadBtn.innerHTML = '✔️ MARK ALL AS READ';
-    markReadBtn.onclick = markAllMessagesAsRead;
-    convoListEl.appendChild(markReadBtn);
-
     sortedConversations.forEach(convo => {
       const partnerProfile = convo.partnerProfile;
       const isActive = State.currentChatPartnerId === partnerProfile.id;
@@ -2935,44 +2898,12 @@ async function loadMessages() {
   }
 }
 
-async function markAllMessagesAsRead() {
-  if (!State.user) return;
-  try {
-    const { error } = await db
-      .from('messages')
-      .update({ is_read: true })
-      .eq('receiver_id', State.user.id)
-      .eq('is_read', false);
-
-    if (error) throw error;
-    showToast('All messages marked as read.', 'success');
-    loadMessages();
-  } catch (err) {
-    console.error('Error marking messages as read:', err);
-  }
-}
-
 async function loadConversationThread(partnerId, listingId = null) {
-  // Cleanup previous typing channel
-  if (State.chatChannel) {
-    State.chatChannel.unsubscribe();
-  }
-
   State.currentChatPartnerId = partnerId;
   
   document.querySelectorAll('.convo-item').forEach(el => {
     el.classList.toggle('active', el.getAttribute('data-id') === partnerId);
   });
-
-  // Set up Realtime Broadcast for Typing Indicator
-  State.chatChannel = db.channel(`chat:${partnerId}`)
-    .on('broadcast', { event: 'typing' }, ({ payload }) => {
-      const indicator = document.getElementById('typing-indicator');
-      if (indicator && payload.senderId === partnerId) {
-        indicator.classList.toggle('active', payload.isTyping);
-      }
-    })
-    .subscribe();
   
   const { data: partnerProfile, error: pError } = await db.from('profiles').select('*').eq('id', partnerId).single();
   if (pError || !partnerProfile) return;
@@ -3006,19 +2937,6 @@ async function loadConversationThread(partnerId, listingId = null) {
   if (!threadEl) return;
   threadEl.innerHTML = '';
 
-  // Add Typing Indicator element to thread
-  const typingDiv = document.createElement('div');
-  typingDiv.id = 'typing-indicator';
-  typingDiv.className = 'typing-indicator';
-  typingDiv.innerHTML = `<span>Typing</span><span class="dot"></span><span class="dot"></span><span class="dot"></span>`;
-  
-  // Mark messages in this specific thread as read
-  await db.from('messages')
-    .update({ is_read: true })
-    .eq('sender_id', partnerId)
-    .eq('receiver_id', State.user.id)
-    .eq('is_read', false);
-
   if (messages) {
     // Filter logic handled in JS to ensure we don't lose messages due to NULL columns or complex SQL ORs
     const filteredMessages = messages.filter(msg => {
@@ -3034,7 +2952,6 @@ async function loadConversationThread(partnerId, listingId = null) {
 
     filteredMessages.forEach(msg => renderMessage(msg, State.user.id));
   }
-  threadEl.appendChild(typingDiv);
   threadEl.scrollTop = threadEl.scrollHeight;
 }
 
@@ -3054,25 +2971,8 @@ async function handleSendMessage(e) {
   if (error) showToast("Error: " + error.message, 'error');
   else {
     if (input) input.value = '';
-    sendTypingStatus(false);
     await loadConversationThread(State.currentChatPartnerId);
     await loadMessages();
-  }
-}
-
-function sendTypingStatus(isTyping) {
-  if (!State.chatChannel || !State.user) return;
-  State.chatChannel.send({
-    type: 'broadcast',
-    event: 'typing',
-    payload: { senderId: State.user.id, isTyping }
-  });
-}
-
-function handleChatInput() {
-  sendTypingStatus(true);
-  clearTimeout(State.typingTimeout);
-  State.typingTimeout = setTimeout(() => sendTypingStatus(false), 2000);
   }
 }
 
