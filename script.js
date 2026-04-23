@@ -623,6 +623,23 @@ async function handleRegister(e) {
 function injectCustomStyles() {
   const style = document.createElement('style');
   style.textContent = `
+    /* Global Processing Overlay */
+    #processing-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(10px);
+      z-index: 10000;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--neon);
+      font-family: 'Orbitron', sans-serif;
+      text-align: center;
+    }
+    #processing-overlay.show { display: flex; }
+
     /* Navbar Scrollbar Red & Wide in Dark Mode */
     body:not(.light-mode) .nav-menu::-webkit-scrollbar {
       height: 12px;
@@ -635,6 +652,22 @@ function injectCustomStyles() {
     }
   `;
   document.head.appendChild(style);
+
+  // Create overlay element if it doesn't exist
+  if (!document.getElementById('processing-overlay')) {
+    const overlay = document.createElement('div');
+    overlay.id = 'processing-overlay';
+    overlay.innerHTML = '<div class="spinner spinner-lg"></div><div id="processing-text" style="margin-top:20px; letter-spacing:2px; font-weight:bold;">PROCESSING...</div>';
+    document.body.appendChild(overlay);
+  }
+}
+
+function toggleProcessingOverlay(show, text = 'PROCESSING...') {
+  const overlay = document.getElementById('processing-overlay');
+  const textEl = document.getElementById('processing-text');
+  if (!overlay) return;
+  if (textEl) textEl.textContent = text.toUpperCase();
+  overlay.classList.toggle('show', show);
 }
 
 async function signOut() {
@@ -1515,11 +1548,16 @@ async function submitListing(e) {
     return;
   }
   
+  // Guard to prevent duplicate listings from double-clicks
+  if (State.isSubmittingListing) return;
+  
   const isEditing = !!State.editingListingId;
   const errEl = document.getElementById('create-error');
   const btn = document.getElementById('create-submit');
   if (errEl) errEl.classList.remove('show');
   if (btn) setLoading(btn, true, isEditing ? 'SAVING...' : 'PUBLISHING...');
+  toggleProcessingOverlay(true, isEditing ? 'Updating listing...' : 'Uploading listing...');
+  State.isSubmittingListing = true;
   
   try {
     const price = parseFloat(document.getElementById('c-price')?.value || '0');
@@ -1619,6 +1657,8 @@ async function submitListing(e) {
     }
   } finally {
     if (btn) setLoading(btn, false, isEditing ? 'SAVE CHANGES' : 'PUBLISH LISTING');
+    toggleProcessingOverlay(false);
+    State.isSubmittingListing = false;
   }
 }
 
@@ -2226,19 +2266,6 @@ async function handleReviewSubmit(e) {
 
       if (iError) throw iError;
       review = newReview;
-    }
-
-    // Recalculate and update the seller's average rating in their profile
-    const { data: allReviews, error: fetchErr } = await db
-      .from('reviews')
-      .select('rating')
-      .eq('seller_id', State.currentReviewSellerId);
-
-    if (!fetchErr && allReviews && allReviews.length > 0) {
-      const avgRating = allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length;
-      await db.from('profiles')
-        .update({ rating: avgRating })
-        .eq('id', State.currentReviewSellerId);
     }
 
     // Handle Review Images (max 3, only new ones)
@@ -2939,28 +2966,38 @@ async function handleSendMessage(e) {
 }
 
 async function handleSendImage(e) {
-  const file = e.target.files[0];
+  const file = e.target.files?.[0];
   if (!file || !State.currentChatPartnerId) return;
-  
-  const filePath = `${State.user.id}/${Date.now()}_${file.name}`;
-  const { error: uploadError } = await db.storage.from('chat-images').upload(filePath, file);
-  
-  if (uploadError) {
-    showToast("Upload failed", 'error');
-    return;
+
+  toggleProcessingOverlay(true, 'Uploading image...');
+
+  try {
+    const filePath = `${State.user.id}/${Date.now()}_${file.name}`;
+    const { error: uploadError } = await db.storage.from('chat-images').upload(filePath, file);
+    
+    if (uploadError) throw uploadError;
+    
+    const { data: { publicUrl } } = db.storage.from('chat-images').getPublicUrl(filePath);
+    
+    const { error: msgError } = await db.from('messages').insert([{
+      sender_id: State.user.id,
+      receiver_id: State.currentChatPartnerId,
+      // Ensure listing_id is null if it's not a valid number/ID to prevent DB errors
+      listing_id: State.currentListingId || null,
+      image_url: publicUrl,
+    }]);
+
+    if (msgError) throw msgError;
+    
+    e.target.value = ''; // Reset input
+    await loadConversationThread(State.currentChatPartnerId);
+    await loadMessages();
+  } catch (err) {
+    console.error("Image send error:", err);
+    showToast("Could not send image: " + err.message, 'error');
+  } finally {
+    toggleProcessingOverlay(false);
   }
-  
-  const { data: { publicUrl } } = db.storage.from('chat-images').getPublicUrl(filePath);
-  
-  await db.from('messages').insert([{
-    sender_id: State.user.id,
-    receiver_id: State.currentChatPartnerId,
-    listing_id: State.currentListingId,
-    image_url: publicUrl,
-  }]);
-  
-  await loadConversationThread(State.currentChatPartnerId);
-  await loadMessages();
 }
 
 function renderMessage(msg, currentUserId) {
@@ -3120,7 +3157,8 @@ function setupEventListeners() {
   const uploadZone = document.getElementById('upload-zone');
   if (imageInput) imageInput.addEventListener('change', handleImageUpload);
   if (uploadZone) {
-    uploadZone.addEventListener('click', () => {
+    uploadZone.addEventListener('click', (e) => {
+      if (e.target.tagName === 'INPUT') return; // Prevent double trigger if clicking input directly
       const input = document.getElementById('image-input');
       if (input) input.click();
     });
@@ -3201,11 +3239,10 @@ function setupEventListeners() {
   const reviewImgInput = document.getElementById('review-image-input');
   if (reviewImgInput) {
     reviewImgInput.onchange = (e) => {
-      const newFiles = Array.from(e.target.files);
-      const existingCount = (State.existingReviewImages?.length || 0) + (State.reviewImageFiles?.length || 0);
-      const remaining = Math.max(0, 3 - existingCount);
-      State.reviewImageFiles = [...(State.reviewImageFiles || []), ...newFiles.slice(0, remaining)];
-      
+      const files = Array.from(e.target.files);
+      const existingCount = State.existingReviewImages?.length || 0;
+      const maxNewFiles = Math.max(0, 3 - existingCount);
+      State.reviewImageFiles = files.slice(0, maxNewFiles);
       const preview = document.getElementById('review-image-previews');
       const countEl = document.getElementById('review-image-count');
       
