@@ -2091,75 +2091,66 @@ async function handleReviewSubmit(e) {
 }
 
 async function loadSellerReviews(sellerId) {
-  const container = document.getElementById('ptab-reviews');
-  const noReviewsMsg = document.getElementById('no-reviews-message');
-  if (!container) return;
-  
-  container.innerHTML = '<div class="spinner"></div>';
-  noReviewsMsg.style.display = 'none';
-
+  console.log('loadSellerReviews called for seller:', sellerId);
+  const container = document.getElementById('seller-reviews-container');
+  if (!container) {
+    console.error('ERROR: seller-reviews-container not found in DOM');
+    return;
+  }
   try {
     const { data: reviews, error } = await db
       .from('reviews')
-      .select('*, reviewer:reviewer_id(username), review_images(*), listing:listing_id(name, sold_to)')
+      .select(`
+        *,
+        reviewer:reviewer_id (id, username, avatar_url)
+      `)
       .eq('seller_id', sellerId)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+    console.log('Reviews fetched:', reviews);
 
+    const noReviewsMsg = document.getElementById('no-reviews-message');
     if (!reviews || reviews.length === 0) {
+      if (noReviewsMsg) noReviewsMsg.style.display = 'block';
       container.innerHTML = '';
-      noReviewsMsg.style.display = 'block';
-      
-      // Show write review button if logged in and not the seller
-      if (State.user && State.user.id !== sellerId) {
-        const btn = document.createElement('button');
-        btn.className = 'btn btn-primary';
-        btn.textContent = '✍️ Write a Review';
-        btn.style.marginTop = '16px';
-        btn.onclick = () => navigate('review', { meta: { sellerId: sellerId } });
-        noReviewsMsg.appendChild(btn);
-      }
       return;
     }
+    if (noReviewsMsg) noReviewsMsg.style.display = 'none';
 
-    container.innerHTML = `
-      <div class="reviews-list" style="display:grid; gap:16px;">
-        ${reviews.map(r => `
-          <div style="background:var(--bg-2); padding:20px; border-radius:var(--radius-lg); border:1px solid var(--border);">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-              <div>
-                <strong style="color:var(--text);">${escHtml(r.reviewer?.username || 'Anonymous')}</strong>
-                ${(r.listing && r.reviewer_id === r.listing.sold_to) ? `
-                  <span class="verified-badge" style="background:var(--neon); color:#001a07; font-size:0.6rem; padding:2px 6px; border-radius:4px; font-weight:bold; margin-left:8px; display:inline-block; vertical-align:middle;">
-                    ✓ VERIFIED BUYER
-                  </span>
-                ` : ''}
-              </div>
-              <div style="color:var(--neon); font-size:0.9rem; letter-spacing:1px;">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</div>
-            </div>
-            <p style="color:var(--text-secondary); line-height:1.6; margin:0 0 12px 0; word-break:break-word;">${escHtml(r.body)}</p>
-            ${r.review_images?.length > 0 ? `
-              <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
-                ${r.review_images.map(img => `<img src="${img.object_path}" style="width:80px; height:80px; border-radius:4px; object-fit:cover; cursor:pointer;" onclick="window.open('${img.object_path}')">`).join('')}
-              </div>
-            ` : ''}
-            <div style="font-size:0.75rem; color:var(--text-muted);">
-              ${new Date(r.created_at).toLocaleDateString()}
-            </div>
+    // Fetch images for each review
+    const reviewsWithImages = await Promise.all(reviews.map(async (review) => {
+      const { data: images } = await db.from('review_images').select('object_path').eq('review_id', review.id);
+      return { ...review, images: images || [] };
+    }));
+
+    container.innerHTML = reviewsWithImages.map(r => `
+      <div class="review-card" style="background:var(--bg-2); border-radius:var(--radius); padding:16px; margin-bottom:16px; border:1px solid var(--border);">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+          <div class="reviewer-avatar" style="width:36px; height:36px; border-radius:50%; background:var(--bg-3); display:flex; align-items:center; justify-content:center;">
+            ${r.reviewer?.username?.charAt(0) || '?'}
           </div>
-        `).join('')}
+          <div>
+            <strong>${escHtml(r.reviewer?.username || 'Anonymous')}</strong>
+            ${generateStarRatingHtml(r.rating)}
+          </div>
+          <div style="margin-left:auto; font-size:0.7rem; color:var(--text-muted);">
+            ${new Date(r.created_at).toLocaleDateString()}
+          </div>
+        </div>
+        <div>${escHtml(r.body)}</div>
+        ${r.images && r.images.length ? `
+          <div class="review-images" style="display:flex; gap:8px; margin-top:12px;">
+            ${r.images.map(img => `<img src="${img.object_path}" style="width:60px; height:60px; object-fit:cover; border-radius:4px;">`).join('')}
+          </div>
+        ` : ''}
       </div>
-    `;
+    `).join('');
   } catch (err) {
     console.error('Error loading reviews:', err);
-    container.innerHTML = '';
-    noReviewsMsg.innerHTML = '<div style="font-size:2rem; margin-bottom:12px;">⚠️</div><p>Failed to load reviews.</p>';
-    noReviewsMsg.style.display = 'block';
+    container.innerHTML = '<div class="empty-state">Failed to load reviews.</div>';
   }
 }
-
-
 // ==================== MARK SOLD ====================
 function openMarkSoldModal(listingId) {
   const input = document.getElementById('mark-sold-listing-id');
