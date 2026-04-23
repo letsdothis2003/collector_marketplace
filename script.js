@@ -324,7 +324,7 @@ function navigate(page, options = {}) {
 
   // Fix: Hide global AI route finder button unless on detail page
   const globalRouteBtn = document.getElementById('btn-global-route-safety');
-  if (globalRouteBtn) globalRouteBtn.style.display = (page === 'detail') ? 'inline-flex' : 'none';
+  if (globalRouteBtn) globalRouteBtn.style.display = (State.currentPage === 'detail') ? 'inline-flex' : 'none';
   
   updateRestrictedPageUI();
   
@@ -1889,7 +1889,8 @@ async function loadReviewPage(sellerId) {
 
   State.currentReviewSellerId = sellerId;
   State.reviewImageFiles = [];
-  document.getElementById('toggle-sold-items').checked = false;
+  const toggleSoldInput = document.getElementById('toggle-sold-items');
+  if (toggleSoldInput) toggleSoldInput.checked = false;
 
   const header = document.getElementById('review-seller-info');
   const itemsGrid = document.getElementById('seller-items-grid');
