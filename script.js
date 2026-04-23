@@ -111,11 +111,9 @@ function escHtml(str) {
 
 function generateStarRatingHtml(rating) {
   const fullStars = Math.floor(rating || 0);
-  const hasHalf = (rating % 1) >= 0.5;
-  let html = '<span style="color:var(--neon); letter-spacing:2px;">';
+  let html = '<span style="color:var(--neon); letter-spacing:2px; font-size:1.1rem;">';
   for(let i=0; i<5; i++) {
     if(i < fullStars) html += '★';
-    else if(i === fullStars && hasHalf) html += '½'; // Fallback for simplicity or use CSS stars
     else html += '☆';
   }
   html += '</span>';
@@ -334,10 +332,6 @@ function navigate(page, options = {}) {
   document.getElementById(`page-${page}`)?.classList.add('active');
   State.currentPage = page;
   updateNavActive(page);
-
-  // Fix: Hide global AI route finder button unless on detail page
-  const globalRouteBtn = document.getElementById('btn-global-route-safety');
-  if (globalRouteBtn) globalRouteBtn.style.display = (State.currentPage === 'detail') ? 'inline-flex' : 'none';
   
   updateRestrictedPageUI();
   
@@ -357,6 +351,10 @@ function navigate(page, options = {}) {
     updateUrlForPage(page, options.meta);
     setTimeout(() => { ignoreHashChange = false; }, 0);
   }
+
+  // Fix: Hide global AI route finder button unless on detail page
+  const globalRouteBtn = document.getElementById('btn-global-route-safety');
+  if (globalRouteBtn) globalRouteBtn.style.display = (State.currentPage === 'detail') ? 'inline-flex' : 'none';
 }
 
 function navigateProfile() {
@@ -1642,13 +1640,6 @@ async function loadProfile() {
   if (bioEl) bioEl.textContent = profile?.bio || '';
   if (locationEl) locationEl.textContent = profile?.location ? '📍 ' + profile.location : '';
   
-  // Add Rating Summary to Banner
-  const ratingValue = profile?.rating || 0;
-  if (usernameEl) {
-    const stars = generateStarRatingHtml(ratingValue);
-    usernameEl.innerHTML = `${escHtml(profile?.username || name).toUpperCase()} <span style="font-size:1rem; margin-left:12px; vertical-align:middle;">${stars} <small style="color:var(--text-muted); font-family:'Inter';">(${parseFloat(ratingValue).toFixed(1)})</small></span>`;
-  }
-
   const editButton = document.querySelector('#page-profile .profile-banner .btn');
   if (editButton) {
     if (isOwnProfile) {
@@ -1659,6 +1650,16 @@ async function loadProfile() {
       editButton.innerHTML = '💬 Let\'s Chat';
       editButton.onclick = () => startChat(profile.id);
       editButton.style.display = 'inline-block';
+    }
+
+    // Add Rating Summary to Banner
+    const ratingValue = profile?.rating || 0;
+    if (usernameEl) {
+      const stars = generateStarRatingHtml(ratingValue);
+      usernameEl.innerHTML = `${escHtml(profile?.username || name).toUpperCase()} 
+        <span style="font-size:1rem; margin-left:12px; vertical-align:middle; display:inline-flex; align-items:center; gap:8px;">
+          ${stars} <small style="color:var(--text-muted); font-family:'Inter';">(${parseFloat(ratingValue).toFixed(1)})</small>
+        </span>`;
     }
     
     // Handle Review Button logic
@@ -1771,9 +1772,6 @@ async function loadProfileListings(profileId, isOwnProfile) {
   if (statViews) animateNumber(statViews, totalViews);
   if (statFavs) animateNumber(statFavs, totalFavs);
   if (statSold) animateNumber(statSold, sold.length);
-
-  const statRating = document.getElementById('stat-rating');
-  if (statRating) statRating.textContent = parseFloat(profileId === State.user?.id ? State.profile?.rating : allListings[0]?.profiles?.rating || 0).toFixed(1);
   
   const grid = document.getElementById('profile-listings-grid');
   if (grid) {
@@ -1912,11 +1910,6 @@ async function loadReviewPage(sellerId) {
 
   State.currentReviewSellerId = sellerId;
   State.reviewImageFiles = [];
-  
-  // Clear existing previews
-  const preview = document.getElementById('review-image-previews');
-  if (preview) preview.innerHTML = '';
-
   const toggleSoldInput = document.getElementById('toggle-sold-items');
   if (toggleSoldInput) toggleSoldInput.checked = false;
 
@@ -1949,6 +1942,15 @@ async function loadReviewPage(sellerId) {
     const items = itemsRes.data || [];
     State.allSellerItems = items;
     renderSellerItems(items);
+
+    // Re-bind listeners for selection
+    document.querySelectorAll('.seller-item-card').forEach(card => {
+      card.onclick = () => {
+        document.querySelectorAll('.seller-item-card').forEach(c => c.style.borderColor = 'transparent');
+        card.style.borderColor = 'var(--neon)';
+        State.selectedReviewListingId = card.dataset.listingId;
+      };
+    });
   } catch (err) {
     console.error('Error loading review context:', err);
     showToast('Failed to load seller info.', 'error');
@@ -2013,6 +2015,19 @@ async function handleReviewSubmit(e) {
     return;
   }
 
+  // One Review Per Seller Check
+  const { data: existingReview } = await db
+    .from('reviews')
+    .select('id')
+    .eq('reviewer_id', State.user.id)
+    .eq('seller_id', State.currentReviewSellerId)
+    .maybeSingle();
+
+  if (existingReview) {
+    showToast("You have already reviewed this seller.", "warning");
+    return;
+  }
+
   const rating = document.querySelector('input[name="rating"]:checked')?.value;
   if (!rating) {
     showToast("Please provide a star rating.", "warning");
@@ -2034,6 +2049,7 @@ async function handleReviewSubmit(e) {
       .insert({
         seller_id: State.currentReviewSellerId,
         reviewer_id: State.user.id,
+        listing_id: State.selectedReviewListingId,
         rating: parseInt(rating),
         body: body
       })
@@ -2071,6 +2087,118 @@ async function handleReviewSubmit(e) {
     }
   } finally {
     setLoading(btn, false, '✓ SUBMIT REVIEW');
+  }
+}
+
+async function loadSellerReviews(sellerId) {
+  const container = document.getElementById('ptab-reviews');
+  const noReviewsMsg = document.getElementById('no-reviews-message');
+  if (!container) return;
+  
+  container.innerHTML = '<div class="spinner"></div>';
+  noReviewsMsg.style.display = 'none';
+
+  try {
+    const { data: reviews, error } = await db
+      .from('reviews')
+      .select('*, reviewer:reviewer_id(username), review_images(*), listing:listing_id(name, sold_to)')
+      .eq('seller_id', sellerId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    if (!reviews || reviews.length === 0) {
+      container.innerHTML = '';
+      noReviewsMsg.style.display = 'block';
+      
+      // Show write review button if logged in and not the seller
+      if (State.user && State.user.id !== sellerId) {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-primary';
+        btn.textContent = '✍️ Write a Review';
+        btn.style.marginTop = '16px';
+        btn.onclick = () => navigate('review', { meta: { sellerId: sellerId } });
+        noReviewsMsg.appendChild(btn);
+      }
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="reviews-list" style="display:grid; gap:16px;">
+        ${reviews.map(r => `
+          <div style="background:var(--bg-2); padding:20px; border-radius:var(--radius-lg); border:1px solid var(--border);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <div>
+                <strong style="color:var(--text);">${escHtml(r.reviewer?.username || 'Anonymous')}</strong>
+                ${(r.listing && r.reviewer_id === r.listing.sold_to) ? `
+                  <span class="verified-badge" style="background:var(--neon); color:#001a07; font-size:0.6rem; padding:2px 6px; border-radius:4px; font-weight:bold; margin-left:8px; display:inline-block; vertical-align:middle;">
+                    ✓ VERIFIED BUYER
+                  </span>
+                ` : ''}
+              </div>
+              <div style="color:var(--neon); font-size:0.9rem; letter-spacing:1px;">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</div>
+            </div>
+            <p style="color:var(--text-secondary); line-height:1.6; margin:0 0 12px 0; word-break:break-word;">${escHtml(r.body)}</p>
+            ${r.review_images?.length > 0 ? `
+              <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+                ${r.review_images.map(img => `<img src="${img.object_path}" style="width:80px; height:80px; border-radius:4px; object-fit:cover; cursor:pointer;" onclick="window.open('${img.object_path}')">`).join('')}
+              </div>
+            ` : ''}
+            <div style="font-size:0.75rem; color:var(--text-muted);">
+              ${new Date(r.created_at).toLocaleDateString()}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } catch (err) {
+    console.error('Error loading reviews:', err);
+    container.innerHTML = '';
+    noReviewsMsg.innerHTML = '<div style="font-size:2rem; margin-bottom:12px;">⚠️</div><p>Failed to load reviews.</p>';
+    noReviewsMsg.style.display = 'block';
+  }
+}
+
+
+// ==================== MARK SOLD ====================
+function openMarkSoldModal(listingId) {
+  const input = document.getElementById('mark-sold-listing-id');
+  if (input) input.value = listingId;
+  const modal = document.getElementById('mark-sold-modal');
+  if (modal) modal.classList.add('open');
+}
+
+async function confirmMarkSold() {
+  const listingId = document.getElementById('mark-sold-listing-id')?.value;
+  if (!listingId || !State.user) return;
+  
+  try {
+    const { error } = await db
+      .from('listings')
+      .update({ 
+        is_sold: true, 
+        sold_at: new Date().toISOString(),
+        sold_to: State.user.id
+      })
+      .eq('id', listingId)
+      .eq('seller_id', State.user.id);
+    
+    if (error) throw error;
+    
+    closeModal('mark-sold-modal');
+    showToast('Listing marked as sold!', 'success');
+    
+    const idx = State.listings.findIndex(l => l.id === listingId);
+    if (idx !== -1) State.listings.splice(idx, 1);
+    applyFilters();
+    
+    if (State.currentPage === 'profile') {
+      await loadProfileListings(State.user.id, true);
+    }
+    if (State.currentPage === 'detail') navigate('profile');
+  } catch (err) {
+    console.error('Error marking as sold:', err);
+    showToast('Failed to mark as sold: ' + err.message, 'error');
   }
 }
 
@@ -3543,84 +3671,3 @@ async function findSafeRoute() {
   }
 }
 
-
-
-async function handleReviewSubmit(e) {
-  e.preventDefault();
-  const btn = document.getElementById('submit-review-btn');
-  const errEl = document.getElementById('review-form-error');
-
-  if (!State.user) {
-    openAuthModal();
-    return;
-  }
-
-  // Get selected listing ID from the clicked item in seller-items-grid
-  const selectedListingId = State.selectedReviewListingId;
-  if (!selectedListingId) {
-    showToast("Please select an item you purchased from this seller.", "warning");
-    return;
-  }
-
-  const rating = document.querySelector('input[name="rating"]:checked')?.value;
-  if (!rating) {
-    showToast("Please provide a star rating.", "warning");
-    return;
-  }
-
-  const body = document.getElementById('review-body').value.trim();
-  if (!body || body.length < 10) {
-    showToast("Review must be at least 10 characters.", "warning");
-    return;
-  }
-
-  setLoading(btn, true, 'SUBMITTING...');
-  if (errEl) errEl.style.display = 'none';
-
-  try {
-    // Insert review with listing_id
-    const { data: review, error: rError } = await db
-      .from('reviews')
-      .insert({
-        seller_id: State.currentReviewSellerId,
-        reviewer_id: State.user.id,
-        listing_id: selectedListingId,
-        rating: parseInt(rating),
-        body: body
-      })
-      .select()
-      .single();
-
-    if (rError) throw rError;
-
-    // Upload review images (if any)
-    if (State.reviewImageFiles && State.reviewImageFiles.length > 0) {
-      for (let i = 0; i < Math.min(State.reviewImageFiles.length, 3); i++) {
-        const file = State.reviewImageFiles[i];
-        const ext = file.name.split('.').pop();
-        const path = `${State.user.id}/${review.id}/${Date.now()}_${i}.${ext}`;
-        
-        const { error: uError } = await db.storage.from('review-images').upload(path, file);
-        if (!uError) {
-          const { data: { publicUrl } } = db.storage.from('review-images').getPublicUrl(path);
-          await db.from('review_images').insert({ 
-            review_id: review.id, 
-            object_path: publicUrl 
-          });
-        }
-      }
-    }
-
-    showToast('✓ Review posted successfully!', 'success');
-    // Refresh the seller's profile to show updated rating
-    navigate('profile', { meta: { profileId: State.currentReviewSellerId } });
-  } catch (err) {
-    console.error('Submit error:', err);
-    if (errEl) {
-      errEl.textContent = err.message.includes('unique') ? 'You have already reviewed this item.' : err.message;
-      errEl.style.display = 'block';
-    }
-  } finally {
-    setLoading(btn, false, '✓ SUBMIT REVIEW');
-  }
-}
