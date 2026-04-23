@@ -98,7 +98,11 @@ const State = {
   reviewImageFiles: [],
   selectedReviewListingId: null,
   allSellerItems: [],
-  viewingProfileId: null
+  viewingProfileId: null,
+  isSubmittingListing: false,
+  profileCache: {}, // New: Store profiles to avoid redundant DB calls
+  typingTimeout: null,
+  chatChannel: null
 };
 
 // ==================== HELPER FUNCTIONS ====================
@@ -144,6 +148,14 @@ function closeMobileNav() {
   document.getElementById('mobile-nav')?.classList.remove('open');
 }
 
+function toggleProcessingOverlay(show, text = 'PROCESSING...') {
+  const overlay = document.getElementById('processing-overlay');
+  const textEl = document.getElementById('processing-text');
+  if (!overlay) return;
+  if (textEl) textEl.textContent = text.toUpperCase();
+  overlay.classList.toggle('show', show);
+}
+
 function setLoading(btn, isLoading, text) {
   if (!btn) return;
   btn.disabled = isLoading;
@@ -178,7 +190,7 @@ function createImageCarousel(images, listingId) {
     <div class="image-carousel" id="${carouselId}">
       <div class="carousel-container">
         <div class="carousel-slides" id="${carouselId}-slides">
-          ${images.map((img, idx) => `<div class="carousel-slide" data-index="${idx}"><img src="${escHtml(img)}" alt="Image ${idx + 1}" loading="lazy" /></div>`).join('')}
+          ${images.map((img, idx) => `<div class="carousel-slide" data-index="${idx}"><img src="${escHtml(img)}" alt="Image ${idx + 1}" loading="lazy" decoding="async" /></div>`).join('')}
         </div>
         <button class="carousel-btn prev" onclick="event.stopPropagation(); changeSlide('${carouselId}', -1)">‹</button>
         <button class="carousel-btn next" onclick="event.stopPropagation(); changeSlide('${carouselId}', 1)">›</button>
@@ -650,6 +662,26 @@ function injectCustomStyles() {
       border: 2px solid var(--bg);
       box-shadow: 0 0 15px #ff0000, inset 0 0 5px rgba(255, 255, 255, 0.5);
     }
+    /* Hardware Acceleration for smoother page transitions */
+    .page { backface-visibility: hidden; transform: translateZ(0); }
+
+    /* Typing Indicator Styles */
+    .typing-indicator {
+      padding: 8px 12px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      display: none;
+      align-items: center;
+      gap: 5px;
+    }
+    .typing-indicator.active { display: flex; }
+    .dot {
+      width: 4px; height: 4px; background: var(--text-muted); border-radius: 50%;
+      animation: typing 1.4s infinite inline;
+    }
+    .dot:nth-child(2) { animation-delay: 0.2s; }
+    .dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typing { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
   `;
   document.head.appendChild(style);
 
@@ -660,14 +692,6 @@ function injectCustomStyles() {
     overlay.innerHTML = '<div class="spinner spinner-lg"></div><div id="processing-text" style="margin-top:20px; letter-spacing:2px; font-weight:bold;">PROCESSING...</div>';
     document.body.appendChild(overlay);
   }
-}
-
-function toggleProcessingOverlay(show, text = 'PROCESSING...') {
-  const overlay = document.getElementById('processing-overlay');
-  const textEl = document.getElementById('processing-text');
-  if (!overlay) return;
-  if (textEl) textEl.textContent = text.toUpperCase();
-  overlay.classList.toggle('show', show);
 }
 
 async function signOut() {
@@ -1039,7 +1063,6 @@ async function displayListingSuggestion(listingId) {
 async function loadListings(forceRefresh = false) {
   if (!db) { renderListings([]); return; }
   try {
-    // PERFORMANCE: Use cache if available to prevent flicker and slow loads
     if (State.listings.length > 0 && !forceRefresh) {
       applyFilters();
       return;
@@ -1049,16 +1072,8 @@ async function loadListings(forceRefresh = false) {
     
     const { data, error } = await db
       .from('listings')
-      .select(`
-        *,
-        profiles:seller_id (
-          id,
-          username,
-          avatar_url,
-          rating,
-          location
-        )
-      `)
+      // OPTIMIZATION: Only select columns needed for the grid view to reduce payload size
+      .select('id, name, price, images, category, condition, type, location, is_fair, is_sold, seller_id, created_at, profiles:seller_id(id, username, avatar_url, rating, location)')
       .eq('is_sold', false)
       .order('created_at', { ascending: false });
     
@@ -1548,16 +1563,12 @@ async function submitListing(e) {
     return;
   }
   
-  // Guard to prevent duplicate listings from double-clicks
-  if (State.isSubmittingListing) return;
-  
   const isEditing = !!State.editingListingId;
   const errEl = document.getElementById('create-error');
   const btn = document.getElementById('create-submit');
   if (errEl) errEl.classList.remove('show');
   if (btn) setLoading(btn, true, isEditing ? 'SAVING...' : 'PUBLISHING...');
   toggleProcessingOverlay(true, isEditing ? 'Updating listing...' : 'Uploading listing...');
-  State.isSubmittingListing = true;
   
   try {
     const price = parseFloat(document.getElementById('c-price')?.value || '0');
@@ -1638,19 +1649,22 @@ async function submitListing(e) {
       State.listings.unshift(savedListing);
     }
     
-    const form = document.getElementById('create-form');
-    if (form) form.reset();
+    // Reset listing state completely
+    const createForm = document.getElementById('create-form');
+    if (createForm) createForm.reset();
     State.imageFiles = [];
     State.keepExistingImages = [];
-    const previewGrid = document.getElementById('image-preview-grid');
-    if (previewGrid) previewGrid.innerHTML = '';
+    document.getElementById('image-preview-grid').innerHTML = '';
     State.editingListingId = null;
-    
+
     showToast(isEditing ? 'Listing updated!' : 'Listing published!', 'success');
-    navigate(isEditing ? 'profile' : 'shop');
-    
+    // Force refresh to clear local unshifted state and get fresh DB data
+    if (isEditing) navigate('profile');
+    else loadListings(true).then(() => navigate('shop'));
+
   } catch (err) {
     console.error('Error submitting listing:', err);
+    State.isSubmittingListing = false; // Reset on error
     if (errEl) {
       errEl.textContent = err.message || 'An unknown error occurred.';
       errEl.classList.add('show');
@@ -1658,7 +1672,6 @@ async function submitListing(e) {
   } finally {
     if (btn) setLoading(btn, false, isEditing ? 'SAVE CHANGES' : 'PUBLISH LISTING');
     toggleProcessingOverlay(false);
-    State.isSubmittingListing = false;
   }
 }
 
@@ -1673,6 +1686,11 @@ async function loadProfile() {
   if (!profileIdToLoad) {
     navigate('shop');
     return;
+  }
+
+  // New: Check Profile Cache to load page instantly
+  if (State.profileCache[profileIdToLoad] && !window.selectedProfileId) {
+    renderProfileUI(State.profileCache[profileIdToLoad]);
   }
 
   State.viewingProfileId = profileIdToLoad;
@@ -1691,7 +1709,17 @@ async function loadProfile() {
     navigate('shop');
     return;
   }
-  
+
+  // New: Save to Cache
+  State.profileCache[profileIdToLoad] = profile;
+  renderProfileUI(profile);
+}
+
+// New: Extracted UI logic to allow calling from cache or fresh fetch
+async function renderProfileUI(profile) {
+  const profileIdToLoad = profile.id;
+  const isOwnProfile = State.user && profileIdToLoad === State.user.id;
+
   const avatarEl = document.getElementById('profile-avatar-lg');
   const usernameEl = document.getElementById('profile-username');
   const emailEl = document.getElementById('profile-email');
@@ -1702,7 +1730,7 @@ async function loadProfile() {
   
   if (avatarEl) {
     if (profile?.avatar_url) {
-      avatarEl.innerHTML = `<img src="${escHtml(profile.avatar_url)}" alt="${escHtml(name)}" />`;
+      avatarEl.innerHTML = `<img src="${escHtml(profile.avatar_url)}" alt="${escHtml(name)}" decoding="async" />`;
     } else {
       avatarEl.textContent = name.charAt(0).toUpperCase();
     }
@@ -2338,7 +2366,7 @@ async function loadSellerReviews(sellerId) {
       const itemHtml = item ? `
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; padding:8px; background:var(--bg-3); border-radius:6px; border:1px solid var(--border);">
           <img src="${item.images?.[0] || ''}" style="width:40px; height:40px; object-fit:cover; border-radius:4px;">
-          <span style="font-size:0.8rem; color:var(--text-muted);">Reviewed: <strong>${escHtml(item.name)}</strong></span>
+          <span style="font-size:0.8rem; color:var(--text-secondary);">Reviewed: <strong>${escHtml(item.name)}</strong></span>
         </div>` : '';
 
       return `
@@ -2705,7 +2733,7 @@ function createListingCard(listing, showOwnerActions = false) {
   if (listing.images && listing.images.length > 1) {
     imageHtml = createImageCarousel(listing.images, listing.id);
   } else if (listing.images && listing.images.length === 1) {
-    imageHtml = `<img src="${escHtml(listing.images[0])}" alt="${escHtml(listing.name)}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" />`;
+    imageHtml = `<img src="${escHtml(listing.images[0])}" alt="${escHtml(listing.name)}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" decoding="async" />`;
   } else {
     imageHtml = `<div class="card-no-image">📦</div>`;
   }
@@ -2865,6 +2893,14 @@ async function loadMessages() {
   if (sortedConversations.length === 0) {
     convoListEl.innerHTML = '<div class="empty-state-small">No conversations yet.</div>';
   } else {
+    // Add "Mark all as read" button
+    const markReadBtn = document.createElement('button');
+    markReadBtn.className = 'btn btn-outline btn-sm w-full mb-md';
+    markReadBtn.style.fontSize = '0.7rem';
+    markReadBtn.innerHTML = '✔️ MARK ALL AS READ';
+    markReadBtn.onclick = markAllMessagesAsRead;
+    convoListEl.appendChild(markReadBtn);
+
     sortedConversations.forEach(convo => {
       const partnerProfile = convo.partnerProfile;
       const isActive = State.currentChatPartnerId === partnerProfile.id;
@@ -2899,12 +2935,44 @@ async function loadMessages() {
   }
 }
 
+async function markAllMessagesAsRead() {
+  if (!State.user) return;
+  try {
+    const { error } = await db
+      .from('messages')
+      .update({ is_read: true })
+      .eq('receiver_id', State.user.id)
+      .eq('is_read', false);
+
+    if (error) throw error;
+    showToast('All messages marked as read.', 'success');
+    loadMessages();
+  } catch (err) {
+    console.error('Error marking messages as read:', err);
+  }
+}
+
 async function loadConversationThread(partnerId, listingId = null) {
+  // Cleanup previous typing channel
+  if (State.chatChannel) {
+    State.chatChannel.unsubscribe();
+  }
+
   State.currentChatPartnerId = partnerId;
   
   document.querySelectorAll('.convo-item').forEach(el => {
     el.classList.toggle('active', el.getAttribute('data-id') === partnerId);
   });
+
+  // Set up Realtime Broadcast for Typing Indicator
+  State.chatChannel = db.channel(`chat:${partnerId}`)
+    .on('broadcast', { event: 'typing' }, ({ payload }) => {
+      const indicator = document.getElementById('typing-indicator');
+      if (indicator && payload.senderId === partnerId) {
+        indicator.classList.toggle('active', payload.isTyping);
+      }
+    })
+    .subscribe();
   
   const { data: partnerProfile, error: pError } = await db.from('profiles').select('*').eq('id', partnerId).single();
   if (pError || !partnerProfile) return;
@@ -2929,8 +2997,7 @@ async function loadConversationThread(partnerId, listingId = null) {
   const { data: messages, error: mError } = await db
     .from('messages')
     .select('*')
-    .or(`and(sender_id.eq.${State.user.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${State.user.id})`)
-    .is('deleted_by_sender', false)
+    .or(`sender_id.eq.${State.user.id},receiver_id.eq.${State.user.id}`)
     .order('created_at', { ascending: true });
   
   if (mError) return console.error("Error loading messages", mError);
@@ -2938,9 +3005,36 @@ async function loadConversationThread(partnerId, listingId = null) {
   const threadEl = document.getElementById('chatThread');
   if (!threadEl) return;
   threadEl.innerHTML = '';
+
+  // Add Typing Indicator element to thread
+  const typingDiv = document.createElement('div');
+  typingDiv.id = 'typing-indicator';
+  typingDiv.className = 'typing-indicator';
+  typingDiv.innerHTML = `<span>Typing</span><span class="dot"></span><span class="dot"></span><span class="dot"></span>`;
+  
+  // Mark messages in this specific thread as read
+  await db.from('messages')
+    .update({ is_read: true })
+    .eq('sender_id', partnerId)
+    .eq('receiver_id', State.user.id)
+    .eq('is_read', false);
+
   if (messages) {
-    messages.forEach(msg => renderMessage(msg, State.user.id));
+    // Filter logic handled in JS to ensure we don't lose messages due to NULL columns or complex SQL ORs
+    const filteredMessages = messages.filter(msg => {
+      // Only show messages belonging to this specific conversation
+      const isConversation = (msg.sender_id === State.user.id && msg.receiver_id === partnerId) || 
+                             (msg.sender_id === partnerId && msg.receiver_id === State.user.id);
+      
+      // Only hide if the user is the sender AND they explicitly clicked delete (true)
+      const isDeleted = msg.sender_id === State.user.id && msg.deleted_by_sender === true;
+      
+      return isConversation && !isDeleted;
+    });
+
+    filteredMessages.forEach(msg => renderMessage(msg, State.user.id));
   }
+  threadEl.appendChild(typingDiv);
   threadEl.scrollTop = threadEl.scrollHeight;
 }
 
@@ -2960,8 +3054,25 @@ async function handleSendMessage(e) {
   if (error) showToast("Error: " + error.message, 'error');
   else {
     if (input) input.value = '';
+    sendTypingStatus(false);
     await loadConversationThread(State.currentChatPartnerId);
     await loadMessages();
+  }
+}
+
+function sendTypingStatus(isTyping) {
+  if (!State.chatChannel || !State.user) return;
+  State.chatChannel.send({
+    type: 'broadcast',
+    event: 'typing',
+    payload: { senderId: State.user.id, isTyping }
+  });
+}
+
+function handleChatInput() {
+  sendTypingStatus(true);
+  clearTimeout(State.typingTimeout);
+  State.typingTimeout = setTimeout(() => sendTypingStatus(false), 2000);
   }
 }
 
@@ -2973,16 +3084,15 @@ async function handleSendImage(e) {
 
   try {
     const filePath = `${State.user.id}/${Date.now()}_${file.name}`;
-    const { error: uploadError } = await db.storage.from('chat-images').upload(filePath, file);
+    const { error: uploadError } = await db.storage.from('messages-images').upload(filePath, file);
     
     if (uploadError) throw uploadError;
     
-    const { data: { publicUrl } } = db.storage.from('chat-images').getPublicUrl(filePath);
+    const { data: { publicUrl } } = db.storage.from('messages-images').getPublicUrl(filePath);
     
     const { error: msgError } = await db.from('messages').insert([{
       sender_id: State.user.id,
       receiver_id: State.currentChatPartnerId,
-      // Ensure listing_id is null if it's not a valid number/ID to prevent DB errors
       listing_id: State.currentListingId || null,
       image_url: publicUrl,
     }]);
@@ -3155,10 +3265,12 @@ function setupEventListeners() {
   
   const imageInput = document.getElementById('image-input');
   const uploadZone = document.getElementById('upload-zone');
-  if (imageInput) imageInput.addEventListener('change', handleImageUpload);
+  if (imageInput) {
+    imageInput.addEventListener('change', handleImageUpload);
+    imageInput.addEventListener('click', e => e.stopPropagation()); // Prevent double dialog
+  }
   if (uploadZone) {
-    uploadZone.addEventListener('click', (e) => {
-      if (e.target.tagName === 'INPUT') return; // Prevent double trigger if clicking input directly
+    uploadZone.addEventListener('click', () => {
       const input = document.getElementById('image-input');
       if (input) input.click();
     });
@@ -3238,11 +3350,14 @@ function setupEventListeners() {
   // Review image handling (max 3 images)
   const reviewImgInput = document.getElementById('review-image-input');
   if (reviewImgInput) {
+    reviewImgInput.onclick = (e) => e.stopPropagation(); // Prevent double dialog
     reviewImgInput.onchange = (e) => {
-      const files = Array.from(e.target.files);
-      const existingCount = State.existingReviewImages?.length || 0;
-      const maxNewFiles = Math.max(0, 3 - existingCount);
-      State.reviewImageFiles = files.slice(0, maxNewFiles);
+      const newFiles = Array.from(e.target.files);
+      const currentTotal = (State.existingReviewImages?.length || 0) + (State.reviewImageFiles?.length || 0);
+      const remaining = Math.max(0, 3 - currentTotal);
+      // Append new files instead of replacing
+      State.reviewImageFiles = [...(State.reviewImageFiles || []), ...newFiles.slice(0, remaining)];
+      
       const preview = document.getElementById('review-image-previews');
       const countEl = document.getElementById('review-image-count');
       
