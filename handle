@@ -1963,12 +1963,23 @@ function renderSellerItems(items) {
     itemsGrid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:24px; color:var(--text-muted);">No items to display</div>';
   } else {
     itemsGrid.innerHTML = items.map(item => `
-      <div style="border-radius:var(--radius); overflow:hidden; background:var(--bg-2); transition:all 0.2s; cursor:pointer;" title="${escHtml(item.name)}">
+      <div class="seller-item-card" data-listing-id="${item.id}" style="border-radius:var(--radius); overflow:hidden; background:var(--bg-2); transition:all 0.2s; cursor:pointer; border:2px solid transparent;" title="${escHtml(item.name)}">
         <img src="${item.images?.[0] || 'placeholder.png'}" style="width:100%; aspect-ratio:1; object-fit:cover; display:block;">
         <div style="padding:8px; font-size:0.75rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center; color:var(--text-secondary);">${escHtml(item.name)}</div>
         ${item.is_sold ? '<div style="position:absolute; top:4px; right:4px; background:var(--danger); color:white; font-size:0.65rem; padding:3px 6px; border-radius:4px; font-weight:bold;">SOLD</div>' : ''}
       </div>
     `).join('');
+
+    // Attach click event to each item
+    document.querySelectorAll('.seller-item-card').forEach(card => {
+      card.addEventListener('click', () => {
+        // Remove highlight from all
+        document.querySelectorAll('.seller-item-card').forEach(c => c.style.borderColor = 'transparent');
+        card.style.borderColor = 'var(--neon)';
+        State.selectedReviewListingId = card.dataset.listingId;
+        showToast(`Selected: ${card.querySelector('div:last-child')?.innerText || 'item'}`, 'info');
+      });
+    });
   }
 }
 
@@ -3542,3 +3553,86 @@ async function findSafeRoute() {
     setLoading(findBtn, false, "🔍 Find Safe Route");
   }
 }
+
+
+
+async function handleReviewSubmit(e) {
+  e.preventDefault();
+  const btn = document.getElementById('submit-review-btn');
+  const errEl = document.getElementById('review-form-error');
+
+  if (!State.user) {
+    openAuthModal();
+    return;
+  }
+
+  // Get selected listing ID from the clicked item in seller-items-grid
+  const selectedListingId = State.selectedReviewListingId;
+  if (!selectedListingId) {
+    showToast("Please select an item you purchased from this seller.", "warning");
+    return;
+  }
+
+  const rating = document.querySelector('input[name="rating"]:checked')?.value;
+  if (!rating) {
+    showToast("Please provide a star rating.", "warning");
+    return;
+  }
+
+  const body = document.getElementById('review-body').value.trim();
+  if (!body || body.length < 10) {
+    showToast("Review must be at least 10 characters.", "warning");
+    return;
+  }
+
+  setLoading(btn, true, 'SUBMITTING...');
+  if (errEl) errEl.style.display = 'none';
+
+  try {
+    // Insert review with listing_id
+    const { data: review, error: rError } = await db
+      .from('reviews')
+      .insert({
+        seller_id: State.currentReviewSellerId,
+        reviewer_id: State.user.id,
+        listing_id: selectedListingId,
+        rating: parseInt(rating),
+        body: body
+      })
+      .select()
+      .single();
+
+    if (rError) throw rError;
+
+    // Upload review images (if any)
+    if (State.reviewImageFiles && State.reviewImageFiles.length > 0) {
+      for (let i = 0; i < Math.min(State.reviewImageFiles.length, 3); i++) {
+        const file = State.reviewImageFiles[i];
+        const ext = file.name.split('.').pop();
+        const path = `${State.user.id}/${review.id}/${Date.now()}_${i}.${ext}`;
+        
+        const { error: uError } = await db.storage.from('review-images').upload(path, file);
+        if (!uError) {
+          const { data: { publicUrl } } = db.storage.from('review-images').getPublicUrl(path);
+          await db.from('review_images').insert({ 
+            review_id: review.id, 
+            object_path: publicUrl 
+          });
+        }
+      }
+    }
+
+    showToast('✓ Review posted successfully!', 'success');
+    // Refresh the seller's profile to show updated rating
+    navigate('profile', { meta: { profileId: State.currentReviewSellerId } });
+  } catch (err) {
+    console.error('Submit error:', err);
+    if (errEl) {
+      errEl.textContent = err.message.includes('unique') ? 'You have already reviewed this item.' : err.message;
+      errEl.style.display = 'block';
+    }
+  } finally {
+    setLoading(btn, false, '✓ SUBMIT REVIEW');
+  }
+}
+
