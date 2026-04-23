@@ -103,17 +103,13 @@ const State = {
 
 // ==================== HELPER FUNCTIONS ====================
 function escHtml(str) {
-  if (!str) return '';
-  return String(str).replace(/[&<>]/g, function(m) {
-    if (m === '&') return '&amp;';
-    if (m === '<') return '&lt;';
-    if (m === '>') return '&gt;';
-    return m;
-  });
+  if (!str) return ''; 
+  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+  return String(str).replace(/[&<>"']/g, m => map[m]);
 }
 
 function generateStarRatingHtml(rating) {
-  const fullStars = Math.floor(rating || 0);
+  const fullStars = Math.round(rating || 0);
   let html = '<span style="color:var(--neon); letter-spacing:2px; font-size:1.1rem;">';
   for(let i=0; i<5; i++) {
     if(i < fullStars) html += '★';
@@ -597,14 +593,21 @@ async function handleRegister(e) {
       closeModal('auth-modal');
       showToast('Account created! Welcome to OBTAINUM.', 'success');
     } else {
-      document.getElementById('register-form-wrap').innerHTML = `
-        <div class="auth-confirm-panel" style="text-align:center;padding:20px;">
-          <div class="confirm-icon" style="font-size:3rem;">✉️</div>
-          <div class="confirm-title" style="font-weight:bold;margin:16px 0;">CHECK YOUR EMAIL</div>
-          <div class="confirm-msg">Click the confirmation link to activate your account.</div>
-          <button class="btn btn-outline w-full" onclick="closeModal('auth-modal')">GOT IT</button>
-        </div>
-      `;
+      // Fix: Handle case where 'register-form-wrap' ID is missing from HTML
+      const wrap = document.getElementById('register-form-wrap') || document.getElementById('auth-register');
+      if (wrap) {
+        wrap.innerHTML = `
+          <div class="auth-confirm-panel" style="text-align:center;padding:20px;">
+            <div class="confirm-icon" style="font-size:3rem;">✉️</div>
+            <div class="confirm-title" style="font-weight:bold;margin:16px 0;">CHECK YOUR EMAIL</div>
+            <div class="confirm-msg">Click the confirmation link to activate your account.</div>
+            <button class="btn btn-outline w-full" onclick="closeModal('auth-modal')">GOT IT</button>
+          </div>
+        `;
+      } else {
+        showToast('Registration successful! Check your email to confirm.', 'success');
+        closeModal('auth-modal');
+      }
     }
   } catch (err) {
     if (errEl) {
@@ -614,6 +617,24 @@ async function handleRegister(e) {
   } finally {
     if (btn) setLoading(btn, false, 'CREATE ACCOUNT');
   }
+}
+
+// ==================== UI STYLING INJECTION ====================
+function injectCustomStyles() {
+  const style = document.createElement('style');
+  style.textContent = `
+    /* Navbar Scrollbar Red & Wide in Dark Mode */
+    body:not(.light-mode) .nav-menu::-webkit-scrollbar {
+      height: 12px;
+    }
+    body:not(.light-mode) .nav-menu::-webkit-scrollbar-thumb {
+      background: #ff0000;
+      border-radius: 10px;
+      border: 2px solid var(--bg);
+      box-shadow: 0 0 15px #ff0000, inset 0 0 5px rgba(255, 255, 255, 0.5);
+    }
+  `;
+  document.head.appendChild(style);
 }
 
 async function signOut() {
@@ -1647,7 +1668,17 @@ async function loadProfile() {
     }
   }
   
-  if (usernameEl) usernameEl.textContent = (profile?.username || name).toUpperCase();
+  // Render Username with Rating Summary (Visible to everyone)
+  if (usernameEl) {
+    const ratingValue = Number(profile?.rating) || 0;
+    const stars = generateStarRatingHtml(ratingValue);
+    const refreshBtn = isOwnProfile ? `<button id="btn-refresh-rating" onclick="refreshProfileRating()" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:0.9rem; padding:4px;" title="Refresh Rating">↻</button>` : '';
+    usernameEl.innerHTML = `${escHtml(profile?.username || name).toUpperCase()}
+        <span style="font-size:1rem; margin-left:12px; vertical-align:middle; display:inline-flex; align-items:center; gap:8px;">
+          ${stars} <small style="color:var(--text-muted); font-family:'Inter';">(${parseFloat(ratingValue).toFixed(1)})</small> ${refreshBtn}
+        </span>`;
+  }
+
   if (emailEl) emailEl.textContent = isOwnProfile ? profile.email : '';
   if (bioEl) bioEl.textContent = profile?.bio || '';
   if (locationEl) locationEl.textContent = profile?.location ? '📍 ' + profile.location : '';
@@ -1662,16 +1693,6 @@ async function loadProfile() {
       editButton.innerHTML = '💬 Let\'s Chat';
       editButton.onclick = () => startChat(profile.id);
       editButton.style.display = 'inline-block';
-    }
-
-    // Add Rating Summary to Banner
-    const ratingValue = profile?.rating || 0;
-    if (usernameEl) {
-      const stars = generateStarRatingHtml(ratingValue);
-      usernameEl.innerHTML = `${escHtml(profile?.username || name).toUpperCase()} 
-        <span style="font-size:1rem; margin-left:12px; vertical-align:middle; display:inline-flex; align-items:center; gap:8px;">
-          ${stars} <small style="color:var(--text-muted); font-family:'Inter';">(${parseFloat(ratingValue).toFixed(1)})</small>
-        </span>`;
     }
     
     // Handle Review Button logic
@@ -1724,6 +1745,39 @@ async function loadProfile() {
   if (tabToOpen === 'settings' && !isOwnProfile) tabToOpen = 'my-listings';
   
   showProfileTab(tabToOpen);
+}
+
+async function refreshProfileRating() {
+  if (!State.user || State.viewingProfileId !== State.user.id) return;
+  const btn = document.getElementById('btn-refresh-rating');
+  const originalHtml = btn.innerHTML;
+  btn.innerHTML = '...';
+  btn.disabled = true;
+
+  try {
+    // Recalculate average from reviews table
+    const { data: allReviews, error: fetchErr } = await db
+      .from('reviews')
+      .select('rating')
+      .eq('seller_id', State.user.id);
+
+    if (fetchErr) throw fetchErr;
+
+    const avgRating = allReviews.length > 0 
+      ? allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length 
+      : 0;
+
+    // Sync back to profile
+    await db.from('profiles').update({ rating: avgRating }).eq('id', State.user.id);
+    
+    showToast('Rating updated from latest reviews!', 'success');
+    await loadProfile(); 
+  } catch (err) {
+    showToast('Failed to refresh rating.', 'error');
+  } finally {
+    btn.innerHTML = originalHtml;
+    btn.disabled = false;
+  }
 }
 
 function showProfileTab(tabName) {
@@ -2174,6 +2228,19 @@ async function handleReviewSubmit(e) {
       review = newReview;
     }
 
+    // Recalculate and update the seller's average rating in their profile
+    const { data: allReviews, error: fetchErr } = await db
+      .from('reviews')
+      .select('rating')
+      .eq('seller_id', State.currentReviewSellerId);
+
+    if (!fetchErr && allReviews && allReviews.length > 0) {
+      const avgRating = allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length;
+      await db.from('profiles')
+        .update({ rating: avgRating })
+        .eq('id', State.currentReviewSellerId);
+    }
+
     // Handle Review Images (max 3, only new ones)
     if (State.reviewImageFiles && State.reviewImageFiles.length > 0) {
       const totalImages = (State.existingReviewImages?.length || 0) + State.reviewImageFiles.length;
@@ -2212,24 +2279,24 @@ async function handleReviewSubmit(e) {
 }
 
 async function loadSellerReviews(sellerId) {
-  console.log('loadSellerReviews called for seller:', sellerId);
   const container = document.getElementById('seller-reviews-container');
-  if (!container) {
-    console.error('ERROR: seller-reviews-container not found in DOM');
-    return;
-  }
+  if (!container) return;
+  
+  container.innerHTML = '<div class="spinner" style="display:block; margin:20px auto;"></div>';
+
   try {
     const { data: reviews, error } = await db
       .from('reviews')
       .select(`
-        *,
-        reviewer:reviewer_id (id, username, avatar_url)
+        *, 
+        reviewer:reviewer_id(id, username, avatar_url), 
+        review_images(object_path),
+        listings:listing_id(name, images)
       `)
       .eq('seller_id', sellerId)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    console.log('Reviews fetched:', reviews);
 
     const noReviewsMsg = document.getElementById('no-reviews-message');
     if (!reviews || reviews.length === 0) {
@@ -2239,13 +2306,15 @@ async function loadSellerReviews(sellerId) {
     }
     if (noReviewsMsg) noReviewsMsg.style.display = 'none';
 
-    // Fetch images for each review
-    const reviewsWithImages = await Promise.all(reviews.map(async (review) => {
-      const { data: images } = await db.from('review_images').select('object_path').eq('review_id', review.id);
-      return { ...review, images: images || [] };
-    }));
+    container.innerHTML = reviews.map(r => {
+      const item = r.listings;
+      const itemHtml = item ? `
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; padding:8px; background:var(--bg-3); border-radius:6px; border:1px solid var(--border);">
+          <img src="${item.images?.[0] || ''}" style="width:40px; height:40px; object-fit:cover; border-radius:4px;">
+          <span style="font-size:0.8rem; color:var(--text-muted);">Reviewed: <strong>${escHtml(item.name)}</strong></span>
+        </div>` : '';
 
-    container.innerHTML = reviewsWithImages.map(r => `
+      return `
       <div class="review-card" onclick="this.classList.toggle('expanded')" style="background:var(--bg-2); border-radius:var(--radius); padding:20px; margin-bottom:16px; border:1px solid var(--border); cursor:pointer; transition:all 0.3s ease;">
         <div style="display:flex; align-items:center; gap:16px;">
           <div class="reviewer-avatar" style="width:44px; height:44px; border-radius:50%; background:var(--bg-3); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:1.2rem; border:1px solid var(--border);">
@@ -2253,7 +2322,7 @@ async function loadSellerReviews(sellerId) {
           </div>
           <div style="flex:1;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-              <strong style="color:var(--text); font-size:1rem;">${escHtml(r.reviewer?.username || 'Anonymous')}</strong>
+              <strong style="color:var(--text); font-size:1rem; cursor:pointer; text-decoration:underline;" onclick="event.stopPropagation(); viewSellerProfile('${r.reviewer?.id}')">${escHtml(r.reviewer?.username || 'Anonymous')}</strong>
               ${generateStarRatingHtml(r.rating)}
             </div>
             <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">${new Date(r.created_at).toLocaleDateString()}</div>
@@ -2261,19 +2330,20 @@ async function loadSellerReviews(sellerId) {
           <div class="expand-icon" style="transition:transform 0.3s; font-size:0.8rem; color:var(--text-muted);">▼</div>
         </div>
         
-        <div class="review-details">
+        <div class="review-details" style="display:block;">
+          ${itemHtml}
           <div style="line-height:1.7; color:var(--text-secondary); white-space:pre-wrap;">${escHtml(r.body)}</div>
-          ${r.images && r.images.length ? `
+          ${r.review_images && r.review_images.length ? `
             <div class="review-images" style="display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;">
-              ${r.images.map(img => `<img src="${img.object_path}" style="width:90px; height:90px; object-fit:cover; border-radius:8px; border:1px solid var(--border); transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" onclick="event.stopPropagation(); window.open('${img.object_path}')">`).join('')}
+              ${r.review_images.map(img => `<img src="${img.object_path}" style="width:120px; height:120px; object-fit:cover; border-radius:8px; border:2px solid var(--border); transition:transform 0.2s; cursor:zoom-in; display:block;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" onclick="event.stopPropagation(); window.open('${img.object_path}')">`).join('')}
             </div>
           ` : ''}
           <div style="text-align:right; margin-top:12px;">
              <small style="color:var(--neon); font-size:0.65rem; text-transform:uppercase; font-weight:700;">Verified Transaction</small>
           </div>
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
   } catch (err) {
     console.error('Error loading reviews:', err);
     container.innerHTML = '<div class="empty-state">Failed to load reviews.</div>';
@@ -2833,6 +2903,7 @@ async function loadConversationThread(partnerId, listingId = null) {
     .from('messages')
     .select('*')
     .or(`and(sender_id.eq.${State.user.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${State.user.id})`)
+    .is('deleted_by_sender', false)
     .order('created_at', { ascending: true });
   
   if (mError) return console.error("Error loading messages", mError);
@@ -2908,13 +2979,35 @@ function renderMessage(msg, currentUserId) {
   }
   
   if (msg.image_url) {
-    div.innerHTML = `<img src="${escHtml(msg.image_url)}" class="msg-image" style="max-width:200px;border-radius:8px;cursor:pointer;" onclick="window.open(this.src)">${timestampHtml}`;
+    div.innerHTML = `<img src="${escHtml(msg.image_url)}" class="msg-image" style="max-width:200px;border-radius:8px;cursor:pointer;" onclick="window.open(this.src)">
+                     ${isSent ? `<button onclick="deleteMessage('${msg.id}')" style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.7rem; display:block; margin-left:auto;">Delete</button>` : ''}
+                     ${timestampHtml}`;
   } else {
-    div.innerHTML = `${escHtml(msg.content)}${timestampHtml}`;
+    div.innerHTML = `${escHtml(msg.content)}
+                     ${isSent ? `<button onclick="deleteMessage('${msg.id}')" style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.7rem; display:block; margin-left:auto; padding-top:4px;">Delete</button>` : ''}
+                     ${timestampHtml}`;
   }
   
   thread.appendChild(div);
   thread.scrollTop = thread.scrollHeight;
+}
+
+async function deleteMessage(msgId) {
+  if (!confirm('Remove this message from your view? (It will still be saved in the database)')) return;
+  
+  try {
+    const { error } = await db
+      .from('messages')
+      .update({ deleted_by_sender: true })
+      .eq('id', msgId)
+      .eq('sender_id', State.user.id);
+    
+    if (error) throw error;
+    showToast('Message removed from your view.', 'info');
+    loadConversationThread(State.currentChatPartnerId);
+  } catch (err) {
+    showToast('Failed to delete message.', 'error');
+  }
 }
 
 function initChat() {
@@ -3108,10 +3201,11 @@ function setupEventListeners() {
   const reviewImgInput = document.getElementById('review-image-input');
   if (reviewImgInput) {
     reviewImgInput.onchange = (e) => {
-      const files = Array.from(e.target.files);
-      const existingCount = State.existingReviewImages?.length || 0;
-      const maxNewFiles = Math.max(0, 3 - existingCount);
-      State.reviewImageFiles = files.slice(0, maxNewFiles);
+      const newFiles = Array.from(e.target.files);
+      const existingCount = (State.existingReviewImages?.length || 0) + (State.reviewImageFiles?.length || 0);
+      const remaining = Math.max(0, 3 - existingCount);
+      State.reviewImageFiles = [...(State.reviewImageFiles || []), ...newFiles.slice(0, remaining)];
+      
       const preview = document.getElementById('review-image-previews');
       const countEl = document.getElementById('review-image-count');
       
@@ -3166,6 +3260,7 @@ function setupEventListeners() {
 
 // ==================== INITIALIZATION ====================
 document.addEventListener('DOMContentLoaded', async () => {
+  injectCustomStyles();
   initTheme();
   setupEventListeners();
   await initAuth();
