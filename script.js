@@ -92,6 +92,9 @@ const State = {
   aiSessionId: null,
   aiMessages: [],
   currentReviewSellerId: null,
+  reviewId: null,
+  existingReviewImages: [],
+  originalReviewImages: [],
   reviewImageFiles: [],
   selectedReviewListingId: null,
   allSellerItems: [],
@@ -979,9 +982,15 @@ async function displayListingSuggestion(listingId) {
 }
 
 // ==================== LISTINGS MODULE ====================
-async function loadListings() {
+async function loadListings(forceRefresh = false) {
   if (!db) { renderListings([]); return; }
   try {
+    // PERFORMANCE: Use cache if available to prevent flicker and slow loads
+    if (State.listings.length > 0 && !forceRefresh) {
+      applyFilters();
+      return;
+    }
+
     showSkeletons();
     
     const { data, error } = await db
@@ -1936,7 +1945,8 @@ window.removeExistingReviewImage = function(imagePath) {
 async function loadReviewPage(sellerId) {
   if (!sellerId || !State.user || sellerId === State.user.id) {
     showToast("You cannot review yourself.", "warning");
-    navigate('shop');
+    if (State.currentPage === 'review') window.location.href = 'index.html#shop';
+    else navigate('shop');
     return;
   }
 
@@ -1945,6 +1955,14 @@ async function loadReviewPage(sellerId) {
   State.reviewId = null;
   State.existingReviewImages = [];
   State.originalReviewImages = [];
+
+  // Setup back/cancel buttons
+  const backBtn = document.getElementById('btn-back-profile');
+  const cancelBtn = document.getElementById('btn-cancel-review');
+  const backHandler = () => navigate('profile', { meta: { profileId: sellerId } });
+  if (backBtn) backBtn.onclick = backHandler;
+  if (cancelBtn) cancelBtn.onclick = backHandler;
+
   const toggleSoldInput = document.getElementById('toggle-sold-items');
   if (toggleSoldInput) toggleSoldInput.checked = false;
 
@@ -1978,17 +1996,6 @@ async function loadReviewPage(sellerId) {
     const items = itemsRes.data || [];
     State.allSellerItems = items;
     renderSellerItems(items);
-
-    // If user already has a review, load it for editing
-    if (existingReviewRes.data) {
-      const review = existingReviewRes.data;
-      State.reviewId = review.id;
-      
-      // Load review images
-      const { data: images } = await db.from('review_images').select('object_path').eq('review_id', review.id);
-      State.existingReviewImages = images || [];
-      
-    // If user already has a review, load it for editing
     if (existingReviewRes.data) {
       const review = existingReviewRes.data;
       State.reviewId = review.id;
@@ -2003,7 +2010,9 @@ async function loadReviewPage(sellerId) {
       const charCountEl = document.getElementById('review-char-count');
       if (charCountEl) charCountEl.textContent = `${review.body.length} / 2000 characters`;
       
-      document.querySelector(`input[name="rating"][value="${review.rating}"]`).checked = true;
+      const radio = document.querySelector(`input[name="rating"][value="${review.rating}"]`);
+      if (radio) radio.checked = true;
+
       const display = document.getElementById('star-value-display');
       if (display) display.textContent = `${review.rating} star${review.rating !== 1 ? 's' : ''} selected`;
       
@@ -2011,7 +2020,7 @@ async function loadReviewPage(sellerId) {
       const preview = document.getElementById('review-image-previews');
       if (preview && State.existingReviewImages.length > 0) {
         preview.innerHTML = State.existingReviewImages.map((img) => `
-          <div style="position:relative; width:80px; height:80px;">
+          <div style="position:relative; width:80px; height:80px;" class="animate-pop">
             <img src="${img.object_path}" style="width:100%; height:100%; object-fit:cover; border-radius:4px; display:block;">
             <button type="button" onclick="removeExistingReviewImage('${img.object_path}')" style="position:absolute; top:-8px; right:-8px; width:24px; height:24px; border-radius:50%; background:var(--danger); border:none; color:white; cursor:pointer; font-size:1rem; padding:0; display:flex; align-items:center; justify-content:center;">×</button>
           </div>
@@ -2023,8 +2032,9 @@ async function loadReviewPage(sellerId) {
       
       // Update button text
       const btn = document.getElementById('submit-review-btn');
-      if (btn) btn.textContent = '✎ UPDATE REVIEW';
-    }
+      if (btn) btn.textContent = '✎ UPDATE MY PREVIOUS REVIEW';
+      const formTitle = document.getElementById('review-form-title');
+      if (formTitle) formTitle.textContent = '✍️ Edit Your Review';
     }
   } catch (err) {
     console.error('Error loading review context:', err);
@@ -2040,12 +2050,20 @@ function renderSellerItems(items) {
     itemsGrid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:24px; color:var(--text-muted);">No items to display</div>';
   } else {
     itemsGrid.innerHTML = items.map(item => `
-      <div style="border-radius:var(--radius); overflow:hidden; background:var(--bg-2); transition:all 0.2s; cursor:pointer;" title="${escHtml(item.name)}">
+      <div class="seller-item-card" data-id="${item.id}" style="border-radius:var(--radius); overflow:hidden; background:var(--bg-2); transition:all 0.2s; cursor:pointer; border: 2px solid transparent;" title="${escHtml(item.name)}">
         <img src="${item.images?.[0] || 'placeholder.png'}" style="width:100%; aspect-ratio:1; object-fit:cover; display:block;">
         <div style="padding:8px; font-size:0.75rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center; color:var(--text-secondary);">${escHtml(item.name)}</div>
         ${item.is_sold ? '<div style="position:absolute; top:4px; right:4px; background:var(--danger); color:white; font-size:0.65rem; padding:3px 6px; border-radius:4px; font-weight:bold;">SOLD</div>' : ''}
       </div>
     `).join('');
+    
+    itemsGrid.querySelectorAll('.seller-item-card').forEach(card => {
+        card.onclick = () => {
+            itemsGrid.querySelectorAll('.seller-item-card').forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+            State.selectedReviewListingId = card.dataset.id;
+        };
+    });
   }
 }
 
@@ -2228,25 +2246,32 @@ async function loadSellerReviews(sellerId) {
     }));
 
     container.innerHTML = reviewsWithImages.map(r => `
-      <div class="review-card" style="background:var(--bg-2); border-radius:var(--radius); padding:16px; margin-bottom:16px; border:1px solid var(--border);">
-        <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
-          <div class="reviewer-avatar" style="width:36px; height:36px; border-radius:50%; background:var(--bg-3); display:flex; align-items:center; justify-content:center;">
-            ${r.reviewer?.username?.charAt(0) || '?'}
+      <div class="review-card" onclick="this.classList.toggle('expanded')" style="background:var(--bg-2); border-radius:var(--radius); padding:20px; margin-bottom:16px; border:1px solid var(--border); cursor:pointer; transition:all 0.3s ease;">
+        <div style="display:flex; align-items:center; gap:16px;">
+          <div class="reviewer-avatar" style="width:44px; height:44px; border-radius:50%; background:var(--bg-3); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:1.2rem; border:1px solid var(--border);">
+            ${r.reviewer?.avatar_url ? `<img src="${r.reviewer.avatar_url}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">` : (r.reviewer?.username?.charAt(0) || '?')}
           </div>
-          <div>
-            <strong>${escHtml(r.reviewer?.username || 'Anonymous')}</strong>
-            ${generateStarRatingHtml(r.rating)}
+          <div style="flex:1;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <strong style="color:var(--text); font-size:1rem;">${escHtml(r.reviewer?.username || 'Anonymous')}</strong>
+              ${generateStarRatingHtml(r.rating)}
+            </div>
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">${new Date(r.created_at).toLocaleDateString()}</div>
           </div>
-          <div style="margin-left:auto; font-size:0.7rem; color:var(--text-muted);">
-            ${new Date(r.created_at).toLocaleDateString()}
+          <div class="expand-icon" style="transition:transform 0.3s; font-size:0.8rem; color:var(--text-muted);">▼</div>
+        </div>
+        
+        <div class="review-details">
+          <div style="line-height:1.7; color:var(--text-secondary); white-space:pre-wrap;">${escHtml(r.body)}</div>
+          ${r.images && r.images.length ? `
+            <div class="review-images" style="display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;">
+              ${r.images.map(img => `<img src="${img.object_path}" style="width:90px; height:90px; object-fit:cover; border-radius:8px; border:1px solid var(--border); transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" onclick="event.stopPropagation(); window.open('${img.object_path}')">`).join('')}
+            </div>
+          ` : ''}
+          <div style="text-align:right; margin-top:12px;">
+             <small style="color:var(--neon); font-size:0.65rem; text-transform:uppercase; font-weight:700;">Verified Transaction</small>
           </div>
         </div>
-        <div>${escHtml(r.body)}</div>
-        ${r.images && r.images.length ? `
-          <div class="review-images" style="display:flex; gap:8px; margin-top:12px;">
-            ${r.images.map(img => `<img src="${img.object_path}" style="width:60px; height:60px; object-fit:cover; border-radius:4px;">`).join('')}
-          </div>
-        ` : ''}
       </div>
     `).join('');
   } catch (err) {
@@ -2583,7 +2608,7 @@ function createListingCard(listing, showOwnerActions = false) {
   if (listing.images && listing.images.length > 1) {
     imageHtml = createImageCarousel(listing.images, listing.id);
   } else if (listing.images && listing.images.length === 1) {
-    imageHtml = `<img src="${escHtml(listing.images[0])}" alt="${escHtml(listing.name)}" style="width:100%;height:100%;object-fit:cover;" />`;
+    imageHtml = `<img src="${escHtml(listing.images[0])}" alt="${escHtml(listing.name)}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" />`;
   } else {
     imageHtml = `<div class="card-no-image">📦</div>`;
   }
@@ -3007,6 +3032,14 @@ function setupEventListeners() {
       if (input) input.click();
     });
   }
+
+  window.addEventListener('scroll', () => {
+    const header = document.getElementById('header');
+    if (header) {
+      if (window.scrollY > 50) header.classList.add('scrolled');
+      else header.classList.remove('scrolled');
+    }
+  });
   
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
@@ -3138,29 +3171,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   await initAuth();
   initChat();
 
-  const initialRoute = parseRouteFromHash();
-  if (initialRoute.page === 'detail' && initialRoute.listingId) {
-    openListing(initialRoute.listingId);
+  const route = parseRouteFromHash();
+  
+  // FIX: Properly handle meta-data for all routes on refresh
+  if (route.page === 'detail' && route.listingId) {
+    openListing(route.listingId);
+  } else if (route.page === 'profile' && route.profileId) {
+    window.selectedProfileId = route.profileId;
+    navigate('profile', { updateUrl: false });
+  } else if (route.page === 'review' && route.sellerId) {
+    navigate('review', { meta: { sellerId: route.sellerId }, updateUrl: false });
   } else {
-    if (initialRoute.page === 'profile' && initialRoute.profileId) {
-      window.selectedProfileId = initialRoute.profileId;
-    }
-
-    navigate(initialRoute.page, { updateUrl: false });
-    if (initialRoute.page === 'profile') {
-      loadProfile();
-    } else if (initialRoute.page === 'wishlist' && State.user) {
-      loadWishlist();
-    } else if (initialRoute.page === 'create' && State.user) {
-      initCreatePage();
-    } else if (initialRoute.page === 'messages' && State.user) {
-      loadMessages();
-    } else if (initialRoute.page === 'assistant') {
-      updateAssistantUI();
-      loadAIChatHistory();
-    } else if (initialRoute.page === 'shop') {
-      loadListings();
-    }
+    navigate(route.page, { updateUrl: false });
   }
   
   const categoryChips = document.getElementById('category-chips');
@@ -3774,4 +3796,3 @@ async function findSafeRoute() {
     setLoading(findBtn, false, "🔍 Find Safe Route");
   }
 }
-

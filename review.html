@@ -1,72 +1,107 @@
-<!-- review.html - Seller review page -->
-<section id="page-review" class="page-section">
-  <div class="container">
-    <div class="section-header">
-      <h2 class="section-title">⭐ REVIEW SELLER</h2>
-      <button class="btn btn-outline btn-sm" onclick="navigate('profile', { meta: { profileId: State.currentReviewSellerId } })">BACK TO PROFILE</button>
-    </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Review Seller — OBTAINUM</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script src="script.js" defer></script>
+</head>
+<body data-page="review">
+  <header id="header">
+    <div class="logo glitch" data-text="OBTAINUM" onclick="window.location.href='index.html#shop'">OBTAINUM</div>
+    <nav class="nav-menu">
+      <button class="nav-btn" onclick="window.location.href='index.html#shop'">🛒 SHOP</button>
+      <button class="nav-btn" onclick="window.location.href='index.html#profile'">⚙️ PROFILE</button>
+    </nav>
+  </header>
 
-    <div id="review-seller-info" class="seller-card mb-lg" style="background: var(--bg-2);">
-      <!-- Seller info populated by JS -->
-    </div>
+  <main id="app">
+    <section class="page active" id="page-review">
+      <div class="container" style="max-width: 800px; margin: 0 auto; padding: 40px 20px;">
+        <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+          <h2 class="section-title" style="font-family: 'Orbitron', sans-serif; color: var(--neon);">⭐ FEEDBACK & REVIEWS</h2>
+          <button class="btn btn-outline btn-sm" id="btn-back-profile">BACK TO PROFILE</button>
+        </div>
 
-    <!-- Toggle to show all seller items -->
-    <div style="margin-bottom: 24px; padding: 16px; background: var(--bg-2); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: space-between;">
-      <div>
-        <h3 style="margin: 0 0 4px 0;">📦 Items from this seller</h3>
-        <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Click an item to reference in your review</p>
+        <div id="review-seller-info" class="seller-card mb-lg" style="background: var(--bg-2); padding: 20px; border-radius: var(--radius-lg); margin-bottom: 24px; border: 1px solid var(--border);">
+          <!-- Seller info populated by JS -->
+        </div>
+
+        <div style="margin-bottom: 24px; padding: 16px; background: var(--bg-2); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: space-between; border-left: 4px solid var(--neon);">
+          <div>
+            <h3 style="margin: 0 0 4px 0;">📦 Select Purchased Item</h3>
+            <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Which item are you reviewing?</p>
+          </div>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="toggle-sold-items" onchange="toggleSoldItems()" style="width: 18px; height: 18px;">
+            <span style="font-size: 0.9rem;">Include sold items</span>
+          </label>
+        </div>
+
+        <div id="seller-items-grid" class="listings-grid" style="margin-bottom: 32px; max-height: 400px; overflow-y: auto; padding: 12px; background: var(--bg-3); border-radius: var(--radius-lg); display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px;">
+          <!-- Seller items populated by JS -->
+        </div>
+
+        <div class="review-box" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 32px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+          <h3 style="margin: 0 0 24px 0; color: var(--neon); text-transform: uppercase; letter-spacing: 1px;" id="review-form-title">✍️ Post a Review</h3>
+          <form id="review-form" onsubmit="handleReviewSubmit(event)">
+            
+            <div class="form-group">
+              <label class="form-label">Overall Rating *</label>
+              <div class="star-rating-input" style="display: flex; flex-direction: row-reverse; justify-content: flex-end; gap: 12px; font-size: 2.8rem;">
+                <input type="radio" name="rating" value="5" id="star5" hidden><label for="star5" style="cursor: pointer; color: var(--text-muted); transition: color 0.2s;">★</label>
+                <input type="radio" name="rating" value="4" id="star4" hidden><label for="star4" style="cursor: pointer; color: var(--text-muted); transition: color 0.2s;">★</label>
+                <input type="radio" name="rating" value="3" id="star3" hidden><label for="star3" style="cursor: pointer; color: var(--text-muted); transition: color 0.2s;">★</label>
+                <input type="radio" name="rating" value="2" id="star2" hidden><label for="star2" style="cursor: pointer; color: var(--text-muted); transition: color 0.2s;">★</label>
+                <input type="radio" name="rating" value="1" id="star1" hidden><label for="star1" style="cursor: pointer; color: var(--text-muted); transition: color 0.2s;">★</label>
+              </div>
+              <div id="star-value-display" style="margin-top: 8px; font-size: 0.9rem; color: var(--text-muted); font-weight: 600;">Select a star rating</div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Your Experience *</label>
+              <textarea id="review-body" class="form-input" rows="6" placeholder="Describe the transaction, item quality, and seller's communication..." required minlength="10" maxlength="2000" style="background: var(--bg-3); border: 1px solid var(--border); color: var(--text);"></textarea>
+              <div style="display: flex; justify-content: space-between; margin-top: 6px;">
+                <small style="color: var(--text-muted); font-size: 0.75rem;" id="review-char-count">0 / 2000 characters</small>
+                <small style="color: var(--text-muted); font-size: 0.75rem;">Minimum 10 chars</small>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Proof Photos (Optional)</label>
+              <div class="upload-zone" id="review-upload-zone" style="padding: 30px; border: 2px dashed var(--border); text-align: center; cursor: pointer; border-radius: 12px; transition: all 0.3s; background: rgba(255,255,255,0.02);">
+                <div style="font-size: 2.5rem; margin-bottom: 8px;">📸</div>
+                <div style="font-size: 1rem; font-weight: 600; color: var(--text);">Drop images or click to upload</div>
+                <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px;">Max 3 images (JPG, PNG)</div>
+                <input type="file" id="review-image-input" multiple accept="image/jpeg,image/png" hidden>
+              </div>
+              <div id="review-image-previews" style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px;"></div>
+              <div id="review-image-count" style="margin-top: 10px; font-size: 0.85rem; color: var(--text-muted); text-align: right;">0 / 3 images</div>
+            </div>
+
+            <div id="review-form-error" class="auth-error" style="display:none; padding: 15px; background: rgba(255,45,85,0.1); border-radius: 8px; border-left: 4px solid var(--danger); margin-bottom: 20px; font-size: 0.9rem;"></div>
+            
+            <div style="display: flex; gap: 16px; margin-top: 32px;">
+              <button type="submit" class="btn btn-primary btn-lg" id="submit-review-btn" style="flex: 2;">✓ SUBMIT REVIEW</button>
+              <button type="button" class="btn btn-outline btn-lg" id="btn-cancel-review" style="flex: 1;">CANCEL</button>
+            </div>
+          </form>
+        </div>
       </div>
-      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-        <input type="checkbox" id="toggle-sold-items" onchange="toggleSoldItems()" style="width: 18px; height: 18px; cursor: pointer;">
-        <span style="font-size: 0.9rem;">Show sold items</span>
-      </label>
-    </div>
+    </section>
+  </main>
 
-    <div id="seller-items-grid" class="listings-grid" style="margin-bottom: 32px; max-height: 500px; overflow-y: auto; padding: 12px; background: var(--bg-3); border-radius: var(--radius-lg);">
-      <!-- Seller items populated by JS -->
-    </div>
-
-    <div class="review-box" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px;">
-      <h3 style="margin: 0 0 16px 0; color: var(--neon);">✍️ Write Your Review</h3>
-      <form id="review-form" onsubmit="handleReviewSubmit(event)">
-        
-        <div class="form-group">
-          <label class="form-label">Rating *</label>
-          <div class="star-rating-input" style="display: flex; flex-direction: row-reverse; justify-content: flex-end; gap: 8px; font-size: 2.2rem;">
-            <input type="radio" name="rating" value="5" id="star5" hidden><label for="star5" style="cursor: pointer; color: var(--text-muted); transition: color 0.2s;">★</label>
-            <input type="radio" name="rating" value="4" id="star4" hidden><label for="star4" style="cursor: pointer; color: var(--text-muted); transition: color 0.2s;">★</label>
-            <input type="radio" name="rating" value="3" id="star3" hidden><label for="star3" style="cursor: pointer; color: var(--text-muted); transition: color 0.2s;">★</label>
-            <input type="radio" name="rating" value="2" id="star2" hidden><label for="star2" style="cursor: pointer; color: var(--text-muted); transition: color 0.2s;">★</label>
-            <input type="radio" name="rating" value="1" id="star1" hidden><label for="star1" style="cursor: pointer; color: var(--text-muted); transition: color 0.2s;">★</label>
-          </div>
-          <div id="star-value-display" style="margin-top: 8px; font-size: 0.9rem; color: var(--text-muted);">Select a rating</div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Your Review *</label>
-          <textarea id="review-body" class="form-input" rows="6" placeholder="Share your experience with this seller. Was the item as described? How was communication? Be helpful and honest." required minlength="10" maxlength="2000"></textarea>
-          <small style="color: var(--text-muted); font-size: 0.75rem;" id="review-char-count">0 / 2000 characters</small>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Photos (Optional - up to 3)</label>
-          <div class="upload-zone" id="review-upload-zone" style="padding: 24px; border: 2px dashed var(--border); text-align: center; cursor: pointer; border-radius: 8px; transition: border-color 0.2s;">
-            <div style="font-size: 2rem; margin-bottom: 8px;">📸</div>
-            <div style="font-size: 0.9rem; font-weight: 600;">Click to upload photos</div>
-            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Max 3 images (JPG, PNG)</div>
-            <input type="file" id="review-image-input" multiple accept="image/jpeg,image/png" hidden>
-          </div>
-          <div id="review-image-previews" style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px;"></div>
-          <div id="review-image-count" style="margin-top: 8px; font-size: 0.85rem; color: var(--text-muted);">0 / 3 images</div>
-        </div>
-
-        <div id="review-form-error" class="auth-error mb-md" style="display:none; padding: 12px; background: rgba(255,45,85,0.1); border-radius: 8px; border-left: 4px solid var(--danger);"></div>
-        
-        <div style="display: flex; gap: 12px; margin-top: 24px;">
-          <button type="submit" class="btn btn-primary btn-lg" id="submit-review-btn" style="flex: 1;">✓ SUBMIT REVIEW</button>
-          <button type="button" class="btn btn-outline" onclick="navigate('profile', { meta: { profileId: State.currentReviewSellerId } })">Cancel</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</section>
+  <style>
+    .seller-item-card.selected { border-color: var(--neon) !important; background: rgba(0,255,65,0.05); transform: scale(1.02); }
+    .review-card .review-details { max-height: 0; opacity: 0; pointer-events: none; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+    .review-card.expanded .review-details { max-height: 1000px; opacity: 1; pointer-events: auto; padding-top: 16px; margin-top: 16px; border-top: 1px solid var(--border); }
+    .review-card.expanded .expand-icon { transform: rotate(180deg); color: var(--neon); }
+    .star-rating-input label:hover, .star-rating-input label:hover ~ label { color: var(--neon) !important; }
+    .star-rating-input input:checked ~ label { color: var(--neon) !important; }
+    .listings-grid::-webkit-scrollbar { width: 6px; }
+    .listings-grid::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+  </style>
+</body>
+</html>
