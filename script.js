@@ -242,6 +242,9 @@ function getRouteHash(page, meta = {}) {
   if (page === 'profile' && meta.profileId) {
     return `#profile/${meta.profileId}`;
   }
+  if (page === 'review' && meta.sellerId) {
+    return `#review/${meta.sellerId}`;
+  }
   return `#${page}`;
 }
 
@@ -273,7 +276,7 @@ function updateDocumentTitle(page, listingName) {
 function parseRouteFromHash() {
   const hash = window.location.hash.replace(/^#/, '');
   if (!hash) return { page: 'shop' };
-  const knownPages = ['shop', 'create', 'profile', 'wishlist', 'messages', 'assistant', 'about', 'contact', 'donate'];
+  const knownPages = ['shop', 'create', 'profile', 'wishlist', 'messages', 'assistant', 'about', 'contact', 'donate', 'review'];
   if (knownPages.includes(hash)) return { page: hash };
   if (hash.startsWith('shop-')) {
     const parts = hash.split('-');
@@ -1901,6 +1904,35 @@ window.removeReviewImage = function(index) {
   }
 };
 
+window.removeExistingReviewImage = function(imagePath) {
+  if (!State.reviewId) return;
+  // Remove from State.existingReviewImages
+  State.existingReviewImages = State.existingReviewImages.filter(img => img.object_path !== imagePath);
+  
+  const preview = document.getElementById('review-image-previews');
+  if (preview) {
+    // Rebuild preview with remaining existing images + new images
+    preview.innerHTML = State.existingReviewImages.map((img) => `
+      <div style="position:relative; width:80px; height:80px;">
+        <img src="${img.object_path}" style="width:100%; height:100%; object-fit:cover; border-radius:4px; display:block;">
+        <button type="button" onclick="removeExistingReviewImage('${img.object_path}')" style="position:absolute; top:-8px; right:-8px; width:24px; height:24px; border-radius:50%; background:var(--danger); border:none; color:white; cursor:pointer; font-size:1rem; padding:0; display:flex; align-items:center; justify-content:center;">×</button>
+      </div>
+    `).join('') + 
+    (State.reviewImageFiles || []).map((f, idx) => `
+      <div style="position:relative; width:80px; height:80px;">
+        <img src="${URL.createObjectURL(f)}" style="width:100%; height:100%; object-fit:cover; border-radius:4px; display:block;">
+        <button type="button" onclick="removeReviewImage(${idx})" style="position:absolute; top:-8px; right:-8px; width:24px; height:24px; border-radius:50%; background:var(--danger); border:none; color:white; cursor:pointer; font-size:1rem; padding:0; display:flex; align-items:center; justify-content:center;">×</button>
+      </div>
+    `).join('');
+  }
+  
+  const countEl = document.getElementById('review-image-count');
+  if (countEl) {
+    const totalCount = State.existingReviewImages.length + (State.reviewImageFiles?.length || 0);
+    countEl.textContent = `${totalCount} / 3 images`;
+  }
+};
+
 async function loadReviewPage(sellerId) {
   if (!sellerId || !State.user || sellerId === State.user.id) {
     showToast("You cannot review yourself.", "warning");
@@ -1910,6 +1942,9 @@ async function loadReviewPage(sellerId) {
 
   State.currentReviewSellerId = sellerId;
   State.reviewImageFiles = [];
+  State.reviewId = null;
+  State.existingReviewImages = [];
+  State.originalReviewImages = [];
   const toggleSoldInput = document.getElementById('toggle-sold-items');
   if (toggleSoldInput) toggleSoldInput.checked = false;
 
@@ -1921,9 +1956,10 @@ async function loadReviewPage(sellerId) {
   itemsGrid.innerHTML = '<div class="spinner"></div>';
 
   try {
-    const [sellerRes, itemsRes] = await Promise.all([
+    const [sellerRes, itemsRes, existingReviewRes] = await Promise.all([
       db.from('profiles').select('*').eq('id', sellerId).single(),
-      db.from('listings').select('*').eq('seller_id', sellerId).eq('is_sold', false).order('created_at', { ascending: false })
+      db.from('listings').select('*').eq('seller_id', sellerId).eq('is_sold', false).order('created_at', { ascending: false }),
+      db.from('reviews').select('*').eq('seller_id', sellerId).eq('reviewer_id', State.user.id).maybeSingle()
     ]);
 
     if (sellerRes.error) throw sellerRes.error;
@@ -1943,14 +1979,53 @@ async function loadReviewPage(sellerId) {
     State.allSellerItems = items;
     renderSellerItems(items);
 
-    // Re-bind listeners for selection
-    document.querySelectorAll('.seller-item-card').forEach(card => {
-      card.onclick = () => {
-        document.querySelectorAll('.seller-item-card').forEach(c => c.style.borderColor = 'transparent');
-        card.style.borderColor = 'var(--neon)';
-        State.selectedReviewListingId = card.dataset.listingId;
-      };
-    });
+    // If user already has a review, load it for editing
+    if (existingReviewRes.data) {
+      const review = existingReviewRes.data;
+      State.reviewId = review.id;
+      
+      // Load review images
+      const { data: images } = await db.from('review_images').select('object_path').eq('review_id', review.id);
+      State.existingReviewImages = images || [];
+      
+    // If user already has a review, load it for editing
+    if (existingReviewRes.data) {
+      const review = existingReviewRes.data;
+      State.reviewId = review.id;
+      
+      // Load review images
+      const { data: images } = await db.from('review_images').select('object_path').eq('review_id', review.id);
+      State.existingReviewImages = images || [];
+      State.originalReviewImages = JSON.parse(JSON.stringify(images || [])); // Store original for comparison
+      
+      // Populate form with existing data
+      document.getElementById('review-body').value = review.body;
+      const charCountEl = document.getElementById('review-char-count');
+      if (charCountEl) charCountEl.textContent = `${review.body.length} / 2000 characters`;
+      
+      document.querySelector(`input[name="rating"][value="${review.rating}"]`).checked = true;
+      const display = document.getElementById('star-value-display');
+      if (display) display.textContent = `${review.rating} star${review.rating !== 1 ? 's' : ''} selected`;
+      
+      // Show existing images
+      const preview = document.getElementById('review-image-previews');
+      if (preview && State.existingReviewImages.length > 0) {
+        preview.innerHTML = State.existingReviewImages.map((img) => `
+          <div style="position:relative; width:80px; height:80px;">
+            <img src="${img.object_path}" style="width:100%; height:100%; object-fit:cover; border-radius:4px; display:block;">
+            <button type="button" onclick="removeExistingReviewImage('${img.object_path}')" style="position:absolute; top:-8px; right:-8px; width:24px; height:24px; border-radius:50%; background:var(--danger); border:none; color:white; cursor:pointer; font-size:1rem; padding:0; display:flex; align-items:center; justify-content:center;">×</button>
+          </div>
+        `).join('');
+      }
+      
+      const countEl = document.getElementById('review-image-count');
+      if (countEl) countEl.textContent = `${State.existingReviewImages.length} / 3 images`;
+      
+      // Update button text
+      const btn = document.getElementById('submit-review-btn');
+      if (btn) btn.textContent = '✎ UPDATE REVIEW';
+    }
+    }
   } catch (err) {
     console.error('Error loading review context:', err);
     showToast('Failed to load seller info.', 'error');
@@ -2015,19 +2090,6 @@ async function handleReviewSubmit(e) {
     return;
   }
 
-  // One Review Per Seller Check
-  const { data: existingReview } = await db
-    .from('reviews')
-    .select('id')
-    .eq('reviewer_id', State.user.id)
-    .eq('seller_id', State.currentReviewSellerId)
-    .maybeSingle();
-
-  if (existingReview) {
-    showToast("You have already reviewed this seller.", "warning");
-    return;
-  }
-
   const rating = document.querySelector('input[name="rating"]:checked')?.value;
   if (!rating) {
     showToast("Please provide a star rating.", "warning");
@@ -2040,34 +2102,73 @@ async function handleReviewSubmit(e) {
     return;
   }
 
-  setLoading(btn, true, 'SUBMITTING...');
+  setLoading(btn, true, State.reviewId ? 'UPDATING...' : 'SUBMITTING...');
   if (errEl) errEl.style.display = 'none';
 
   try {
-    const { data: review, error: rError } = await db
-      .from('reviews')
-      .insert({
-        seller_id: State.currentReviewSellerId,
-        reviewer_id: State.user.id,
-        listing_id: State.selectedReviewListingId,
-        rating: parseInt(rating),
-        body: body
-      })
-      .select()
-      .single();
+    let review;
+    
+    if (State.reviewId) {
+      // UPDATE MODE
+      const { data: updated, error: uError } = await db
+        .from('reviews')
+        .update({
+          rating: parseInt(rating),
+          body: body,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', State.reviewId)
+        .select()
+        .single();
+      
+      if (uError) throw uError;
+      review = updated;
+      
+      // Handle image removals - compare original with current
+      const removedImages = (State.originalReviewImages || []).filter(original => 
+        !State.existingReviewImages.some(current => current.object_path === original.object_path)
+      );
+      
+      for (const img of removedImages) {
+        try {
+          const path = img.object_path.split('/').slice(-3).join('/');
+          await db.storage.from('review-images').remove([path]);
+          await db.from('review_images').delete().eq('object_path', img.object_path);
+        } catch (err) {
+          console.error('Error removing image:', err);
+        }
+      }
+    } else {
+      // INSERT MODE
+      const { data: newReview, error: iError } = await db
+        .from('reviews')
+        .insert({
+          seller_id: State.currentReviewSellerId,
+          reviewer_id: State.user.id,
+          listing_id: State.selectedReviewListingId,
+          rating: parseInt(rating),
+          body: body
+        })
+        .select()
+        .single();
 
-    if (rError) throw rError;
+      if (iError) throw iError;
+      review = newReview;
+    }
 
-    // Handle Review Images (max 3)
+    // Handle Review Images (max 3, only new ones)
     if (State.reviewImageFiles && State.reviewImageFiles.length > 0) {
-      for (let i = 0; i < Math.min(State.reviewImageFiles.length, 3); i++) {
+      const totalImages = (State.existingReviewImages?.length || 0) + State.reviewImageFiles.length;
+      const maxNewImages = Math.max(0, 3 - (State.existingReviewImages?.length || 0));
+      
+      for (let i = 0; i < Math.min(State.reviewImageFiles.length, maxNewImages); i++) {
         const file = State.reviewImageFiles[i];
         const ext = file.name.split('.').pop();
         const path = `${State.user.id}/${review.id}/${Date.now()}_${i}.${ext}`;
         
-        const { error: uError } = await db.storage.from('review-images').upload(path, file);
+        const { error: uploadError } = await db.storage.from('review-images').upload(path, file);
         
-        if (!uError) {
+        if (!uploadError) {
           const { data: { publicUrl } } = db.storage.from('review-images').getPublicUrl(path);
           await db.from('review_images').insert({ 
             review_id: review.id, 
@@ -2077,16 +2178,18 @@ async function handleReviewSubmit(e) {
       }
     }
 
-    showToast('✓ Review posted successfully!', 'success');
+    const message = State.reviewId ? '✓ Review updated successfully!' : '✓ Review posted successfully!';
+    showToast(message, 'success');
     navigate('profile', { meta: { profileId: State.currentReviewSellerId } });
   } catch (err) {
     console.error('Submit error:', err);
     if (errEl) {
-      errEl.textContent = err.message.includes('unique') ? 'You have already reviewed this seller.' : err.message;
+      errEl.textContent = err.message;
       errEl.style.display = 'block';
     }
   } finally {
-    setLoading(btn, false, '✓ SUBMIT REVIEW');
+    const btnText = State.reviewId ? '✎ UPDATE REVIEW' : '✓ SUBMIT REVIEW';
+    setLoading(btn, false, btnText);
   }
 }
 
@@ -2972,19 +3075,29 @@ function setupEventListeners() {
   const reviewImgInput = document.getElementById('review-image-input');
   if (reviewImgInput) {
     reviewImgInput.onchange = (e) => {
-      const files = Array.from(e.target.files).slice(0, 3); // Max 3 images
-      State.reviewImageFiles = files;
+      const files = Array.from(e.target.files);
+      const existingCount = State.existingReviewImages?.length || 0;
+      const maxNewFiles = Math.max(0, 3 - existingCount);
+      State.reviewImageFiles = files.slice(0, maxNewFiles);
       const preview = document.getElementById('review-image-previews');
       const countEl = document.getElementById('review-image-count');
       
-      preview.innerHTML = files.map((f, idx) => `
+      // Show existing images + new images
+      preview.innerHTML = (State.existingReviewImages || []).map((img) => `
+        <div style="position:relative; width:80px; height:80px;">
+          <img src="${img.object_path}" style="width:100%; height:100%; object-fit:cover; border-radius:4px; display:block;">
+          <button type="button" onclick="removeExistingReviewImage('${img.object_path}')" style="position:absolute; top:-8px; right:-8px; width:24px; height:24px; border-radius:50%; background:var(--danger); border:none; color:white; cursor:pointer; font-size:1rem; padding:0; display:flex; align-items:center; justify-content:center;">×</button>
+        </div>
+      `).join('') +
+      State.reviewImageFiles.map((f, idx) => `
         <div style="position:relative; width:80px; height:80px;">
           <img src="${URL.createObjectURL(f)}" style="width:100%; height:100%; object-fit:cover; border-radius:4px; display:block;">
           <button type="button" onclick="removeReviewImage(${idx})" style="position:absolute; top:-8px; right:-8px; width:24px; height:24px; border-radius:50%; background:var(--danger); border:none; color:white; cursor:pointer; font-size:1rem; padding:0; display:flex; align-items:center; justify-content:center;">×</button>
         </div>
       `).join('');
       
-      if (countEl) countEl.textContent = `${files.length} / 3 images`;
+      const totalCount = existingCount + State.reviewImageFiles.length;
+      if (countEl) countEl.textContent = `${totalCount} / 3 images`;
     };
   }
 
