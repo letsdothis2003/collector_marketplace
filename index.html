@@ -599,31 +599,21 @@
     <section class="page" id="page-donate">
       <div class="donate-container">
         <h1>☕ Support OBTAINUM</h1>
-        <p>Help us keep AI features free and fair. Donations keep the marketplace independent.</p>
-        <div class="donate-options">
-          <div class="donate-card">
-            <h3>💜 One-Time Donation</h3>
-            <p>Support our development efforts</p>
-            <div class="donate-buttons">
-              <button class="btn btn-outline" onclick="showToast('❤️ Thank you for your support!')">$5</button>
-              <button class="btn btn-outline" onclick="showToast('❤️ Thank you for your support!')">$10</button>
-              <button class="btn btn-outline" onclick="showToast('❤️ Thank you for your support!')">$25</button>
-              <button class="btn btn-outline" onclick="showToast('❤️ Thank you for your support!')">$50</button>
-            </div>
+        <p>Looking to give back? Use our AI to find highly-rated charities in your local area where you can donate goods or funds.</p>
+        
+        <div class="charity-search-box" style="margin: 30px 0; padding: 24px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg);">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:15px;">
+            <span style="font-size:1.5rem;">🔍</span>
+            <h3 style="color: var(--neon); font-family: 'Orbitron', sans-serif; margin:0;">LOCAL CHARITY FINDER</h3>
           </div>
-          <div class="donate-card">
-            <h3>🔄 Monthly Supporter</h3>
-            <p>Become a sustaining member</p>
-            <div class="donate-buttons">
-              <button class="btn btn-primary" onclick="showToast('❤️ Thank you for becoming a supporter!')">Subscribe $5/mo</button>
-            </div>
-          </div>
-          <div class="donate-card">
-            <h3>🪙 Crypto Donations</h3>
-            <p>Bitcoin, Ethereum, and more</p>
-            <button class="btn btn-outline" onclick="showToast('Contact us for crypto address')">Get Crypto Address</button>
+          <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            <input type="text" id="charity-location-input" placeholder="Enter your City, Neighborhood, or Zip..." style="flex:1; min-width:250px;">
+            <button class="btn btn-primary" id="charity-search-btn" onclick="findLocalCharities()">FIND CHARITIES</button>
           </div>
         </div>
+
+        <div id="charity-results-container"></div>
+        <div id="charity-map" style="height: 400px; border-radius: var(--radius-lg); margin-top: 20px; display:none; border: 1px solid var(--border);"></div>
       </div>
     </section>
 
