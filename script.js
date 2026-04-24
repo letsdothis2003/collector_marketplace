@@ -44,12 +44,20 @@ async function callGemini(prompt, responseType = 'text/plain') {
     throw new Error("AI service is not configured. Please add your Gemini API Key.");
   }
 
-  const model = "gemini-2.0-flash";
+  // Priority list including requested future-proof models
+  const models = [
+    "gemini-3.0-flash", 
+    "gemini-2.5-flash", 
+    "gemini-2.0-flash", 
+    "gemini-1.5-flash"
+  ];
+  
   let retries = 3;
   let delay = 2000; // Start with a 2-second delay
 
   while (retries > 0) {
-    console.log(`[OBTAINUM AI] Calling ${model} directly...`);
+    const model = models[Math.max(0, models.length - retries - 1)] || "gemini-1.5-flash";
+    console.log(`[OBTAINUM AI] Attempting ${model}...`);
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
@@ -111,17 +119,19 @@ async function findLocalCharities() {
   resultsDiv.innerHTML = '<div class="spinner" style="margin: 20px auto;"></div><p style="text-align:center;">Identifying top-rated charities near you...</p>';
   mapDiv.style.display = 'none';
 
-  const prompt = `You are a helpful community assistant. Find the top 10 registered, highly-rated charities, non-profits, or donation centers in or near "${location}". 
+  const prompt = `You are a helpful community assistant. Find the top 8 registered, highly-rated charities, non-profits, or donation centers in or near "${location}". 
   Include a mix of organizations (e.g., food banks, clothing donations, animal shelters).
   
-  Return the results as a JSON array of objects with this structure:
+  Return the results as a JSON array of objects with this structure (include exact coordinates for the map):
   [
     {
       "name": "Charity Name",
       "description": "Short 1-sentence mission",
       "address": "Full street address, City, State",
-      "focus": "Category (e.g., Hunger, Health)",
-      "url": "Website URL if known"
+      "focus": "Category",
+      "url": "Website URL",
+      "lat": latitude_float,
+      "lng": longitude_float
     }
   ]
   Return ONLY the JSON array. No extra text.`;
@@ -172,16 +182,11 @@ async function initCharityMap(charities, centerLocation) {
     }).addTo(map);
 
     const bounds = [];
-    
-    // Add markers for each charity
     for (const c of charities) {
-      try {
-        const coords = await geocodeLocation(c.address);
-        const marker = L.marker([coords.lat, coords.lon]).addTo(map);
+      if (c.lat && c.lng) {
+        const marker = L.marker([c.lat, c.lng]).addTo(map);
         marker.bindPopup(`<strong>${escHtml(c.name)}</strong><br>${escHtml(c.address)}`);
-        bounds.push([coords.lat, coords.lon]);
-      } catch (e) {
-        console.warn(`Could not geocode address: ${c.address}`);
+        bounds.push([c.lat, c.lng]);
       }
     }
 
@@ -1739,6 +1744,9 @@ async function submitListing(e) {
     return;
   }
   
+  if (State.isSubmittingListing) return;
+  State.isSubmittingListing = true;
+  
   const isEditing = !!State.editingListingId;
   const errEl = document.getElementById('create-error');
   const btn = document.getElementById('create-submit');
@@ -1840,13 +1848,13 @@ async function submitListing(e) {
 
   } catch (err) {
     console.error('Error submitting listing:', err);
-    State.isSubmittingListing = false; // Reset on error
     if (errEl) {
       errEl.textContent = err.message || 'An unknown error occurred.';
       errEl.classList.add('show');
     }
   } finally {
     if (btn) setLoading(btn, false, isEditing ? 'SAVE CHANGES' : 'PUBLISH LISTING');
+    State.isSubmittingListing = false;
     toggleProcessingOverlay(false);
   }
 }
