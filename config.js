@@ -1,27 +1,3 @@
-/**
- * Configuration file for OBTAINUM
- * 
- * IMPORTANT: This file loads settings that may contain sensitive data.
- * See .env file for actual configuration values.
- * 
- * Setup Instructions:
- * 1. Open the .env file in this directory
- * 2. Replace YOUR_GEMINI_API_KEY_HERE with your actual Gemini API key
- * 3. Get your key from: https://makersuite.google.com/app/apikey
- * 4. NEVER commit your real API key to this file (config.js).
- */
-
 const CONFIG = {
-  // Your Gemini API key
-  // For local development only. Do not commit your key!
-  GEMINI_API_KEY: 'YOUR_GEMINI_API_KEY_HERE',
-  
-  // Supabase configuration (no changes needed - these are published keys)
-  SUPABASE_URL: 'https://gotzmuobwuubsugnowxq.supabase.co',
-  SUPABASE_ANON_KEY: 'sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs'
+  GEMINI_API_KEY: 'AIzaSyCY39e1cbMimlRDevMHH-p8Mk8C00cUOg8'
 };
-
-// Export for use in script.js
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = CONFIG;
-}
