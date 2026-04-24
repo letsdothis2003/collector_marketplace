@@ -53,21 +53,15 @@ function scrub(text) {
 
 // ==================== DIRECT API HELPER (REPLACES LIBRARY) ====================
 async function callGemini(prompt, responseType = 'text/plain') {
-  const AI_LIMIT = 10;
-  
   if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
     throw new Error("AI service is not configured. Please add your Gemini API Key.");
-  }
-
-  if (!checkAIUsageLimit(AI_LIMIT)) {
-    throw new Error(`Daily AI limit reached (${AI_LIMIT}/${AI_LIMIT}). Resets at midnight.`);
   }
 
   // Priority list including requested future-proof models
   const models = [
     "gemini-pro", // Stable and widely available text model
     "gemini-1.5-flash", // Keeping as a fallback, but if it consistently 404s, consider removing or checking API key access.
-    // "gemini-1.5-flash-8b" // This model name might be incorrect or not publicly available. Removed for now.
+    // "gemini-1.5-flash-8b" // This model name might be incorrect or not publicly available.
   ];
   
   for (const model of models) {
@@ -104,10 +98,6 @@ async function callGemini(prompt, responseType = 'text/plain') {
         const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (text) return text;
-        if (text) {
-          incrementAIUsage();
-          return text;
-        }
         
         break; 
       } catch (err) {
@@ -257,11 +247,6 @@ const State = {
   allSellerItems: [],
   viewingProfileId: null,
   isSubmittingListing: false
-  isSubmittingListing: false,
-  aiUsage: {
-    count: 0,
-    lastReset: null
-  }
 };
 
 // ==================== HELPER FUNCTIONS ====================
@@ -313,62 +298,6 @@ function toggleProcessingOverlay(show, text = 'PROCESSING...') {
   if (!overlay) return;
   if (textEl) textEl.textContent = text.toUpperCase();
   overlay.classList.toggle('show', show);
-}
-
-// ==================== AI USAGE TRACKING ====================
-function checkAIUsageLimit(limit) {
-  const usage = getAIUsage();
-  return usage.count < limit;
-}
-
-function getAIUsage() {
-  const today = new Date().toDateString();
-  let usage = JSON.parse(localStorage.getItem('obtainum_ai_usage') || '{"count":0,"lastReset":""}');
-  
-  if (usage.lastReset !== today) {
-    usage = { count: 0, lastReset: today };
-    localStorage.setItem('obtainum_ai_usage', JSON.stringify(usage));
-  }
-  return usage;
-}
-
-function incrementAIUsage() {
-  const usage = getAIUsage();
-  usage.count++;
-  localStorage.setItem('obtainum_ai_usage', JSON.stringify(usage));
-  updateAIUsageUI();
-}
-
-function updateAIUsageUI() {
-  const usage = getAIUsage();
-  const countEl = document.getElementById('ai-usage-count');
-  const limitEl = document.getElementById('ai-usage-limit');
-  const counterWrap = document.getElementById('ai-usage-counter');
-  
-  if (countEl) countEl.textContent = usage.count;
-  if (limitEl) limitEl.textContent = 10; // Daily Limit
-  
-  if (usage.count >= 10 && counterWrap) {
-    counterWrap.classList.add('ai-usage-warning');
-  }
-}
-
-function initAIUsageTimer() {
-  const timerEl = document.getElementById('ai-reset-timer');
-  if (!timerEl) return;
-
-  setInterval(() => {
-    const now = new Date();
-    const midnight = new Date();
-    midnight.setHours(24, 0, 0, 0);
-    
-    const diff = midnight - now;
-    const h = Math.floor(diff / 3600000).toString().padStart(2, '0');
-    const m = Math.floor((diff % 3600000) / 60000).toString().padStart(2, '0');
-    const s = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
-    
-    timerEl.textContent = `${h}:${m}:${s}`;
-  }, 1000);
 }
 
 function setLoading(btn, isLoading, text) {
@@ -3612,8 +3541,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   await initAuth();
   initChat();
-  updateAIUsageUI();
-  initAIUsageTimer();
 
   const route = parseRouteFromHash();
   
@@ -3890,12 +3817,28 @@ window.generatePickupRoute = generatePickupRoute;
 // ==================== GEOCODING & OSRM ROUTING HELPERS ====================
 async function geocodeLocation(location) {
   // Returns { lat, lon } for a location string
-  const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}&limit=1`);
-  const data = await response.json();
-  if (data && data.length > 0) {
-    return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+  try {
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}&limit=1`, {
+      headers: {
+        'User-Agent': 'ObtainumMarketplace/1.0 (https://letsdothis2003.github.io)' // Required by Nominatim usage policy
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Geocoding service returned status ${response.status}: ${response.statusText || 'Unknown error'}.`);
+    }
+    
+    const data = await response.json();
+    if (data && data.length > 0) {
+      return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+    }
+    throw new Error(`Could not find precise coordinates for "${location}". Try a more specific address.`);
+  } catch (err) {
+    if (err instanceof TypeError && err.message === 'Failed to fetch') {
+      throw new Error(`Geocoding failed due to network error or browser security (CORS). This often happens when running locally without a proxy or if Nominatim blocks the request. Try again later or use a different browser.`);
+    }
+    throw err; // Re-throw other errors
   }
-  throw new Error(`Could not geocode: ${location}`);
 }
 
 async function getDrivingRoute(startLat, startLon, endLat, endLon) {
