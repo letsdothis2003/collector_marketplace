@@ -6,7 +6,6 @@
 // ==================== DATABASE CONFIG ====================
 const SUPABASE_URL = "https://gotzmuobwuubsugnowxq.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
-const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_PLACEHOLDER";  
 
 let db;
 
@@ -19,53 +18,18 @@ try {
 
 // ==================== DIRECT API HELPER (REPLACES LIBRARY) ====================
 async function callGemini(prompt, responseType = 'text/plain') {
-  if (!GEMINI_API_KEY) {
-    throw new Error('API Key missing');
+  // SECURE IMPLEMENTATION: Call a Supabase Edge Function instead of Gemini directly
+  try {
+    const { data, error } = await db.functions.invoke('gemini-proxy', {
+      body: { prompt, responseType }
+    });
+    
+    if (error) throw error;
+    return data.text;
+  } catch (err) {
+    console.error('[OBTAINUM AI] Proxy error:', err);
+    throw new Error('AI system currently unavailable. Ensure gemini-proxy is deployed.');
   }
-
-  const models = [
-    'gemini-3-flash-preview',
-    'gemini-1.5-flash',
-    'gemini-1.5-pro',
-    'gemini-pro'
-  ];
-
-  for (const model of models) {
-    try {
-      console.log(`[OBTAINUM AI] Calling ${model}...`);
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': GEMINI_API_KEY
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{ text: prompt }]
-          }],
-          generationConfig: {
-            responseMimeType: responseType
-          }
-        })
-      });
-
-      const data = await response.json();
-      
-      if (data.error) {
-        console.warn(`Model ${model} error:`, data.error.message);
-        continue;
-      }
-
-      if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-        console.log(`[OBTAINUM AI] Success with ${model}`);
-        return data.candidates[0].content.parts[0].text;
-      }
-    } catch (err) {
-      console.error(`Fetch error with ${model}:`, err);
-      continue;
-    }
-  }
-  throw new Error('All Gemini models failed to respond.');
 }
 
 // ==================== STATE MANAGEMENT ====================
@@ -99,7 +63,10 @@ const State = {
   selectedReviewListingId: null,
   allSellerItems: [],
   viewingProfileId: null,
-  isSubmittingListing: false
+  donationLocation: null,
+  charityResults: null,
+  donationCategory: 'all',
+  favoriteCharityIds: new Set()
 };
 
 // ==================== HELPER FUNCTIONS ====================
@@ -118,6 +85,15 @@ function generateStarRatingHtml(rating) {
   }
   html += '</span>';
   return html;
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('Copied to clipboard!', 'success');
+  }).catch(err => {
+    console.error('Copy failed:', err);
+    showToast('Failed to copy.', 'error');
+  });
 }
 
 function showToast(message, type = 'info') {
@@ -143,14 +119,6 @@ function closeOnOverlay(e, id) {
 
 function closeMobileNav() {
   document.getElementById('mobile-nav')?.classList.remove('open');
-}
-
-function toggleProcessingOverlay(show, text = 'PROCESSING...') {
-  const overlay = document.getElementById('processing-overlay');
-  const textEl = document.getElementById('processing-text');
-  if (!overlay) return;
-  if (textEl) textEl.textContent = text.toUpperCase();
-  overlay.classList.toggle('show', show);
 }
 
 function setLoading(btn, isLoading, text) {
@@ -187,7 +155,7 @@ function createImageCarousel(images, listingId) {
     <div class="image-carousel" id="${carouselId}">
       <div class="carousel-container">
         <div class="carousel-slides" id="${carouselId}-slides">
-          ${images.map((img, idx) => `<div class="carousel-slide" data-index="${idx}"><img src="${escHtml(img)}" alt="Image ${idx + 1}" loading="lazy" decoding="async" /></div>`).join('')}
+          ${images.map((img, idx) => `<div class="carousel-slide" data-index="${idx}"><img src="${escHtml(img)}" alt="Image ${idx + 1}" loading="lazy" /></div>`).join('')}
         </div>
         <button class="carousel-btn prev" onclick="event.stopPropagation(); changeSlide('${carouselId}', -1)">‹</button>
         <button class="carousel-btn next" onclick="event.stopPropagation(); changeSlide('${carouselId}', 1)">›</button>
@@ -351,6 +319,7 @@ function navigate(page, options = {}) {
   if (page === 'wishlist' && State.user) loadWishlist();
   if (page === 'create' && State.user) initCreatePage();
   if (page === 'review') loadReviewPage(options.meta?.sellerId);
+  if (page === 'donate') initDonationPage();
   if (page === 'messages' && State.user) loadMessages();
   if (page === 'assistant') {
     updateAssistantUI();
@@ -485,6 +454,7 @@ async function onAuthChange(user) {
   State.profile = profile;
   updateAuthUI();
   await loadWishlistIds();
+  await loadFavoriteCharities();
   await initAISession();
 }
 
@@ -492,6 +462,7 @@ function onSignOut() {
   State.user = null;
   State.profile = null;
   State.wishlistIds.clear();
+  State.favoriteCharityIds.clear();
   State.currentChatPartnerId = null;
   State.currentListingId = null;
   State.aiSessionId = null;
@@ -602,21 +573,14 @@ async function handleRegister(e) {
       closeModal('auth-modal');
       showToast('Account created! Welcome to OBTAINUM.', 'success');
     } else {
-      // Fix: Handle case where 'register-form-wrap' ID is missing from HTML
-      const wrap = document.getElementById('register-form-wrap') || document.getElementById('auth-register');
-      if (wrap) {
-        wrap.innerHTML = `
-          <div class="auth-confirm-panel" style="text-align:center;padding:20px;">
-            <div class="confirm-icon" style="font-size:3rem;">✉️</div>
-            <div class="confirm-title" style="font-weight:bold;margin:16px 0;">CHECK YOUR EMAIL</div>
-            <div class="confirm-msg">Click the confirmation link to activate your account.</div>
-            <button class="btn btn-outline w-full" onclick="closeModal('auth-modal')">GOT IT</button>
-          </div>
-        `;
-      } else {
-        showToast('Registration successful! Check your email to confirm.', 'success');
-        closeModal('auth-modal');
-      }
+      document.getElementById('register-form-wrap').innerHTML = `
+        <div class="auth-confirm-panel" style="text-align:center;padding:20px;">
+          <div class="confirm-icon" style="font-size:3rem;">✉️</div>
+          <div class="confirm-title" style="font-weight:bold;margin:16px 0;">CHECK YOUR EMAIL</div>
+          <div class="confirm-msg">Click the confirmation link to activate your account.</div>
+          <button class="btn btn-outline w-full" onclick="closeModal('auth-modal')">GOT IT</button>
+        </div>
+      `;
     }
   } catch (err) {
     if (errEl) {
@@ -625,51 +589,6 @@ async function handleRegister(e) {
     }
   } finally {
     if (btn) setLoading(btn, false, 'CREATE ACCOUNT');
-  }
-}
-
-// ==================== UI STYLING INJECTION ====================
-function injectCustomStyles() {
-  const style = document.createElement('style');
-  style.textContent = `
-    /* Global Processing Overlay */
-    #processing-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.85);
-      backdrop-filter: blur(10px);
-      z-index: 10000;
-      display: none;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: var(--neon);
-      font-family: 'Orbitron', sans-serif;
-      text-align: center;
-    }
-    #processing-overlay.show { display: flex; }
-
-    /* Navbar Scrollbar Red & Wide in Dark Mode */
-    body:not(.light-mode) .nav-menu::-webkit-scrollbar {
-      height: 12px;
-    }
-    body:not(.light-mode) .nav-menu::-webkit-scrollbar-thumb {
-      background: #ff0000;
-      border-radius: 10px;
-      border: 2px solid var(--bg);
-      box-shadow: 0 0 15px #ff0000, inset 0 0 5px rgba(255, 255, 255, 0.5);
-    }
-    /* Hardware Acceleration for smoother page transitions */
-    .page { backface-visibility: hidden; transform: translateZ(0); }
-  `;
-  document.head.appendChild(style);
-
-  // Create overlay element if it doesn't exist
-  if (!document.getElementById('processing-overlay')) {
-    const overlay = document.createElement('div');
-    overlay.id = 'processing-overlay';
-    overlay.innerHTML = '<div class="spinner spinner-lg"></div><div id="processing-text" style="margin-top:20px; letter-spacing:2px; font-weight:bold;">PROCESSING...</div>';
-    document.body.appendChild(overlay);
   }
 }
 
@@ -1042,6 +961,7 @@ async function displayListingSuggestion(listingId) {
 async function loadListings(forceRefresh = false) {
   if (!db) { renderListings([]); return; }
   try {
+    // PERFORMANCE: Use cache if available to prevent flicker and slow loads
     if (State.listings.length > 0 && !forceRefresh) {
       applyFilters();
       return;
@@ -1051,8 +971,16 @@ async function loadListings(forceRefresh = false) {
     
     const { data, error } = await db
       .from('listings')
-      // OPTIMIZATION: Only select columns needed for the grid view to reduce payload size
-      .select('id, name, price, images, category, condition, type, location, is_fair, is_sold, seller_id, created_at, profiles:seller_id(id, username, avatar_url, rating, location)')
+      .select(`
+        *,
+        profiles:seller_id (
+          id,
+          username,
+          avatar_url,
+          rating,
+          location
+        )
+      `)
       .eq('is_sold', false)
       .order('created_at', { ascending: false });
     
@@ -1547,7 +1475,6 @@ async function submitListing(e) {
   const btn = document.getElementById('create-submit');
   if (errEl) errEl.classList.remove('show');
   if (btn) setLoading(btn, true, isEditing ? 'SAVING...' : 'PUBLISHING...');
-  toggleProcessingOverlay(true, isEditing ? 'Updating listing...' : 'Uploading listing...');
   
   try {
     const price = parseFloat(document.getElementById('c-price')?.value || '0');
@@ -1628,29 +1555,25 @@ async function submitListing(e) {
       State.listings.unshift(savedListing);
     }
     
-    // Reset listing state completely
-    const createForm = document.getElementById('create-form');
-    if (createForm) createForm.reset();
+    const form = document.getElementById('create-form');
+    if (form) form.reset();
     State.imageFiles = [];
     State.keepExistingImages = [];
-    document.getElementById('image-preview-grid').innerHTML = '';
+    const previewGrid = document.getElementById('image-preview-grid');
+    if (previewGrid) previewGrid.innerHTML = '';
     State.editingListingId = null;
-
+    
     showToast(isEditing ? 'Listing updated!' : 'Listing published!', 'success');
-    // Force refresh to clear local unshifted state and get fresh DB data
-    if (isEditing) navigate('profile');
-    else loadListings(true).then(() => navigate('shop'));
-
+    navigate(isEditing ? 'profile' : 'shop');
+    
   } catch (err) {
     console.error('Error submitting listing:', err);
-    State.isSubmittingListing = false; // Reset on error
     if (errEl) {
       errEl.textContent = err.message || 'An unknown error occurred.';
       errEl.classList.add('show');
     }
   } finally {
     if (btn) setLoading(btn, false, isEditing ? 'SAVE CHANGES' : 'PUBLISH LISTING');
-    toggleProcessingOverlay(false);
   }
 }
 
@@ -1683,14 +1606,7 @@ async function loadProfile() {
     navigate('shop');
     return;
   }
-  renderProfileUI(profile);
-}
-
-// New: Extracted UI logic to allow calling from cache or fresh fetch
-async function renderProfileUI(profile) {
-  const profileIdToLoad = profile.id;
-  const isOwnProfile = State.user && profileIdToLoad === State.user.id;
-
+  
   const avatarEl = document.getElementById('profile-avatar-lg');
   const usernameEl = document.getElementById('profile-username');
   const emailEl = document.getElementById('profile-email');
@@ -1701,7 +1617,7 @@ async function renderProfileUI(profile) {
   
   if (avatarEl) {
     if (profile?.avatar_url) {
-      avatarEl.innerHTML = `<img src="${escHtml(profile.avatar_url)}" alt="${escHtml(name)}" decoding="async" />`;
+      avatarEl.innerHTML = `<img src="${escHtml(profile.avatar_url)}" alt="${escHtml(name)}" />`;
     } else {
       avatarEl.textContent = name.charAt(0).toUpperCase();
     }
@@ -1732,6 +1648,16 @@ async function renderProfileUI(profile) {
       editButton.innerHTML = '💬 Let\'s Chat';
       editButton.onclick = () => startChat(profile.id);
       editButton.style.display = 'inline-block';
+    }
+
+    // Add Rating Summary to Banner
+    const ratingValue = profile?.rating || 0;
+    if (usernameEl) {
+      const stars = generateStarRatingHtml(ratingValue);
+      usernameEl.innerHTML = `${escHtml(profile?.username || name).toUpperCase()} 
+        <span style="font-size:1rem; margin-left:12px; vertical-align:middle; display:inline-flex; align-items:center; gap:8px;">
+          ${stars} <small style="color:var(--text-muted); font-family:'Inter';">(${parseFloat(ratingValue).toFixed(1)})</small>
+        </span>`;
     }
     
     // Handle Review Button logic
@@ -1786,47 +1712,26 @@ async function renderProfileUI(profile) {
   showProfileTab(tabToOpen);
 }
 
-async function refreshProfileRating() {
-  if (!State.user || State.viewingProfileId !== State.user.id) return;
-  const btn = document.getElementById('btn-refresh-rating');
-  const originalHtml = btn.innerHTML;
-  btn.innerHTML = '...';
-  btn.disabled = true;
-
-  try {
-    // Recalculate average from reviews table
-    const { data: allReviews, error: fetchErr } = await db
-      .from('reviews')
-      .select('rating')
-      .eq('seller_id', State.user.id);
-
-    if (fetchErr) throw fetchErr;
-
-    const avgRating = allReviews.length > 0 
-      ? allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length 
-      : 0;
-
-    // Sync back to profile
-    await db.from('profiles').update({ rating: avgRating }).eq('id', State.user.id);
-    
-    showToast('Rating updated from latest reviews!', 'success');
-    await loadProfile(); 
-  } catch (err) {
-    showToast('Failed to refresh rating.', 'error');
-  } finally {
-    btn.innerHTML = originalHtml;
-    btn.disabled = false;
-  }
-}
-
 function showProfileTab(tabName) {
   const myListingsDiv = document.getElementById('ptab-my-listings');
   const soldDiv = document.getElementById('ptab-sold');
   const settingsDiv = document.getElementById('ptab-settings');
   const reviewsDiv = document.getElementById('ptab-reviews');
+  let savedCharitiesDiv = document.getElementById('ptab-saved-charities');
   
   const targetId = State.viewingProfileId;
   const isOwnProfile = State.user && targetId === State.user.id;
+
+  // Auto-create ptab div if missing
+  if (!savedCharitiesDiv && isOwnProfile) {
+    const parent = myListingsDiv?.parentElement;
+    if (parent) {
+      savedCharitiesDiv = document.createElement('div');
+      savedCharitiesDiv.id = 'ptab-saved-charities';
+      savedCharitiesDiv.className = 'profile-tab-content hidden';
+      parent.appendChild(savedCharitiesDiv);
+    }
+  }
 
   // Security: Prevent access to settings if not own profile
   if (tabName === 'settings' && !isOwnProfile) {
@@ -1838,6 +1743,7 @@ function showProfileTab(tabName) {
   if (soldDiv) soldDiv.classList.add('hidden');
   if (settingsDiv) settingsDiv.classList.add('hidden');
   if (reviewsDiv) reviewsDiv.classList.add('hidden');
+  if (savedCharitiesDiv) savedCharitiesDiv.classList.add('hidden');
   
   if (tabName === 'my-listings' && myListingsDiv) {
     myListingsDiv.classList.remove('hidden');
@@ -1847,6 +1753,9 @@ function showProfileTab(tabName) {
   } else if (tabName === 'sold' && soldDiv) {
     soldDiv.classList.remove('hidden');
     loadProfileListings(targetId, isOwnProfile);
+  } else if (tabName === 'saved-charities' && savedCharitiesDiv && isOwnProfile) {
+    savedCharitiesDiv.classList.remove('hidden');
+    renderSavedCharities();
   } else if (tabName === 'settings' && settingsDiv) {
     settingsDiv.classList.remove('hidden');
   }
@@ -2313,12 +2222,7 @@ async function loadSellerReviews(sellerId) {
   try {
     const { data: reviews, error } = await db
       .from('reviews')
-      .select(`
-        *, 
-        reviewer:reviewer_id(id, username, avatar_url), 
-        review_images(object_path),
-        listings:listing_id(name, images)
-      `)
+      .select('*, reviewer:reviewer_id(id, username, avatar_url), review_images(object_path)')
       .eq('seller_id', sellerId)
       .order('created_at', { ascending: false });
 
@@ -2332,15 +2236,7 @@ async function loadSellerReviews(sellerId) {
     }
     if (noReviewsMsg) noReviewsMsg.style.display = 'none';
 
-    container.innerHTML = reviews.map(r => {
-      const item = r.listings;
-      const itemHtml = item ? `
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; padding:8px; background:var(--bg-3); border-radius:6px; border:1px solid var(--border);">
-          <img src="${item.images?.[0] || ''}" style="width:40px; height:40px; object-fit:cover; border-radius:4px;">
-          <span style="font-size:0.8rem; color:var(--text-secondary);">Reviewed: <strong>${escHtml(item.name)}</strong></span>
-        </div>` : '';
-
-      return `
+    container.innerHTML = reviews.map(r => `
       <div class="review-card" onclick="this.classList.toggle('expanded')" style="background:var(--bg-2); border-radius:var(--radius); padding:20px; margin-bottom:16px; border:1px solid var(--border); cursor:pointer; transition:all 0.3s ease;">
         <div style="display:flex; align-items:center; gap:16px;">
           <div class="reviewer-avatar" style="width:44px; height:44px; border-radius:50%; background:var(--bg-3); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:1.2rem; border:1px solid var(--border);">
@@ -2348,7 +2244,7 @@ async function loadSellerReviews(sellerId) {
           </div>
           <div style="flex:1;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-              <strong style="color:var(--text); font-size:1rem; cursor:pointer; text-decoration:underline;" onclick="event.stopPropagation(); viewSellerProfile('${r.reviewer?.id}')">${escHtml(r.reviewer?.username || 'Anonymous')}</strong>
+              <strong style="color:var(--text); font-size:1rem;">${escHtml(r.reviewer?.username || 'Anonymous')}</strong>
               ${generateStarRatingHtml(r.rating)}
             </div>
             <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">${new Date(r.created_at).toLocaleDateString()}</div>
@@ -2356,20 +2252,19 @@ async function loadSellerReviews(sellerId) {
           <div class="expand-icon" style="transition:transform 0.3s; font-size:0.8rem; color:var(--text-muted);">▼</div>
         </div>
         
-        <div class="review-details" style="display:block;">
-          ${itemHtml}
+        <div class="review-details">
           <div style="line-height:1.7; color:var(--text-secondary); white-space:pre-wrap;">${escHtml(r.body)}</div>
           ${r.review_images && r.review_images.length ? `
             <div class="review-images" style="display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;">
-              ${r.review_images.map(img => `<img src="${img.object_path}" style="width:120px; height:120px; object-fit:cover; border-radius:8px; border:2px solid var(--border); transition:transform 0.2s; cursor:zoom-in; display:block;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" onclick="event.stopPropagation(); window.open('${img.object_path}')">`).join('')}
+              ${r.review_images.map(img => `<img src="${img.object_path}" style="width:90px; height:90px; object-fit:cover; border-radius:8px; border:1px solid var(--border); transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" onclick="event.stopPropagation(); window.open('${img.object_path}')">`).join('')}
             </div>
           ` : ''}
           <div style="text-align:right; margin-top:12px;">
              <small style="color:var(--neon); font-size:0.65rem; text-transform:uppercase; font-weight:700;">Verified Transaction</small>
           </div>
         </div>
-      </div>`;
-    }).join('');
+      </div>
+    `).join('');
   } catch (err) {
     console.error('Error loading reviews:', err);
     container.innerHTML = '<div class="empty-state">Failed to load reviews.</div>';
@@ -2704,7 +2599,7 @@ function createListingCard(listing, showOwnerActions = false) {
   if (listing.images && listing.images.length > 1) {
     imageHtml = createImageCarousel(listing.images, listing.id);
   } else if (listing.images && listing.images.length === 1) {
-    imageHtml = `<img src="${escHtml(listing.images[0])}" alt="${escHtml(listing.name)}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" decoding="async" />`;
+    imageHtml = `<img src="${escHtml(listing.images[0])}" alt="${escHtml(listing.name)}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" />`;
   } else {
     imageHtml = `<div class="card-no-image">📦</div>`;
   }
@@ -2928,7 +2823,7 @@ async function loadConversationThread(partnerId, listingId = null) {
   const { data: messages, error: mError } = await db
     .from('messages')
     .select('*')
-    .or(`sender_id.eq.${State.user.id},receiver_id.eq.${State.user.id}`)
+    .or(`and(sender_id.eq.${State.user.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${State.user.id})`)
     .order('created_at', { ascending: true });
   
   if (mError) return console.error("Error loading messages", mError);
@@ -2936,21 +2831,8 @@ async function loadConversationThread(partnerId, listingId = null) {
   const threadEl = document.getElementById('chatThread');
   if (!threadEl) return;
   threadEl.innerHTML = '';
-
   if (messages) {
-    // Filter logic handled in JS to ensure we don't lose messages due to NULL columns or complex SQL ORs
-    const filteredMessages = messages.filter(msg => {
-      // Only show messages belonging to this specific conversation
-      const isConversation = (msg.sender_id === State.user.id && msg.receiver_id === partnerId) || 
-                             (msg.sender_id === partnerId && msg.receiver_id === State.user.id);
-      
-      // Only hide if the user is the sender AND they explicitly clicked delete (true)
-      const isDeleted = msg.sender_id === State.user.id && msg.deleted_by_sender === true;
-      
-      return isConversation && !isDeleted;
-    });
-
-    filteredMessages.forEach(msg => renderMessage(msg, State.user.id));
+    messages.forEach(msg => renderMessage(msg, State.user.id));
   }
   threadEl.scrollTop = threadEl.scrollHeight;
 }
@@ -2977,37 +2859,28 @@ async function handleSendMessage(e) {
 }
 
 async function handleSendImage(e) {
-  const file = e.target.files?.[0];
+  const file = e.target.files[0];
   if (!file || !State.currentChatPartnerId) return;
-
-  toggleProcessingOverlay(true, 'Uploading image...');
-
-  try {
-    const filePath = `${State.user.id}/${Date.now()}_${file.name}`;
-    const { error: uploadError } = await db.storage.from('messages-images').upload(filePath, file);
-    
-    if (uploadError) throw uploadError;
-    
-    const { data: { publicUrl } } = db.storage.from('messages-images').getPublicUrl(filePath);
-    
-    const { error: msgError } = await db.from('messages').insert([{
-      sender_id: State.user.id,
-      receiver_id: State.currentChatPartnerId,
-      listing_id: State.currentListingId || null,
-      image_url: publicUrl,
-    }]);
-
-    if (msgError) throw msgError;
-    
-    e.target.value = ''; // Reset input
-    await loadConversationThread(State.currentChatPartnerId);
-    await loadMessages();
-  } catch (err) {
-    console.error("Image send error:", err);
-    showToast("Could not send image: " + err.message, 'error');
-  } finally {
-    toggleProcessingOverlay(false);
+  
+  const filePath = `${State.user.id}/${Date.now()}_${file.name}`;
+  const { error: uploadError } = await db.storage.from('chat-images').upload(filePath, file);
+  
+  if (uploadError) {
+    showToast("Upload failed", 'error');
+    return;
   }
+  
+  const { data: { publicUrl } } = db.storage.from('chat-images').getPublicUrl(filePath);
+  
+  await db.from('messages').insert([{
+    sender_id: State.user.id,
+    receiver_id: State.currentChatPartnerId,
+    listing_id: State.currentListingId,
+    image_url: publicUrl,
+  }]);
+  
+  await loadConversationThread(State.currentChatPartnerId);
+  await loadMessages();
 }
 
 function renderMessage(msg, currentUserId) {
@@ -3026,35 +2899,13 @@ function renderMessage(msg, currentUserId) {
   }
   
   if (msg.image_url) {
-    div.innerHTML = `<img src="${escHtml(msg.image_url)}" class="msg-image" style="max-width:200px;border-radius:8px;cursor:pointer;" onclick="window.open(this.src)">
-                     ${isSent ? `<button onclick="deleteMessage('${msg.id}')" style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.7rem; display:block; margin-left:auto;">Delete</button>` : ''}
-                     ${timestampHtml}`;
+    div.innerHTML = `<img src="${escHtml(msg.image_url)}" class="msg-image" style="max-width:200px;border-radius:8px;cursor:pointer;" onclick="window.open(this.src)">${timestampHtml}`;
   } else {
-    div.innerHTML = `${escHtml(msg.content)}
-                     ${isSent ? `<button onclick="deleteMessage('${msg.id}')" style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.7rem; display:block; margin-left:auto; padding-top:4px;">Delete</button>` : ''}
-                     ${timestampHtml}`;
+    div.innerHTML = `${escHtml(msg.content)}${timestampHtml}`;
   }
   
   thread.appendChild(div);
   thread.scrollTop = thread.scrollHeight;
-}
-
-async function deleteMessage(msgId) {
-  if (!confirm('Remove this message from your view? (It will still be saved in the database)')) return;
-  
-  try {
-    const { error } = await db
-      .from('messages')
-      .update({ deleted_by_sender: true })
-      .eq('id', msgId)
-      .eq('sender_id', State.user.id);
-    
-    if (error) throw error;
-    showToast('Message removed from your view.', 'info');
-    loadConversationThread(State.currentChatPartnerId);
-  } catch (err) {
-    showToast('Failed to delete message.', 'error');
-  }
 }
 
 function initChat() {
@@ -3165,10 +3016,7 @@ function setupEventListeners() {
   
   const imageInput = document.getElementById('image-input');
   const uploadZone = document.getElementById('upload-zone');
-  if (imageInput) {
-    imageInput.addEventListener('change', handleImageUpload);
-    imageInput.addEventListener('click', e => e.stopPropagation()); // Prevent double dialog
-  }
+  if (imageInput) imageInput.addEventListener('change', handleImageUpload);
   if (uploadZone) {
     uploadZone.addEventListener('click', () => {
       const input = document.getElementById('image-input');
@@ -3250,14 +3098,11 @@ function setupEventListeners() {
   // Review image handling (max 3 images)
   const reviewImgInput = document.getElementById('review-image-input');
   if (reviewImgInput) {
-    reviewImgInput.onclick = (e) => e.stopPropagation(); // Prevent double dialog
     reviewImgInput.onchange = (e) => {
-      const newFiles = Array.from(e.target.files);
-      const currentTotal = (State.existingReviewImages?.length || 0) + (State.reviewImageFiles?.length || 0);
-      const remaining = Math.max(0, 3 - currentTotal);
-      // Append new files instead of replacing
-      State.reviewImageFiles = [...(State.reviewImageFiles || []), ...newFiles.slice(0, remaining)];
-      
+      const files = Array.from(e.target.files);
+      const existingCount = State.existingReviewImages?.length || 0;
+      const maxNewFiles = Math.max(0, 3 - existingCount);
+      State.reviewImageFiles = files.slice(0, maxNewFiles);
       const preview = document.getElementById('review-image-previews');
       const countEl = document.getElementById('review-image-count');
       
@@ -3312,7 +3157,6 @@ function setupEventListeners() {
 
 // ==================== INITIALIZATION ====================
 document.addEventListener('DOMContentLoaded', async () => {
-  injectCustomStyles();
   initTheme();
   setupEventListeners();
   await initAuth();
@@ -3449,6 +3293,298 @@ function toggleNavMode() {
   if (toggleBtn) toggleBtn.classList.toggle('minimized');
 }
 
+// ==================== DONATION PAGE MODULE ====================
+async function initDonationPage() {
+  const container = document.getElementById('page-donate');
+  if (!container) return;
+
+  // Requirement: if user is signed out, it will refresh (reset) if user switches page
+  if (!State.user) {
+    State.donationLocation = null;
+    State.charityResults = null;
+    State.donationCategory = 'all';
+  }
+
+  if (!State.donationLocation) {
+    container.innerHTML = `
+      <div class="donation-welcome animate-fade" style="max-width: 600px; margin: 40px auto; text-align: center; padding: 40px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-neon);">
+        <div style="font-size: 4rem; margin-bottom: 24px; filter: drop-shadow(0 0 10px var(--neon));">🎁</div>
+        <h2 style="font-family: 'Orbitron'; color: var(--neon); margin-bottom: 16px; letter-spacing: 2px;">COMMUNITY GIVING</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 32px; font-size: 1.1rem; line-height: 1.6;">Don't let your items go to waste. Find local charities and Salvation Army centers that can give your goods a second life.</p>
+        <form onsubmit="event.preventDefault(); handleDonationLocationSubmit();" style="display: flex; flex-direction: column; gap: 16px; background: var(--bg-2); padding: 16px; border-radius: var(--radius); border: 1px solid var(--border);">
+          <div style="text-align: left;">
+            <label class="form-label">Search Location</label>
+            <input type="text" id="donation-search-loc" placeholder="City, neighborhood, or zip code..." required style="background: var(--bg-3); border: 1px solid var(--border); margin-top: 4px;">
+          </div>
+          <div style="text-align: left;">
+            <label class="form-label">Item Category</label>
+            <select id="donation-search-cat" style="background: var(--bg-3); border: 1px solid var(--border); color: var(--text); margin-top: 4px; cursor: pointer;">
+              <option value="all">All Accepted Items</option>
+              <option value="clothing">Clothing & Textiles</option>
+              <option value="electronics">Electronics & Appliances</option>
+              <option value="furniture">Furniture & Household</option>
+              <option value="books">Books & Media</option>
+              <option value="toys">Toys & Games</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary" id="btn-find-charities" style="padding: 12px 24px; margin-top: 8px;">FIND DONATION CENTERS</button>
+        </form>
+        <div style="margin-top: 24px; font-size: 0.75rem; color: var(--text-muted);">
+          Powered by OBTAINUM AI • Localized results via RAG
+        </div>
+      </div>
+    `;
+  } else if (!State.charityResults) {
+    container.innerHTML = '<div class="empty-state"><div class="spinner spinner-lg"></div></div>';
+  } else {
+    renderCharityResults();
+  }
+}
+
+async function handleDonationLocationSubmit() {
+  const input = document.getElementById('donation-search-loc');
+  const catInput = document.getElementById('donation-search-cat');
+  const loc = input?.value.trim();
+  const cat = catInput?.value || 'all';
+  if (!loc) return;
+
+  const btn = document.getElementById('btn-find-charities');
+  setLoading(btn, true, 'LOCATING...');
+
+  try {
+    State.donationLocation = loc;
+    State.donationCategory = cat;
+    await findCharities(loc, cat);
+  } finally {
+    setLoading(btn, false, 'FIND DONATION CENTERS');
+  }
+}
+
+async function findCharities(location, category = 'all') {
+  const container = document.getElementById('page-donate');
+  if (container) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="spinner spinner-lg"></div>
+        <div class="empty-title" style="margin-top: 20px;">CONSULTING COMMUNITY RECORDS...</div>
+        <div class="empty-sub">Finding verified charities near ${escHtml(location)}</div>
+      </div>
+    `;
+  }
+
+  const categoryClause = category === 'all' ? 'local charities, thrift stores, and Salvation Army donation centers' : `verified local charities and donation centers that specifically accept "${category}" donations`;
+  const prompt = `You are OBTAINUM's community impact specialist. Search your database (RAG mode) for REAL, verified ${categoryClause} specifically near "${location}".
+  
+  Provide exactly 4 results. For each one, provide:
+  - name: Organization name
+  - address: Full street address
+  - description: Very brief note on what they accept (e.g., "Accepts used electronics and clothing")
+  - phone: Contact phone number
+  - website: Official website URL
+  - lat: Approx latitude
+  - lon: Approx longitude
+  
+  Return the results as a standard JSON array. Only the JSON, no extra text.`;
+
+  try {
+    const response = await callGemini(prompt, 'application/json');
+    const jsonMatch = response.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      const results = JSON.parse(jsonMatch[0]);
+      
+      for (let c of results) {
+        if (!c.lat || !c.lon) {
+          try {
+            const coords = await geocodeLocation(c.address);
+            c.lat = coords.lat;
+            c.lon = coords.lon;
+          } catch (e) { }
+        }
+      }
+      
+      State.charityResults = results;
+      State.donationCategory = category;
+      renderCharityResults();
+    } else {
+      throw new Error("Structure mismatch");
+    }
+  } catch (err) {
+    console.error('Charity retrieval error:', err);
+    showToast('AI could not retrieve charity data.', 'error');
+    State.donationLocation = null;
+    initDonationPage();
+  }
+}
+
+function renderCharityResults() {
+  const container = document.getElementById('page-donate');
+  if (!container || !State.charityResults) return;
+
+  const mapId = `donation-map-${Date.now()}`;
+  
+  container.innerHTML = `
+    <div class="donation-results-container animate-fade" style="padding: 24px; max-width: 1200px; margin: 0 auto;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 32px; border-bottom: 1px solid var(--border); padding-bottom: 16px;">
+        <div>
+          <h2 style="font-family: 'Orbitron'; color: var(--neon); margin: 0;">LOCAL DONATION CENTERS</h2>
+          <p style="color: var(--text-muted); margin-top: 4px;">Verified <strong>${escHtml(State.donationCategory.toUpperCase())}</strong> results near <strong>${escHtml(State.donationLocation.toUpperCase())}</strong></p>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="State.donationLocation = null; State.charityResults = null; initDonationPage();">REFINE SEARCH</button>
+      </div>
+      
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 32px;">
+        <div class="charity-sidebar">
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            ${State.charityResults.map((c, idx) => `
+              <div class="charity-card" style="padding: 20px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); cursor: pointer; transition: all 0.3s;" onclick="focusCharity(${idx})">
+                <div style="display: flex; gap: 12px; align-items: flex-start;">
+                  <div style="background: var(--neon); color: #000; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; margin-top: 2px;">${idx + 1}</div>
+                  <div style="flex: 1;">
+                    <h3 style="color: var(--text); font-size: 1.1rem; margin: 0 0 4px 0;">${escHtml(c.name)}</h3>
+                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px;">
+                      <div style="display: flex; align-items: center; gap: 4px;"><span>📍</span> ${escHtml(c.address)}</div>
+                      ${c.phone ? `<div style="display: flex; align-items: center; gap: 4px;"><span>📞</span> ${escHtml(c.phone)}</div>` : ''}
+                      ${c.website ? `<div style="display: flex; align-items: center; gap: 4px;"><span>🌐</span> <a href="${escHtml(c.website)}" target="_blank" onclick="event.stopPropagation();" style="color:var(--neon); text-decoration:none;">${escHtml(c.website.replace(/^https?:\/\//,'').substring(0,30))}...</a></div>` : ''}
+                    </div>
+                    <div style="font-size: 0.9rem; line-height: 1.5; color: var(--text-secondary); background: var(--bg-3); padding: 8px 12px; border-radius: 8px;">
+                      ${escHtml(c.description)}
+                    </div>
+                    <button class="btn btn-primary btn-sm" style="margin-top: 16px; width: 100%; border-radius: 4px; font-family: 'Orbitron'; font-size: 0.75rem;" onclick="event.stopPropagation(); openRouteSafetyModal('${escHtml(c.address)}')">🛡️ AI SAFE ROUTE</button>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px;">
+                      <button class="btn btn-outline btn-sm" style="border-radius: 4px; font-size: 0.65rem; padding: 6px; font-family: 'Orbitron';" onclick="event.stopPropagation(); copyToClipboard('${escHtml(c.address)}')">📋 ADDR</button>
+                      <button class="btn btn-outline btn-sm" style="border-radius: 4px; font-size: 0.65rem; padding: 6px; font-family: 'Orbitron';" onclick="event.stopPropagation(); window.open('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent('${escHtml(c.address)}'), '_blank')">🌐 MAPS</button>
+                      <button class="btn btn-outline btn-sm favorite-charity-btn ${State.favoriteCharityIds.has(c.name + c.address) ? 'active' : ''}" style="border-radius: 4px; font-size: 0.65rem; padding: 6px; font-family: 'Orbitron';" onclick="toggleFavoriteCharity(event, ${idx})">❤️ FAV</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        
+        <div style="position: sticky; top: 100px; height: calc(100vh - 200px); min-height: 400px;">
+          <div id="${mapId}" style="height: 100%; border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--bg-3); box-shadow: var(--shadow-neon-sm);"></div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  setTimeout(() => {
+    if (typeof L === 'undefined') return;
+    const map = L.map(mapId);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; CartoDB' }).addTo(map);
+    const markers = [];
+    const neonIcon = (index) => L.divIcon({
+      className: 'custom-neon-marker',
+      html: `<div style="background-color:var(--neon); width:28px; height:28px; border-radius:50%; border:2px solid #000; box-shadow:0 0 15px var(--neon); display:flex; align-items:center; justify-content:center; color:#000; font-weight:bold; font-size:14px;">${index+1}</div>`,
+      iconSize: [28, 28],
+      iconAnchor: [14, 14]
+    });
+    State.charityResults.forEach((c, idx) => {
+      if (c.lat && c.lon) {
+        const marker = L.marker([c.lat, c.lon], { icon: neonIcon(idx) }).addTo(map)
+          .bindPopup(`<strong>${escHtml(c.name)}</strong><br>${escHtml(c.address)}`);
+        markers.push(marker);
+      }
+    });
+    if (markers.length > 0) map.fitBounds(new L.featureGroup(markers).getBounds().pad(0.2));
+    window.donationMap = map; window.donationMarkers = markers;
+  }, 100);
+}
+
+function focusCharity(idx) {
+  const c = State.charityResults[idx];
+  if (window.donationMap && c.lat && c.lon) {
+    window.donationMap.setView([c.lat, c.lon], 16);
+    window.donationMarkers[idx].openPopup();
+  }
+}
+
+async function loadFavoriteCharities() {
+  if (!State.user) return;
+  try {
+    const { data, error } = await db
+      .from('favorite_charities')
+      .select('charity_data')
+      .eq('user_id', State.user.id);
+    
+    if (error) throw error;
+    State.favoriteCharityIds = new Set((data || []).map(f => f.charity_data.name + f.charity_data.address));
+  } catch (err) {
+    console.error('Error loading favorite charities:', err);
+  }
+}
+
+async function toggleFavoriteCharity(e, idx) {
+  e.stopPropagation();
+  if (!State.user) { openAuthModal(); return; }
+
+  const c = State.charityResults[idx];
+  const key = c.name + c.address;
+  const isFav = State.favoriteCharityIds.has(key);
+  const btn = e.currentTarget;
+
+  try {
+    if (isFav) {
+      const { error } = await db
+        .from('favorite_charities')
+        .delete()
+        .eq('user_id', State.user.id)
+        .filter('charity_data->>name', 'eq', c.name)
+        .filter('charity_data->>address', 'eq', c.address);
+      
+      if (error) throw error;
+      State.favoriteCharityIds.delete(key);
+      btn.classList.remove('active');
+      showToast('Removed from favorites.', 'info');
+    } else {
+      const { error } = await db
+        .from('favorite_charities')
+        .insert({ user_id: State.user.id, charity_data: c });
+      
+      if (error) throw error;
+      State.favoriteCharityIds.add(key);
+      btn.classList.add('active');
+      showToast('Saved to favorites!', 'success');
+    }
+  } catch (err) {
+    console.error('Error toggling favorite charity:', err);
+    showToast('Failed to update favorites.', 'error');
+  }
+}
+
+async function renderSavedCharities() {
+  const container = document.getElementById('ptab-saved-charities');
+  if (!container || !State.user) return;
+  
+  container.innerHTML = '<div class="spinner" style="margin:40px auto; display:block;"></div>';
+  
+  try {
+    const { data, error } = await db.from('favorite_charities').select('*').eq('user_id', State.user.id);
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      container.innerHTML = '<div class="empty-state"><div class="empty-icon">🎁</div><div class="empty-title">NO SAVED CHARITIES</div></div>';
+      return;
+    }
+    container.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:20px; padding:20px;">
+      ${data.map(item => `
+        <div class="charity-card" style="padding:20px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg);">
+          <h3 style="color:var(--text); font-size:1.1rem; margin:0 0 4px 0;">${escHtml(item.charity_data.name)}</h3>
+          <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">📍 ${escHtml(item.charity_data.address)}</div>
+          <button class="btn btn-primary btn-sm" style="width:100%; margin-top:8px; font-family:'Orbitron'; font-size:0.75rem;" onclick="openRouteSafetyModal('${escHtml(item.charity_data.address)}')">🛡️ AI SAFE ROUTE</button>
+        </div>
+      `).join('')}</div>`;
+  } catch (err) {
+    container.innerHTML = '<div class="empty-state">Failed to load saved charities.</div>';
+  }
+}
+
+window.initDonationPage = initDonationPage;
+window.handleDonationLocationSubmit = handleDonationLocationSubmit;
+window.focusCharity = focusCharity;
+window.copyToClipboard = copyToClipboard;
+window.toggleFavoriteCharity = toggleFavoriteCharity;
+
 // ==================== AI ROUTE SAFETY MODULE ====================
 const safetyDatabase = {
   "downtown,new york": 65,
@@ -3491,7 +3627,7 @@ Consider typical crime rates, lighting, foot traffic, and public transportation 
 `;
 }
 
-async function openRouteSafetyModal() {
+async function openRouteSafetyModal(defaultDest = '') {
   const modal = document.getElementById('route-safety-modal');
   const contentDiv = document.getElementById('route-safety-content');
   if (!modal || !contentDiv) return;
@@ -3504,7 +3640,7 @@ async function openRouteSafetyModal() {
       </div>
       <div class="form-group">
         <label class="form-label">🏁 Destination</label>
-        <input type="text" id="route-end" placeholder="e.g., Beverly Hills, CA" required class="form-input">
+        <input type="text" id="route-end" value="${escHtml(defaultDest)}" placeholder="e.g., Beverly Hills, CA" required class="form-input">
       </div>
       <button type="submit" class="btn btn-primary w-full" id="route-find-btn">🔍 Find Safe Route</button>
     </form>
