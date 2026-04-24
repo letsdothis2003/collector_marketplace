@@ -6,7 +6,7 @@
 // ==================== DATABASE CONFIG ====================
 const SUPABASE_URL = "https://gotzmuobwuubsugnowxq.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
-const GEMINI_API_KEY = "AIzaSyBhLr1W09j234x1xAqPdKaGXTLI2huC-Zs";
+const GEMINI_API_KEY = "AIzaSyCdm0yz9X0Ijk5bec6fx31oxoDESmXwAsY";
 
 // Sanity check for deployment injection
 if (GEMINI_API_KEY === "YOUR_GEMINI_API_KEY_PLACEHOLDER") {
