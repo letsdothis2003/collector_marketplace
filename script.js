@@ -3817,7 +3817,6 @@ async function getDrivingRoute(startLat, startLon, endLat, endLon) {
   const url = `https://router.project-osrm.org/route/v1/driving/${startLon},${startLat};${endLon},${endLat}?overview=full&geometries=geojson&steps=true`;
   const response = await fetch(url);
   const data = await response.json();
-  if (data.code !== 'Ok') throw new Error('Routing failed');
   if (!response.ok || data.code !== 'Ok') {
     throw new Error(data.message || 'No land route found between these locations.');
   }
