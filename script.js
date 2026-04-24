@@ -52,48 +52,49 @@ async function callGemini(prompt, responseType = 'text/plain') {
     "gemini-1.5-flash"
   ];
   
-  let retries = 3;
-  let delay = 2000; // Start with a 2-second delay
+  for (const model of models) {
+    let retries = 2; // Retries per model specifically for rate limits
+    let delay = 2000;
 
-  while (retries > 0) {
-    const model = models[Math.max(0, models.length - retries - 1)] || "gemini-1.5-flash";
-    console.log(`[OBTAINUM AI] Attempting ${model}...`);
+    while (retries >= 0) {
+      console.log(`[OBTAINUM AI] Attempting ${model}...`);
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: responseType }
+          })
+        });
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: responseType
+        // If rate limited, wait and retry THIS model
+        if (response.status === 429) {
+          console.warn(`[OBTAINUM AI] 429 Rate Limit on ${model}. Retrying...`);
+          await new Promise(res => setTimeout(res, delay));
+          retries--;
+          delay *= 2;
+          continue;
         }
-      })
-    });
 
-    // Handle Rate Limiting (429)
-    if (response.status === 429) {
-      console.warn(`[OBTAINUM AI] 429 Rate Limit hit. Retrying in ${delay}ms...`);
-      await new Promise(res => setTimeout(res, delay));
-      retries--;
-      delay *= 2; // Double the wait time for the next attempt
-      continue;
-    }
+        // If model doesn't exist (404) or other error, break to try the NEXT model in the list
+        if (!response.ok) {
+          console.warn(`[OBTAINUM AI] ${model} unavailable (Status: ${response.status}). Trying fallback...`);
+          break; 
+        }
 
-    const data = await response.json();
-    if (data.error) {
-      const safeError = scrub(data.error.message);
-      throw new Error(safeError);
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) return text;
+        
+        break; 
+      } catch (err) {
+        console.error(`[OBTAINUM AI] Connection error with ${model}:`, err);
+        break;
+      }
     }
-    
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) throw new Error("No response from Gemini");
-    
-    return text;
   }
-
-  throw new Error("Gemini API rate limit exceeded. Please try again in a minute.");
+  throw new Error("AI service currently unavailable. Please check your API key.");
 }
 
 // ==================== CHARITY FINDER (RAG-STYLE AI) ====================
@@ -1829,8 +1830,6 @@ async function submitListing(e) {
         .select('*, profiles:seller_id(id, username, avatar_url, rating, location)')
         .single();
       if (error) throw error;
-      savedListing = data;
-      State.listings.unshift(savedListing);
     }
     
     // Reset listing state completely
