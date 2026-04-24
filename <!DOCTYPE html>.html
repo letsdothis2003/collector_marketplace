@@ -3,13 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Donate — OBTAINUM</title>
-  <meta name="description" content="Support OBTAINUM marketplace development." />
+  <title>About — OBTAINUM</title>
+  <meta name="description" content="Learn about OBTAINUM and its fair marketplace mission." />
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@google/generative-ai/dist/index.min.js"></script>
+  <script src="config.js" defer></script>
   <script src="script.js" defer></script>
 </head>
-<body data-page="donate">
+<body data-page="about">
 
 
   <!-- Error Banner -->
@@ -74,33 +76,49 @@
   
   <main id="app">
 
-    <!-- ====== DONATE PAGE ====== -->
-    <section class="page active" id="page-donate">
-      <div class="donate-container">
-        <h1>☕ Support OBTAINUM</h1>
-        <p>Help us keep AI features free and fair. Donations keep the marketplace independent.</p>
-        <div class="donate-options">
-          <div class="donate-card">
-            <h3>💜 One-Time Donation</h3>
-            <p>Support our development efforts</p>
-            <div class="donate-buttons">
-              <button class="btn btn-outline" onclick="showToast('❤️ Thank you for your support!')">$5</button>
-              <button class="btn btn-outline" onclick="showToast('❤️ Thank you for your support!')">$10</button>
-              <button class="btn btn-outline" onclick="showToast('❤️ Thank you for your support!')">$25</button>
-              <button class="btn btn-outline" onclick="showToast('❤️ Thank you for your support!')">$50</button>
-            </div>
+    <!-- ====== ABOUT PAGE ====== -->
+    <section class="page active" id="page-about">
+      <div class="about-container">
+        <div class="about-hero">
+          <h1>📖 About OBTAINUM</h1>
+          <p>The techno marketplace for collectors and hobbyists</p>
+        </div>
+        <div class="about-content">
+          <div class="about-section">
+            <h2>🎯 Our Mission</h2>
+            <p>OBTAINUM was born from a simple idea: create a fair marketplace where collectors can buy and sell without fear of scalping or unfair pricing. We believe in transparency, community, and the thrill of the hunt.</p>
           </div>
-          <div class="donate-card">
-            <h3>🔄 Monthly Supporter</h3>
-            <p>Become a sustaining member</p>
-            <div class="donate-buttons">
-              <button class="btn btn-primary" onclick="showToast('❤️ Thank you for becoming a supporter!')">Subscribe $5/mo</button>
-            </div>
+          <div class="about-section">
+            <h2>✨ What Makes Us Different</h2>
+            <ul>
+              <li>🤖 <strong>AI-Powered Price Analysis</strong> - Our AI analyzes market value to help you make informed decisions</li>
+              <li>🛡️ <strong>No Scalping Policy</strong> - We actively monitor and prevent price gouging</li>
+              <li>💬 <strong>Direct Seller Communication</strong> - Chat directly with sellers, no middlemen</li>
+              <li>⭐ <strong>Community Driven</strong> - Built by collectors, for collectors</li>
+              <li>🔒 <strong>Secure Transactions</strong> - Your data and privacy are protected</li>
+            </ul>
           </div>
-          <div class="donate-card">
-            <h3>🪙 Crypto Donations</h3>
-            <p>Bitcoin, Ethereum, and more</p>
-            <button class="btn btn-outline" onclick="showToast('Contact us for crypto address')">Get Crypto Address</button>
+          <div class="about-section">
+            <h2>📜 Our Story</h2>
+            <p>Founded in 2024, OBTAINUM started as a passion project for vintage toy collectors who were tired of bots and scalpers ruining the hobby. Today, we've grown into a full-featured marketplace serving thousands of collectors across categories including electronics, collectibles, clothing, and more.</p>
+          </div>
+          <div class="about-section">
+            <h2>🌱 Future Plans</h2>
+            <p>We're constantly improving! Upcoming features include: blockchain authentication for rare items, expanded AI recommendations, mobile apps, and community forums.</p>
+          </div>
+          <div class="about-stats">
+            <div class="stat-card">
+              <span class="stat-number">1,000+</span>
+              <span class="stat-label">Active Listings</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-number">500+</span>
+              <span class="stat-label">Happy Collectors</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-number">100%</span>
+              <span class="stat-label">Community Driven</span>
+            </div>
           </div>
         </div>
       </div>

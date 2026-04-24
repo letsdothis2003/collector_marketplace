@@ -6,21 +6,19 @@
 // ==================== DATABASE CONFIG ====================
 const SUPABASE_URL = "https://gotzmuobwuubsugnowxq.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
-const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_PLACEHOLDER";
 
-/** Checks if the AI service is properly configured with a real API key */
-function isAiConfigured() {
-  return GEMINI_API_KEY && GEMINI_API_KEY !== "YOUR_GEMINI_API_KEY_PLACEHOLDER";
-}
+// Load API key from config.js if available, otherwise use placeholder
+let GEMINI_API_KEY = (typeof CONFIG !== 'undefined' && CONFIG.GEMINI_API_KEY) 
+  ? CONFIG.GEMINI_API_KEY 
+  : "YOUR_GEMINI_API_KEY_PLACEHOLDER";
 
 // Sanity check for deployment injection
-if (!isAiConfigured()) {
+if (GEMINI_API_KEY === "YOUR_GEMINI_API_KEY_PLACEHOLDER") {
   console.warn('[OBTAINUM AI] Warning: API Key placeholder detected. Did the GitHub Action run correctly?');
 }
 
 let db;
 
-// ==================== DATABASE INITIALIZATION ====================
 try {
   db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   console.log('[OBTAINUM] Supabase connected');
@@ -35,44 +33,53 @@ function scrub(text) {
 }
 
 // ==================== DIRECT API HELPER (REPLACES LIBRARY) ====================
-/** Direct fetch call to Gemini 2.0 Flash API */
 async function callGemini(prompt, responseType = 'text/plain') {
-  if (!isAiConfigured()) {
-    throw new Error("AI service is not configured. API Key is missing.");
-  }
-
   const model = "gemini-2.0-flash";
-  console.log(`[OBTAINUM AI] Calling ${model} directly...`);
+  let retries = 3;
+  let delay = 2000; // Start with a 2-second delay
 
-  // Using headers instead of query parameters hides the key from the URL in Network logs
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`, {
-    method: 'POST',
-    headers: { 
-      'Content-Type': 'application/json',
-      'x-goog-api-key': GEMINI_API_KEY 
-    },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        responseMimeType: responseType
-      }
-    })
-  });
+  while (retries > 0) {
+    console.log(`[OBTAINUM AI] Calling ${model} directly...`);
 
-  const data = await response.json();
-  if (data.error) {
-    // Scrub error messages in case they echo back the API key or sensitive URL params
-    const safeError = scrub(data.error.message);
-    throw new Error(safeError);
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-goog-api-key': GEMINI_API_KEY 
+      },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: responseType
+        }
+      })
+    });
+
+    // Handle Rate Limiting (429)
+    if (response.status === 429) {
+      console.warn(`[OBTAINUM AI] 429 Rate Limit hit. Retrying in ${delay}ms...`);
+      await new Promise(res => setTimeout(res, delay));
+      retries--;
+      delay *= 2; // Double the wait time for the next attempt
+      continue;
+    }
+
+    const data = await response.json();
+    if (data.error) {
+      const safeError = scrub(data.error.message);
+      throw new Error(safeError);
+    }
+    
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error("No response from Gemini");
+    
+    return text;
   }
-  
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error("No response from Gemini");
-  
-  return text;
+
+  throw new Error("Gemini API rate limit exceeded. Please try again in a minute.");
 }
 
-// ==================== CHARITY FINDER ====================
+// ==================== CHARITY FINDER (RAG-STYLE AI) ====================
 async function findLocalCharities() {
   const locationInput = document.getElementById('charity-location-input');
   const resultsDiv = document.getElementById('charity-results-container');
@@ -80,7 +87,7 @@ async function findLocalCharities() {
   const btn = document.getElementById('charity-search-btn');
   
   // Check if API key is configured
-  if (!isAiConfigured()) {
+  if (!GEMINI_API_KEY) {
     resultsDiv.innerHTML = `<div class="auth-error show">⚠️ Charity finder is not available. AI service not configured.</div>`;
     return;
   }
@@ -3638,23 +3645,302 @@ function toggleNavMode() {
   if (toggleBtn) toggleBtn.classList.toggle('minimized');
 }
 
+async function getSafeRouteFromGemini(start, end) {
+  const ragContext = buildSafetyContext(start, end);
+  const prompt = `You are OBTAINUM's route safety AI. Using the following local safety context, suggest a safe route from "${start}" to "${end}".
+
+${ragContext}
+
+Provide a clear, bullet-point list of recommendations:
+- General safe corridors or streets to take
+- Areas to avoid (if any)
+- Time-of-day advice
+- Alternative safer paths
+
+Keep it practical and concise. If exact streets are unknown, suggest types of routes (e.g., "use main highways, avoid side alleys").`;
+  
+  try {
+    return await callGemini(prompt);
+  } catch (e) {
+    return await getFallbackSafeRoute(start, end);
+  }
+}
+
+async function getFallbackSafeRoute(start, end) {
+  const startScore = getSafetyScore(start);
+  const endScore = getSafetyScore(end);
+  let advice = `**Safe route suggestions from ${start} to ${end}**\n\n`;
+  if (startScore < 50) advice += `⚠️ Starting area has lower safety rating. Consider using ride-share or traveling during daylight.\n`;
+  if (endScore < 50) advice += `⚠️ Destination area has lower safety rating. Plan to arrive before dark.\n`;
+  advice += `\n✅ General advice: Stick to main roads, use well-lit paths, avoid shortcuts through isolated areas.`;
+  if (startScore >= 70 && endScore >= 70) advice += `\n✅ Both areas are relatively safe – direct routes should be fine, but remain aware.`;
+  return advice;
+}
+
 function formatMarkdown(text) {
   // Convert markdown to HTML for better readability
   let formatted = text;
+  
+  // Headers (###)
   formatted = formatted.replace(/### (.*?)(\n|$)/g, '<h3>$1</h3>');
+  
+  // Bold (**text**)
   formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  
+  // Bullet lists (*)
   formatted = formatted.replace(/^\* (.*?)$/gm, '<li>$1</li>');
   formatted = formatted.replace(/(<li>.*?<\/li>\n?)+/g, '<ul>$&</ul>');
+  
+  // Numbered lists
   formatted = formatted.replace(/^\d+\. (.*?)$/gm, '<li>$1</li>');
+  
+  // Add line breaks for paragraphs
   formatted = formatted.replace(/\n\n/g, '</p><p>');
   formatted = '<p>' + formatted + '</p>';
+  
+  // Clean up empty paragraphs
   formatted = formatted.replace(/<p>\s*<\/p>/g, '');
   formatted = formatted.replace(/<p>(<[ou]l>)/g, '$1');
   formatted = formatted.replace(/(<\/[ou]l>)<\/p>/g, '$1');
+  
   return formatted;
 }
 
-// ==================== ROUTE SAFETY HELPERS ====================
+// ==================== PICKUP ROUTE PLANNER (for listing page) ====================
+async function generatePickupRoute(listingId) {
+  if (!listingId) {
+    showToast("Invalid listing ID.", "error");
+    return;
+  }
+
+  const { data: listing, error } = await db
+    .from('listings')
+    .select('location')
+    .eq('id', listingId)
+    .single();
+
+  if (error || !listing || !listing.location) {
+    showToast("Listing location not available.", "error");
+    return;
+  }
+
+  const destination = listing.location;
+  const startInput = document.getElementById(`pickup-start-loc-${listingId}`);
+  if (!startInput) {
+    showToast("Please enter your starting location.", "info");
+    return;
+  }
+
+  const start = startInput.value.trim();
+  if (!start) {
+    showToast("Please enter your starting location.", "info");
+    startInput.focus();
+    return;
+  }
+
+  const resultContainer = document.getElementById(`route-planner-result-${listingId}`);
+  if (!resultContainer) return;
+
+  resultContainer.innerHTML = '<div class="spinner"></div> Analyzing safe route...';
+
+  try {
+    const ragContext = buildSafetyContext(start, destination);
+    const prompt = `You are OBTAINUM's route safety AI. Suggest a safe route from "${start}" to "${destination}" for a physical pickup of an item.
+
+${ragContext}
+
+Provide a clear, actionable response with:
+- Best route recommendations (main roads, public transit if applicable)
+- Areas to avoid (if any)
+- Time-of-day safety advice
+- Any alternative safer paths
+Keep it concise and practical.`;
+
+    let aiResponse;
+    try {
+      aiResponse = await callGemini(prompt);
+    } catch (e) {
+      aiResponse = await getFallbackSafeRoute(start, destination);
+    }
+
+    resultContainer.innerHTML = `
+      <div style="background:var(--bg-3); border-radius:var(--radius); padding:16px; margin-top:12px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+          <span>🛡️</span>
+          <strong style="color:var(--neon);">AI Safe Route Suggestion</strong>
+        </div>
+        <div style="line-height:1.6;">${aiResponse.replace(/\n/g, '<br>')}</div>
+        <div style="margin-top:12px; font-size:0.7rem; color:var(--text-muted);">⚠️ Always verify local conditions. AI suggestions are advisory only.</div>
+      </div>
+    `;
+  } catch (err) {
+    console.error("Pickup route error:", err);
+    resultContainer.innerHTML = `<div class="auth-error show">⚠️ Error: ${err.message || "Could not generate route."}</div>`;
+  }
+}
+
+// Expose global functions
+window.openRouteSafetyModal = openRouteSafetyModal;
+window.findSafeRoute = findSafeRoute;
+window.generatePickupRoute = generatePickupRoute;
+
+
+
+// ==================== GEOCODING & OSRM ROUTING HELPERS ====================
+async function geocodeLocation(location) {
+  // Returns { lat, lon } for a location string
+  const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}&limit=1`);
+  const data = await response.json();
+  if (data && data.length > 0) {
+    return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+  }
+  throw new Error(`Could not geocode: ${location}`);
+}
+
+async function getDrivingRoute(startLat, startLon, endLat, endLon) {
+  // OSRM driving route
+  const url = `https://router.project-osrm.org/route/v1/driving/${startLon},${startLat};${endLon},${endLat}?overview=full&geometries=geojson&steps=true`;
+  const response = await fetch(url);
+  const data = await response.json();
+  if (data.code !== 'Ok') throw new Error('Routing failed');
+  return data;
+}
+
+// ==================== UPDATED PICKUP ROUTE PLANNER ====================
+async function generatePickupRoute(listingId) {
+  if (!listingId) {
+    showToast("Invalid listing ID.", "error");
+    return;
+  }
+
+  // Get listing location
+  const { data: listing, error } = await db
+    .from('listings')
+    .select('location')
+    .eq('id', listingId)
+    .single();
+
+  if (error || !listing || !listing.location) {
+    showToast("Listing location not available.", "error");
+    return;
+  }
+
+  const destination = listing.location;
+  const startInput = document.getElementById(`pickup-start-loc-${listingId}`);
+  if (!startInput) {
+    showToast("Please enter your starting location.", "info");
+    return;
+  }
+
+  const start = startInput.value.trim();
+  if (!start) {
+    showToast("Please enter your starting location.", "info");
+    startInput.focus();
+    return;
+  }
+
+  const resultContainer = document.getElementById(`route-planner-result-${listingId}`);
+  if (!resultContainer) return;
+
+  resultContainer.innerHTML = '<div class="spinner"></div> Geocoding locations...';
+
+  try {
+    // 1. Geocode both locations
+    const [startCoords, endCoords] = await Promise.all([
+      geocodeLocation(start),
+      geocodeLocation(destination)
+    ]);
+
+    resultContainer.innerHTML = '<div class="spinner"></div> Fetching driving route...';
+
+    // 2. Get driving route from OSRM
+    const routeData = await getDrivingRoute(startCoords.lat, startCoords.lon, endCoords.lat, endCoords.lon);
+    const route = routeData.routes[0];
+    const distanceKm = (route.distance / 1000).toFixed(1);
+    const durationMin = Math.round(route.duration / 60);
+
+    // Extract step-by-step instructions
+    let stepsHtml = '<ul style="margin: 8px 0 0 20px;">';
+    (route.legs[0]?.steps || []).forEach(step => {
+      const instruction = step.maneuver?.instruction || "Proceed forward";
+      stepsHtml += `<li>${instruction} (${(step.distance / 1000).toFixed(1)} km)</li>`;
+    });
+    stepsHtml += '</ul>';
+
+    // 3. Generate transit directions using Gemini (no API key needed for free transit data)
+    let transitHtml = '';
+    try {
+      resultContainer.innerHTML = '<div class="spinner"></div> Generating transit directions...';
+      const transitPrompt = `You are a public transit assistant. Suggest the best public transit route from "${start}" to "${destination}" in the New York City area (or general US city). Provide specific subway/bus lines, station names, number of stops, and estimated travel time. Use real MTA lines (e.g., 6 train, Q44 bus) if plausible. Keep it concise with bullet points.`;
+      const transitResult = await callGemini(transitPrompt);
+      transitHtml = `
+        <div style="margin-top: 20px; padding: 16px; background: var(--bg-2); border-radius: var(--radius); border-left: 3px solid var(--blue);">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+            <span>🚇</span>
+            <strong style="color: var(--blue);">Public Transit Directions</strong>
+          </div>
+          <div style="line-height: 1.6;">${formatMarkdown(transitResult)}</div>
+          <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 8px;">⚠️ Transit suggestions are AI-generated; verify with local transit apps.</div>
+        </div>
+      `;
+    } catch (e) {
+      transitHtml = '<div style="margin-top: 20px; padding: 16px; background: var(--bg-2); border-radius: var(--radius);">⚠️ Public transit data currently unavailable.</div>';
+    }
+
+    // 4. Create map with the driving route
+    const mapId = `route-map-${listingId}-${Date.now()}`;
+    const mapHtml = `
+      <div id="${mapId}" style="height: 300px; margin-top: 16px; border-radius: var(--radius); border: 1px solid var(--border);"></div>
+    `;
+
+    resultContainer.innerHTML = `
+      <div style="background: var(--bg-3); border-radius: var(--radius); padding: 16px; margin-top: 12px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+          <span>🚗</span>
+          <strong style="color: var(--neon);">Driving Route</strong>
+          <span style="margin-left: auto; font-size: 0.85rem;">${distanceKm} km • ${durationMin} min</span>
+        </div>
+        ${mapHtml}
+        <details style="margin-top: 12px;">
+          <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.85rem;">Turn-by-turn directions</summary>
+          ${stepsHtml}
+        </details>
+        ${transitHtml}
+        <div style="margin-top: 12px; font-size: 0.7rem; color: var(--text-muted);">⚠️ Always verify local conditions. AI suggestions are advisory only.</div>
+      </div>
+    `;
+
+    // Initialize the map after DOM update
+    setTimeout(() => {
+      if (typeof L !== 'undefined') {
+        const map = L.map(mapId).setView([startCoords.lat, startCoords.lon], 12);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; CartoDB'
+        }).addTo(map);
+
+        // Add start and end markers
+        const startIcon = L.divIcon({ html: '<div style="background: #00ff41; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff;"></div>', iconSize: [12, 12] });
+        const endIcon = L.divIcon({ html: '<div style="background: #ff2d55; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff;"></div>', iconSize: [12, 12] });
+        L.marker([startCoords.lat, startCoords.lon], { icon: startIcon }).addTo(map).bindPopup(`Start: ${start}`);
+        L.marker([endCoords.lat, endCoords.lon], { icon: endIcon }).addTo(map).bindPopup(`Destination: ${destination}`);
+
+        // Draw the route line
+        const routeGeoJSON = route.geometry;
+        const routeLayer = L.geoJSON(routeGeoJSON, {
+          style: { color: 'var(--neon)', weight: 5, opacity: 0.8 }
+        }).addTo(map);
+        map.fitBounds(routeLayer.getBounds());
+      } else {
+        console.warn('Leaflet not loaded');
+      }
+    }, 100);
+
+  } catch (err) {
+    console.error("Pickup route error:", err);
+    resultContainer.innerHTML = `<div class="auth-error show">⚠️ Error: ${err.message || "Could not generate route."}</div>`;
+  }
+}
+
 function getSafetyScore(location) {
   if (!location) return 50;
   const lowerLoc = location.toLowerCase();
@@ -3679,104 +3965,123 @@ function buildSafetyContext(start, end) {
   return `Local safety data: Starting area: ${startSafe}; Destination: ${endSafe}. Suggest a route avoiding unsafe zones.`;
 }
 
-async function geocodeLocation(location) {
-  const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}&limit=1`);
-  const data = await response.json();
-  if (data && data.length > 0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
-  throw new Error(`Could not geocode: ${location}`);
-}
-
-async function getDrivingRoute(startLat, startLon, endLat, endLon) {
-  const url = `https://router.project-osrm.org/route/v1/driving/${startLon},${startLat};${endLon},${endLat}?overview=full&geometries=geojson&steps=true`;
-  const response = await fetch(url);
-  const data = await response.json();
-  if (data.code !== 'Ok') throw new Error('Routing failed');
-  return data;
-}
-
-// ==================== PICKUP ROUTE PLANNER ====================
-async function generatePickupRoute(listingId) {
-  if (!listingId) return showToast("Invalid listing ID.", "error");
-  const { data: listing } = await db.from('listings').select('location').eq('id', listingId).single();
-  if (!listing?.location) return showToast("Location not available.", "error");
-
-  const startInput = document.getElementById(`pickup-start-loc-${listingId}`);
-  const start = startInput?.value.trim();
-  if (!start) return showToast("Please enter your location.", "info");
-
-  const resultContainer = document.getElementById(`route-planner-result-${listingId}`);
-  resultContainer.innerHTML = '<div class="spinner"></div> Geocoding...';
-
-  try {
-    const [startCoords, endCoords] = await Promise.all([geocodeLocation(start), geocodeLocation(listing.location)]);
-    const routeData = await getDrivingRoute(startCoords.lat, startCoords.lon, endCoords.lat, endCoords.lon);
-    const route = routeData.routes[0];
-    
-    let transitHtml = '';
-    if (isAiConfigured()) {
-      const prompt = `Suggest public transit from "${start}" to "${listing.location}". Be concise with station names.`;
-      const transitRes = await callGemini(prompt);
-      transitHtml = `<div style="margin-top:15px; border-top:1px solid var(--border); padding-top:10px;"><strong>🚇 Transit:</strong> ${formatMarkdown(transitRes)}</div>`;
-    }
-
-    const mapId = `map-route-${listingId}-${Date.now()}`;
-    resultContainer.innerHTML = `
-      <div class="route-safety-card">
-        <strong>🚗 Driving:</strong> ${(route.distance/1000).toFixed(1)}km (${Math.round(route.duration/60)}m)
-        <div id="${mapId}" style="height:250px; margin:10px 0; border-radius:8px;"></div>
-        ${transitHtml}
-      </div>`;
-
-    setTimeout(() => {
-      const map = L.map(mapId).setView([startCoords.lat, startCoords.lon], 12);
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
-      L.geoJSON(route.geometry, { style: { color: 'var(--neon)', weight: 4 } }).addTo(map);
-      map.fitBounds([[startCoords.lat, startCoords.lon], [endCoords.lat, endCoords.lon]]);
-    }, 100);
-  } catch (err) {
-    resultContainer.innerHTML = `<div class="auth-error show">⚠️ Error planning route.</div>`;
-  }
+async function openRouteSafetyModal() {
+  const modal = document.getElementById('route-safety-modal');
+  const contentDiv = document.getElementById('route-safety-content');
+  if (!modal || !contentDiv) return;
+  contentDiv.innerHTML = `
+    <form onsubmit="event.preventDefault(); findSafeRoute();">
+      <div class="form-group"><label class="form-label">📍 Start</label><input type="text" id="route-start" class="form-input" required></div>
+      <div class="form-group"><label class="form-label">🏁 End</label><input type="text" id="route-end" class="form-input" required></div>
+      <button type="submit" class="btn btn-primary w-full" id="route-find-btn">🔍 Find Safe Route</button>
+    </form><div id="route-result" style="margin-top: 20px;"></div>`;
+  modal.classList.add('open');
 }
 
 async function findSafeRoute() {
   const start = document.getElementById('route-start')?.value.trim();
   const end = document.getElementById('route-end')?.value.trim();
-  const resultDiv = document.getElementById('route-result');
-  if (!start || !end) return;
+  if (!start || !end) {
+    showToast("Please enter both start and destination.", "error");
+    return;
+  }
 
-  resultDiv.innerHTML = '<div class="spinner"></div> Calculating...';
+  const resultDiv = document.getElementById('route-result');
+  const findBtn = document.getElementById('route-find-btn');
+  if (!resultDiv || !findBtn) return;
+
+  setLoading(findBtn, true, "Analyzing...");
+  resultDiv.innerHTML = '<div class="spinner"></div> Geocoding...';
+
   try {
-    const [s, e] = await Promise.all([geocodeLocation(start), geocodeLocation(end)]);
-    const routeData = await getDrivingRoute(s.lat, s.lon, e.lat, e.lon);
+    // Geocode start and end
+    const [startCoords, endCoords] = await Promise.all([
+      geocodeLocation(start),
+      geocodeLocation(end)
+    ]);
+
+    resultDiv.innerHTML = '<div class="spinner"></div> Fetching driving route...';
+
+    // Get OSRM route
+    const routeData = await getDrivingRoute(startCoords.lat, startCoords.lon, endCoords.lat, endCoords.lon);
     const route = routeData.routes[0];
-    resultDiv.innerHTML = `<strong>Route Found:</strong> ${(route.distance/1000).toFixed(1)}km total journey.`;
+    const distanceKm = (route.distance / 1000).toFixed(1);
+    const durationMin = Math.round(route.duration / 60);
+
+    let stepsHtml = '<ul style="margin: 8px 0 0 20px;">';
+    (route.legs[0]?.steps || []).forEach(step => {
+      const instruction = step.maneuver?.instruction || "Continue on route";
+      stepsHtml += `<li>${instruction} (${(step.distance / 1000).toFixed(1)} km)</li>`;
+    });
+    stepsHtml += '</ul>';
+
+    // Gemini transit suggestion
+    let transitHtml = '';
+    try {
+      const transitPrompt = `Suggest public transit from "${start}" to "${end}". Include line names, station names, and estimated time. Be specific and concise.`;
+      const transitResponse = await callGemini(transitPrompt);
+      transitHtml = `
+        <div style="margin-top: 20px; padding: 16px; background: var(--bg-2); border-radius: var(--radius); border-left: 3px solid var(--blue);">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+            <span>🚇</span>
+            <strong style="color: var(--blue);">Public Transit Suggestions</strong>
+          </div>
+          <div style="line-height: 1.6;">${formatMarkdown(transitResponse)}</div>
+        </div>
+      `;
+    } catch (e) {
+      console.warn("Transit fetch failed", e);
+    }
+
+    const mapId = `route-map-modal-${Date.now()}`;
+    resultDiv.innerHTML = `
+      <div style="background:var(--bg-3); border-radius:var(--radius); padding:16px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+          <span>🚗</span>
+          <strong style="color:var(--neon);">Driving Route</strong>
+          <span style="margin-left: auto;">${distanceKm} km • ${durationMin} min</span>
+        </div>
+        <div id="${mapId}" style="height: 300px; border-radius: var(--radius); margin-bottom: 12px;"></div>
+        <details><summary style="cursor: pointer;">Turn-by-turn directions</summary>${stepsHtml}</details>
+        ${transitHtml}
+        <div style="margin-top: 12px; font-size:0.7rem; color:var(--text-muted);">⚠️ Always verify local conditions.</div>
+      </div>
+    `;
+
+    // Render map
+    setTimeout(() => {
+      if (typeof L !== 'undefined') {
+        const map = L.map(mapId).setView([startCoords.lat, startCoords.lon], 12);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+          attribution: '&copy; OSM & CartoDB'
+        }).addTo(map);
+        L.marker([startCoords.lat, startCoords.lon]).addTo(map).bindPopup(`Start: ${start}`);
+        L.marker([endCoords.lat, endCoords.lon]).addTo(map).bindPopup(`Destination: ${end}`);
+        const routeLayer = L.geoJSON(route.geometry, { style: { color: 'var(--neon)', weight: 5, opacity: 0.8 } }).addTo(map);
+        map.fitBounds(routeLayer.getBounds());
+      }
+    }, 100);
   } catch (err) {
-    resultDiv.innerHTML = "Error finding route.";
+    resultDiv.innerHTML = `<div class="auth-error show">⚠️ Error: ${err.message}</div>`;
+  } finally {
+    setLoading(findBtn, false, "🔍 Find Safe Route");
   }
 }
 
-async function openRouteSafetyModal() {
-  const modal = document.getElementById('route-safety-modal');
-  const contentDiv = document.getElementById('route-safety-content');
-  contentDiv.innerHTML = `
-    <div class="form-group"><label>Start</label><input id="route-start" class="form-input"></div>
-    <div class="form-group"><label>End</label><input id="route-end" class="form-input"></div>
-    <button onclick="findSafeRoute()" class="btn btn-primary w-full">FIND ROUTE</button>
-    <div id="route-result" style="margin-top:15px;"></div>`;
-  modal.classList.add('open');
-}
-
+/**
+ * Bridges the Charity Finder to the OSRM/Gemini Route Safety system
+ */
 async function getCharityDirections(name, address) {
   const start = document.getElementById('charity-location-input')?.value.trim();
-  if (!start) return showToast("Enter your starting location above.", "info");
+  if (!start) {
+    showToast("Please enter your starting location in the search box first.", "info");
+    return;
+  }
+
   await openRouteSafetyModal();
   document.getElementById('route-start').value = start;
   document.getElementById('route-end').value = address;
   findSafeRoute();
 }
 
-// Expose Globals
-window.openRouteSafetyModal = openRouteSafetyModal;
-window.findSafeRoute = findSafeRoute;
-window.generatePickupRoute = generatePickupRoute;
 window.getCharityDirections = getCharityDirections;
