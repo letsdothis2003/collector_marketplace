@@ -16,7 +16,8 @@ let GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_PLACEHOLDER";
 if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
   const isLocal = window.location.hostname === 'localhost' || 
                   window.location.hostname === '127.0.0.1' || 
-                  window.location.hostname.includes('github.dev');
+                  window.location.hostname.includes('github.dev') ||
+                  window.location.hostname.includes('app.github.dev');
 
   if (isLocal) {
     const script = document.createElement('script');
