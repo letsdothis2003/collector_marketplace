@@ -22,20 +22,14 @@ if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
   if (isLocal) {
     const script = document.createElement('script');
     script.src = 'config.js';
+    script.onload = () => {
+      if (typeof CONFIG !== 'undefined' && CONFIG.GEMINI_API_KEY) {
+        GEMINI_API_KEY = CONFIG.GEMINI_API_KEY;
+        console.log('[OBTAINUM AI] Local API Key successfully loaded from config.js');
+      }
+    };
     document.head.appendChild(script);
   }
-}
-
-// 2. Fallback for local development: Use config.js if the placeholder hasn't been replaced.
-if (GEMINI_API_KEY.includes("PLACEHOLDER") && typeof CONFIG !== 'undefined') {
-  if (CONFIG.GEMINI_API_KEY && !CONFIG.GEMINI_API_KEY.includes("HERE")) {
-    GEMINI_API_KEY = CONFIG.GEMINI_API_KEY;
-  }
-}
-
-// Sanity check for deployment injection
-if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
-  console.warn('[OBTAINUM AI] Warning: API Key placeholder detected. Did the GitHub Action run correctly?');
 }
 
 // Use a more robust check for the global db instance
