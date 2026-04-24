@@ -11,6 +11,20 @@ const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
 // Do not change the placeholder string; it must match deploy.yml.
 let GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_PLACEHOLDER";
 
+// Dynamically load local config only if running in a dev environment
+// This prevents 404 errors on the live GitHub Pages site
+if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
+  const isLocal = window.location.hostname === 'localhost' || 
+                  window.location.hostname === '127.0.0.1' || 
+                  window.location.hostname.includes('github.dev');
+
+  if (isLocal) {
+    const script = document.createElement('script');
+    script.src = 'config.js';
+    document.head.appendChild(script);
+  }
+}
+
 // 2. Fallback for local development: Use config.js if the placeholder hasn't been replaced.
 if (GEMINI_API_KEY.includes("PLACEHOLDER") && typeof CONFIG !== 'undefined') {
   if (CONFIG.GEMINI_API_KEY && !CONFIG.GEMINI_API_KEY.includes("HERE")) {
@@ -23,11 +37,15 @@ if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
   console.warn('[OBTAINUM AI] Warning: API Key placeholder detected. Did the GitHub Action run correctly?');
 }
 
-let db;
+// Use a more robust check for the global db instance
+if (typeof window.db === 'undefined') {
+  window.db = null;
+}
+let db = window.db;
 
 try {
-  db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  console.log('[OBTAINUM] Supabase connected');
+  if (!db) db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  console.log('[OBTAINUM] Supabase client initialized');
 } catch (e) {
   console.error('[OBTAINUM] Init failed:', e);
 }
