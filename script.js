@@ -8,6 +8,11 @@ const SUPABASE_URL = "https://gotzmuobwuubsugnowxq.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
 const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_PLACEHOLDER";
 
+// Sanity check for deployment injection
+if (GEMINI_API_KEY === "YOUR_GEMINI_API_KEY_PLACEHOLDER") {
+  console.warn('[OBTAINUM AI] Warning: API Key placeholder detected. Did the GitHub Action run correctly?');
+}
+
 let db;
 
 try {
@@ -17,14 +22,24 @@ try {
   console.error('[OBTAINUM] Init failed:', e);
 }
 
+// Debugging utility to prevent accidental key leaks in logs
+function scrub(text) {
+  if (!text || typeof text !== 'string') return text;
+  return text.split(GEMINI_API_KEY).join('[REDACTED_KEY]');
+}
+
 // ==================== DIRECT API HELPER (REPLACES LIBRARY) ====================
 async function callGemini(prompt, responseType = 'text/plain') {
   const model = "gemini-2.0-flash";
   console.log(`[OBTAINUM AI] Calling ${model} directly...`);
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`, {
+  // Using headers instead of query parameters hides the key from the URL in Network logs
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      'x-goog-api-key': GEMINI_API_KEY 
+    },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
@@ -34,7 +49,11 @@ async function callGemini(prompt, responseType = 'text/plain') {
   });
 
   const data = await response.json();
-  if (data.error) throw new Error(data.error.message);
+  if (data.error) {
+    // Scrub error messages in case they echo back the API key or sensitive URL params
+    const safeError = scrub(data.error.message);
+    throw new Error(safeError);
+  }
   
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error("No response from Gemini");
@@ -3124,16 +3143,9 @@ async function loadConversationThread(partnerId, listingId = null) {
   threadEl.innerHTML = '';
 
   if (messages) {
-    // Filter logic handled in JS to ensure we don't lose messages due to NULL columns or complex SQL ORs
     const filteredMessages = messages.filter(msg => {
-      // Only show messages belonging to this specific conversation
-      const isConversation = (msg.sender_id === State.user.id && msg.receiver_id === partnerId) || 
-                             (msg.sender_id === partnerId && msg.receiver_id === State.user.id);
-      
-      // Only hide if the user is the sender AND they explicitly clicked delete (true)
-      const isDeleted = msg.sender_id === State.user.id && msg.deleted_by_sender === true;
-      
-      return isConversation && !isDeleted;
+      return (msg.sender_id === State.user.id && msg.receiver_id === partnerId) || 
+             (msg.sender_id === partnerId && msg.receiver_id === State.user.id);
     });
 
     filteredMessages.forEach(msg => renderMessage(msg, State.user.id));
@@ -3213,34 +3225,14 @@ function renderMessage(msg, currentUserId) {
   
   if (msg.image_url) {
     div.innerHTML = `<img src="${escHtml(msg.image_url)}" class="msg-image" style="max-width:200px;border-radius:8px;cursor:pointer;" onclick="window.open(this.src)">
-                     ${isSent ? `<button onclick="deleteMessage('${msg.id}')" style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.7rem; display:block; margin-left:auto;">Delete</button>` : ''}
                      ${timestampHtml}`;
   } else {
     div.innerHTML = `${escHtml(msg.content)}
-                     ${isSent ? `<button onclick="deleteMessage('${msg.id}')" style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.7rem; display:block; margin-left:auto; padding-top:4px;">Delete</button>` : ''}
                      ${timestampHtml}`;
   }
   
   thread.appendChild(div);
   thread.scrollTop = thread.scrollHeight;
-}
-
-async function deleteMessage(msgId) {
-  if (!confirm('Remove this message from your view? (It will still be saved in the database)')) return;
-  
-  try {
-    const { error } = await db
-      .from('messages')
-      .update({ deleted_by_sender: true })
-      .eq('id', msgId)
-      .eq('sender_id', State.user.id);
-    
-    if (error) throw error;
-    showToast('Message removed from your view.', 'info');
-    loadConversationThread(State.currentChatPartnerId);
-  } catch (err) {
-    showToast('Failed to delete message.', 'error');
-  }
 }
 
 function initChat() {
