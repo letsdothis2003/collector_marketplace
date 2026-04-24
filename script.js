@@ -6,7 +6,7 @@
 // ==================== DATABASE CONFIG ====================
 const SUPABASE_URL = "https://gotzmuobwuubsugnowxq.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
-const GEMINI_API_KEY = " ";  
+const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_PLACEHOLDER";
 
 let db;
 
@@ -19,52 +19,27 @@ try {
 
 // ==================== DIRECT API HELPER (REPLACES LIBRARY) ====================
 async function callGemini(prompt, responseType = 'text/plain') {
-  if (!GEMINI_API_KEY) {
-    throw new Error('API Key missing');
-  }
+  const model = "gemini-2.0-flash";
+  console.log(`[OBTAINUM AI] Calling ${model} directly...`);
 
-  const models = [
-    'gemini-2.0-flash',
-    'gemini-1.5-flash',
-    'gemini-pro'
-  ];
-
-  for (const model of models) {
-    try {
-      console.log(`[OBTAINUM AI] Calling ${model}...`);
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': GEMINI_API_KEY
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{ text: prompt }]
-          }],
-          generationConfig: {
-            responseMimeType: responseType
-          }
-        })
-      });
-
-      const data = await response.json();
-      
-      if (data.error) {
-        console.warn(`Model ${model} error:`, data.error.message);
-        continue;
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        responseMimeType: responseType
       }
+    })
+  });
 
-      if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-        console.log(`[OBTAINUM AI] Success with ${model}`);
-        return data.candidates[0].content.parts[0].text;
-      }
-    } catch (err) {
-      console.error(`Fetch error with ${model}:`, err);
-      continue;
-    }
-  }
-  throw new Error('All Gemini models failed to respond.');
+  const data = await response.json();
+  if (data.error) throw new Error(data.error.message);
+  
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error("No response from Gemini");
+  
+  return text;
 }
 
 // ==================== CHARITY FINDER (RAG-STYLE AI) ====================
@@ -984,13 +959,13 @@ async function generateAndSaveListingSuggestion(listingId, forceRefresh = false)
 
   const existing = listing.ai_suggestions;
 
-  // Use existing if it's not missing and we are not forcing a refresh
+  // If we already have a suggestion saved and aren't forcing a refresh, use it.
+  // This prevents unnecessary API calls and keeps the DB as the source of truth.
   if (existing && !forceRefresh) {
-    const isHighQuality = typeof existing === 'object' &&
-                         existing.releaseYear && 
-                         !JSON.stringify(existing).includes("Unknown");
-    
-    if (isHighQuality) return existing;
+    const isComplete = typeof existing === 'object' && 
+                       existing.itemIdentification && 
+                       !JSON.stringify(existing).includes("Unknown");
+    if (isComplete) return existing;
   }
   
   let suggestion = null;
@@ -1003,15 +978,15 @@ async function generateAndSaveListingSuggestion(listingId, forceRefresh = false)
   }
   
   if (suggestion) {
-    // This saves the JS object directly into the JSONB column in Supabase
     const { error: updateError } = await db
       .from('listings')
       .update({ ai_suggestions: suggestion })
       .eq('id', listingId);
     
-    // Update local state immediately so the UI reflects the change
-    if (State.selectedListing && State.selectedListing.id === listingId) {
-      State.selectedListing.ai_suggestions = suggestion;
+    // Sync state if update was successful (don't wait for .select() to avoid RLS return issues)
+    if (!updateError && State.selectedListing && State.selectedListing.id === listingId) {
+      State.selectedListing.ai_suggestions = suggestion; // Sync UI State
+      console.log('[OBTAINUM] AI Suggestion saved and synced to UI');
     }
 
     if (updateError) {
