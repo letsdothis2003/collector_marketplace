@@ -7,13 +7,19 @@
 const SUPABASE_URL = "https://gotzmuobwuubsugnowxq.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
 
-// Load API key from config.js if available, otherwise use placeholder
-let GEMINI_API_KEY = (typeof CONFIG !== 'undefined' && CONFIG.GEMINI_API_KEY) 
-  ? CONFIG.GEMINI_API_KEY 
-  : "YOUR_GEMINI_API_KEY_PLACEHOLDER";
+// 1. This placeholder is replaced by GitHub Actions during deployment.
+// Do not change the placeholder string; it must match deploy.yml.
+let GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_PLACEHOLDER";
+
+// 2. Fallback for local development: Use config.js if the placeholder hasn't been replaced.
+if (GEMINI_API_KEY.includes("PLACEHOLDER") && typeof CONFIG !== 'undefined') {
+  if (CONFIG.GEMINI_API_KEY && !CONFIG.GEMINI_API_KEY.includes("HERE")) {
+    GEMINI_API_KEY = CONFIG.GEMINI_API_KEY;
+  }
+}
 
 // Sanity check for deployment injection
-if (GEMINI_API_KEY === "YOUR_GEMINI_API_KEY_PLACEHOLDER") {
+if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
   console.warn('[OBTAINUM AI] Warning: API Key placeholder detected. Did the GitHub Action run correctly?');
 }
 
@@ -34,6 +40,10 @@ function scrub(text) {
 
 // ==================== DIRECT API HELPER (REPLACES LIBRARY) ====================
 async function callGemini(prompt, responseType = 'text/plain') {
+  if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
+    throw new Error("AI service is not configured. Please add your Gemini API Key.");
+  }
+
   const model = "gemini-2.0-flash";
   let retries = 3;
   let delay = 2000; // Start with a 2-second delay
@@ -87,7 +97,7 @@ async function findLocalCharities() {
   const btn = document.getElementById('charity-search-btn');
   
   // Check if API key is configured
-  if (!GEMINI_API_KEY) {
+  if (!GEMINI_API_KEY || GEMINI_API_KEY.includes("PLACEHOLDER")) {
     resultsDiv.innerHTML = `<div class="auth-error show">⚠️ Charity finder is not available. AI service not configured.</div>`;
     return;
   }

@@ -8,13 +8,12 @@
  * 1. Open the .env file in this directory
  * 2. Replace YOUR_GEMINI_API_KEY_HERE with your actual Gemini API key
  * 3. Get your key from: https://makersuite.google.com/app/apikey
- * 4. Never commit your .env file (it's already in .gitignore)
+ * 4. NEVER commit your real API key to this file (config.js).
  */
 
 const CONFIG = {
   // Your Gemini API key
-  // UPDATE THIS: Replace with your actual API key from .env
-  // See .env file for detailed instructions
+  // For local development only. Do not commit your key!
   GEMINI_API_KEY: 'YOUR_GEMINI_API_KEY_HERE',
   
   // Supabase configuration (no changes needed - these are published keys)
