@@ -1,8 +1,10 @@
 # Local configuration
+# Local configuration and secrets
 config.js
 
 # Dependencies
 node_modules/
 
 # OS metadata
+# OS generated files
 .DS_Store

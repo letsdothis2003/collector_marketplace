@@ -46,10 +46,9 @@ async function callGemini(prompt, responseType = 'text/plain') {
 
   // Priority list including requested future-proof models
   const models = [
-    "gemini-3.0-flash", 
-    "gemini-2.5-flash", 
     "gemini-2.0-flash", 
-    "gemini-1.5-flash"
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-8b"
   ];
   
   for (const model of models) {
@@ -3819,6 +3818,9 @@ async function getDrivingRoute(startLat, startLon, endLat, endLon) {
   const response = await fetch(url);
   const data = await response.json();
   if (data.code !== 'Ok') throw new Error('Routing failed');
+  if (!response.ok || data.code !== 'Ok') {
+    throw new Error(data.message || 'No land route found between these locations.');
+  }
   return data;
 }
 
@@ -3870,7 +3872,17 @@ async function generatePickupRoute(listingId) {
     resultContainer.innerHTML = '<div class="spinner"></div> Fetching driving route...';
 
     // 2. Get driving route from OSRM
-    const routeData = await getDrivingRoute(startCoords.lat, startCoords.lon, endCoords.lat, endCoords.lon);
+    let routeData;
+    try {
+      routeData = await getDrivingRoute(startCoords.lat, startCoords.lon, endCoords.lat, endCoords.lon);
+    } catch (routeErr) {
+      resultContainer.innerHTML = `
+        <div class="auth-error show" style="background:rgba(255,214,10,0.1); border-color:var(--warning); color:var(--warning);">
+          ⚠️ <strong>Land Route Unavailable:</strong> ${routeErr.message}<br><small>The distance may be too great or involve crossing oceans.</small>
+        </div>`;
+      return;
+    }
+
     const route = routeData.routes[0];
     const distanceKm = (route.distance / 1000).toFixed(1);
     const durationMin = Math.round(route.duration / 60);
