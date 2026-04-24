@@ -6,6 +6,7 @@
 // ==================== DATABASE CONFIG ====================
 const SUPABASE_URL = "https://gotzmuobwuubsugnowxq.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
+const GEMINI_API_KEY = " ";  
 
 let db;
 
@@ -18,17 +19,160 @@ try {
 
 // ==================== DIRECT API HELPER (REPLACES LIBRARY) ====================
 async function callGemini(prompt, responseType = 'text/plain') {
-  // SECURE IMPLEMENTATION: Call a Supabase Edge Function instead of Gemini directly
+  if (!GEMINI_API_KEY) {
+    throw new Error('API Key missing');
+  }
+
+  const models = [
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-pro'
+  ];
+
+  for (const model of models) {
+    try {
+      console.log(`[OBTAINUM AI] Calling ${model}...`);
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': GEMINI_API_KEY
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: prompt }]
+          }],
+          generationConfig: {
+            responseMimeType: responseType
+          }
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.error) {
+        console.warn(`Model ${model} error:`, data.error.message);
+        continue;
+      }
+
+      if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+        console.log(`[OBTAINUM AI] Success with ${model}`);
+        return data.candidates[0].content.parts[0].text;
+      }
+    } catch (err) {
+      console.error(`Fetch error with ${model}:`, err);
+      continue;
+    }
+  }
+  throw new Error('All Gemini models failed to respond.');
+}
+
+// ==================== CHARITY FINDER (RAG-STYLE AI) ====================
+async function findLocalCharities() {
+  const locationInput = document.getElementById('charity-location-input');
+  const resultsDiv = document.getElementById('charity-results-container');
+  const mapDiv = document.getElementById('charity-map');
+  const btn = document.getElementById('charity-search-btn');
+  
+  // Check if API key is configured
+  if (!GEMINI_API_KEY) {
+    resultsDiv.innerHTML = `<div class="auth-error show">⚠️ Charity finder is not available. AI service not configured.</div>`;
+    return;
+  }
+  
+  const location = locationInput?.value.trim();
+  if (!location) {
+    showToast("Please enter a location.", "info");
+    return;
+  }
+
+  setLoading(btn, true, "SEARCHING...");
+  resultsDiv.innerHTML = '<div class="spinner" style="margin: 20px auto;"></div><p style="text-align:center;">Identifying top-rated charities near you...</p>';
+  mapDiv.style.display = 'none';
+
+  const prompt = `You are a helpful community assistant. Find the top 10 registered, highly-rated charities, non-profits, or donation centers in or near "${location}". 
+  Include a mix of organizations (e.g., food banks, clothing donations, animal shelters).
+  
+  Return the results as a JSON array of objects with this structure:
+  [
+    {
+      "name": "Charity Name",
+      "description": "Short 1-sentence mission",
+      "address": "Full street address, City, State",
+      "focus": "Category (e.g., Hunger, Health)",
+      "url": "Website URL if known"
+    }
+  ]
+  Return ONLY the JSON array. No extra text.`;
+
   try {
-    const { data, error } = await db.functions.invoke('gemini-proxy', {
-      body: { prompt, responseType }
-    });
-    
-    if (error) throw error;
-    return data.text;
+    const response = await callGemini(prompt, 'application/json');
+    const cleanText = response.replace(/```json|```/g, '').trim();
+    const charities = JSON.parse(cleanText);
+
+    if (!charities || charities.length === 0) throw new Error("No charities found.");
+
+    resultsDiv.innerHTML = `
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 20px;">
+        ${charities.map((c, i) => `
+          <div class="charity-card animate-pop" style="background: var(--bg-2); padding: 16px; border-radius: var(--radius); border-left: 4px solid var(--neon);">
+            <div style="font-size: 0.65rem; color: var(--neon); font-weight: bold; margin-bottom: 4px;">#${i+1} ${c.focus.toUpperCase()}</div>
+            <h4 style="margin: 0 0 8px 0; color: var(--text);">${escHtml(c.name)}</h4>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px;">${escHtml(c.description)}</p>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;">📍 ${escHtml(c.address)}</div>
+            ${c.url ? `<a href="${c.url}" target="_blank" class="btn btn-ghost btn-sm" style="font-size: 0.7rem; padding: 4px 8px;">VISIT WEBSITE</a>` : ''}
+          </div>
+        `).join('')}
+      </div>
+    `;
+
+    // Geocode and show map
+    mapDiv.style.display = 'block';
+    initCharityMap(charities, location);
+
   } catch (err) {
-    console.error('[OBTAINUM AI] Proxy error:', err);
-    throw new Error('AI system currently unavailable. Ensure gemini-proxy is deployed.');
+    console.error("Charity Finder Error:", err);
+    resultsDiv.innerHTML = `<div class="auth-error show">⚠️ Could not retrieve charity data. Try again or configure Gemini API.</div>`;
+  } finally {
+    setLoading(btn, false, "FIND CHARITIES");
+  }
+}
+
+async function initCharityMap(charities, centerLocation) {
+  if (typeof L === 'undefined') return;
+  
+  try {
+    // Get center coordinates for the user's provided area
+    const center = await geocodeLocation(centerLocation);
+    const map = L.map('charity-map').setView([center.lat, center.lon], 12);
+    
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; CartoDB'
+    }).addTo(map);
+
+    const bounds = [];
+    
+    // Add markers for each charity
+    for (const c of charities) {
+      try {
+        const coords = await geocodeLocation(c.address);
+        const marker = L.marker([coords.lat, coords.lon]).addTo(map);
+        marker.bindPopup(`<strong>${escHtml(c.name)}</strong><br>${escHtml(c.address)}`);
+        bounds.push([coords.lat, coords.lon]);
+      } catch (e) {
+        console.warn(`Could not geocode address: ${c.address}`);
+      }
+    }
+
+    if (bounds.length > 0) {
+      map.fitBounds(bounds, { padding: [30, 30] });
+    }
+    
+    // Trigger a resize to fix Leaflet gray tiles
+    setTimeout(() => map.invalidateSize(), 200);
+
+  } catch (err) {
+    console.error("Map initialization failed", err);
   }
 }
 
@@ -63,10 +207,7 @@ const State = {
   selectedReviewListingId: null,
   allSellerItems: [],
   viewingProfileId: null,
-  donationLocation: null,
-  charityResults: null,
-  donationCategory: 'all',
-  favoriteCharityIds: new Set()
+  isSubmittingListing: false
 };
 
 // ==================== HELPER FUNCTIONS ====================
@@ -85,15 +226,6 @@ function generateStarRatingHtml(rating) {
   }
   html += '</span>';
   return html;
-}
-
-function copyToClipboard(text) {
-  navigator.clipboard.writeText(text).then(() => {
-    showToast('Copied to clipboard!', 'success');
-  }).catch(err => {
-    console.error('Copy failed:', err);
-    showToast('Failed to copy.', 'error');
-  });
 }
 
 function showToast(message, type = 'info') {
@@ -119,6 +251,14 @@ function closeOnOverlay(e, id) {
 
 function closeMobileNav() {
   document.getElementById('mobile-nav')?.classList.remove('open');
+}
+
+function toggleProcessingOverlay(show, text = 'PROCESSING...') {
+  const overlay = document.getElementById('processing-overlay');
+  const textEl = document.getElementById('processing-text');
+  if (!overlay) return;
+  if (textEl) textEl.textContent = text.toUpperCase();
+  overlay.classList.toggle('show', show);
 }
 
 function setLoading(btn, isLoading, text) {
@@ -155,7 +295,7 @@ function createImageCarousel(images, listingId) {
     <div class="image-carousel" id="${carouselId}">
       <div class="carousel-container">
         <div class="carousel-slides" id="${carouselId}-slides">
-          ${images.map((img, idx) => `<div class="carousel-slide" data-index="${idx}"><img src="${escHtml(img)}" alt="Image ${idx + 1}" loading="lazy" /></div>`).join('')}
+          ${images.map((img, idx) => `<div class="carousel-slide" data-index="${idx}"><img src="${escHtml(img)}" alt="Image ${idx + 1}" loading="lazy" decoding="async" /></div>`).join('')}
         </div>
         <button class="carousel-btn prev" onclick="event.stopPropagation(); changeSlide('${carouselId}', -1)">‹</button>
         <button class="carousel-btn next" onclick="event.stopPropagation(); changeSlide('${carouselId}', 1)">›</button>
@@ -213,7 +353,7 @@ function slugify(text) {
 function getRouteHash(page, meta = {}) {
   if (page === 'detail' && meta.listingId && meta.listingName) {
     const slug = slugify(meta.listingName);
-    return `#shop-${slug}-${meta.listingId}`;
+    return `#shop-${slug}--${meta.listingId}`; // Double-dash separator for UUIDs
   }
   if (page === 'profile' && meta.profileId) {
     return `#profile/${meta.profileId}`;
@@ -255,9 +395,9 @@ function parseRouteFromHash() {
   const knownPages = ['shop', 'create', 'profile', 'wishlist', 'messages', 'assistant', 'about', 'contact', 'donate', 'review'];
   if (knownPages.includes(hash)) return { page: hash };
   if (hash.startsWith('shop-')) {
-    const parts = hash.split('-');
+    const parts = hash.split('--');
     const id = parts[parts.length - 1];
-    if (/^\d+$/.test(id)) {
+    if (id && id.length >= 32) { // Validate UUID format
       return { page: 'detail', listingId: id };
     }
   }
@@ -319,7 +459,6 @@ function navigate(page, options = {}) {
   if (page === 'wishlist' && State.user) loadWishlist();
   if (page === 'create' && State.user) initCreatePage();
   if (page === 'review') loadReviewPage(options.meta?.sellerId);
-  if (page === 'donate') initDonationPage();
   if (page === 'messages' && State.user) loadMessages();
   if (page === 'assistant') {
     updateAssistantUI();
@@ -454,7 +593,6 @@ async function onAuthChange(user) {
   State.profile = profile;
   updateAuthUI();
   await loadWishlistIds();
-  await loadFavoriteCharities();
   await initAISession();
 }
 
@@ -462,7 +600,6 @@ function onSignOut() {
   State.user = null;
   State.profile = null;
   State.wishlistIds.clear();
-  State.favoriteCharityIds.clear();
   State.currentChatPartnerId = null;
   State.currentListingId = null;
   State.aiSessionId = null;
@@ -573,14 +710,21 @@ async function handleRegister(e) {
       closeModal('auth-modal');
       showToast('Account created! Welcome to OBTAINUM.', 'success');
     } else {
-      document.getElementById('register-form-wrap').innerHTML = `
-        <div class="auth-confirm-panel" style="text-align:center;padding:20px;">
-          <div class="confirm-icon" style="font-size:3rem;">✉️</div>
-          <div class="confirm-title" style="font-weight:bold;margin:16px 0;">CHECK YOUR EMAIL</div>
-          <div class="confirm-msg">Click the confirmation link to activate your account.</div>
-          <button class="btn btn-outline w-full" onclick="closeModal('auth-modal')">GOT IT</button>
-        </div>
-      `;
+      // Fix: Handle case where 'register-form-wrap' ID is missing from HTML
+      const wrap = document.getElementById('register-form-wrap') || document.getElementById('auth-register');
+      if (wrap) {
+        wrap.innerHTML = `
+          <div class="auth-confirm-panel" style="text-align:center;padding:20px;">
+            <div class="confirm-icon" style="font-size:3rem;">✉️</div>
+            <div class="confirm-title" style="font-weight:bold;margin:16px 0;">CHECK YOUR EMAIL</div>
+            <div class="confirm-msg">Click the confirmation link to activate your account.</div>
+            <button class="btn btn-outline w-full" onclick="closeModal('auth-modal')">GOT IT</button>
+          </div>
+        `;
+      } else {
+        showToast('Registration successful! Check your email to confirm.', 'success');
+        closeModal('auth-modal');
+      }
     }
   } catch (err) {
     if (errEl) {
@@ -589,6 +733,51 @@ async function handleRegister(e) {
     }
   } finally {
     if (btn) setLoading(btn, false, 'CREATE ACCOUNT');
+  }
+}
+
+// ==================== UI STYLING INJECTION ====================
+function injectCustomStyles() {
+  const style = document.createElement('style');
+  style.textContent = `
+    /* Global Processing Overlay */
+    #processing-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(10px);
+      z-index: 10000;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--neon);
+      font-family: 'Orbitron', sans-serif;
+      text-align: center;
+    }
+    #processing-overlay.show { display: flex; }
+
+    /* Navbar Scrollbar Red & Wide in Dark Mode */
+    body:not(.light-mode) .nav-menu::-webkit-scrollbar {
+      height: 12px;
+    }
+    body:not(.light-mode) .nav-menu::-webkit-scrollbar-thumb {
+      background: #ff0000;
+      border-radius: 10px;
+      border: 2px solid var(--bg);
+      box-shadow: 0 0 15px #ff0000, inset 0 0 5px rgba(255, 255, 255, 0.5);
+    }
+    /* Hardware Acceleration for smoother page transitions */
+    .page { backface-visibility: hidden; transform: translateZ(0); }
+  `;
+  document.head.appendChild(style);
+
+  // Create overlay element if it doesn't exist
+  if (!document.getElementById('processing-overlay')) {
+    const overlay = document.createElement('div');
+    overlay.id = 'processing-overlay';
+    overlay.innerHTML = '<div class="spinner spinner-lg"></div><div id="processing-text" style="margin-top:20px; letter-spacing:2px; font-weight:bold;">PROCESSING...</div>';
+    document.body.appendChild(overlay);
   }
 }
 
@@ -779,18 +968,8 @@ function askSuggestion(suggestion) {
 
 // ==================== LISTING SUGGESTIONS (AI Price Analysis) ====================
 
-async function generateAndSaveListingSuggestion(listingId) {
+async function generateAndSaveListingSuggestion(listingId, forceRefresh = false) {
   if (!db) return null;
-  
-  const { data: existingListing } = await db
-    .from('listings')
-    .select('ai_suggestions')
-    .eq('id', listingId)
-    .single();
-  
-  if (existingListing?.ai_suggestions) {
-    return existingListing.ai_suggestions;
-  }
   
   const { data: listing, error } = await db
     .from('listings')
@@ -801,6 +980,17 @@ async function generateAndSaveListingSuggestion(listingId) {
   if (error || !listing) {
     console.error('Could not fetch listing:', error);
     return null;
+  }
+
+  const existing = listing.ai_suggestions;
+
+  // Use existing if it's not missing and we are not forcing a refresh
+  if (existing && !forceRefresh) {
+    const isHighQuality = typeof existing === 'object' &&
+                         existing.releaseYear && 
+                         !JSON.stringify(existing).includes("Unknown");
+    
+    if (isHighQuality) return existing;
   }
   
   let suggestion = null;
@@ -813,11 +1003,17 @@ async function generateAndSaveListingSuggestion(listingId) {
   }
   
   if (suggestion) {
+    // This saves the JS object directly into the JSONB column in Supabase
     const { error: updateError } = await db
       .from('listings')
       .update({ ai_suggestions: suggestion })
       .eq('id', listingId);
     
+    // Update local state immediately so the UI reflects the change
+    if (State.selectedListing && State.selectedListing.id === listingId) {
+      State.selectedListing.ai_suggestions = suggestion;
+    }
+
     if (updateError) {
       console.error('Failed to save AI suggestion:', updateError);
     }
@@ -827,23 +1023,32 @@ async function generateAndSaveListingSuggestion(listingId) {
 }
 
 async function analyzeListingWithGemini(listing) {
-  const prompt = `You are OBTAINUM's pricing AI. Analyze this marketplace listing and provide a JSON response.
+  const prompt = `You are OBTAINUM's expert collector and market analyst AI. 
+  Task: Perform a deep valuation of the item listed below. 
+  KNOWLEDGE LOOKUP: Use your internal training data to identify the specific product line (e.g., Transformers Studio Series, LEGO Star Wars), release year, and manufacturer.
+  VALUATION: Identify the original retail MSRP and the current secondary market value for a "${listing.condition}" condition specimen. 
+  INFLATED VALUE: You MUST calculate an inflated value. Take the MSRP, add 4% annual inflation, and a 20-50% scarcity premium for sought-after collectibles.
+  
+  CRITICAL: DO NOT use the words "Unknown", "N/A", or null. If you don't have the exact dollar amount, provide your best high-confidence estimate based on the product class (e.g., Voyager class Transformers usually MSRP for $29.99).
+  For the "reasoning", provide a 3-sentence summary explaining the product's history and why it is a ${listing.price > (listing.msrp || 0) ? 'collector item' : 'good deal'}.
 
 LISTING DETAILS:
-- Item Name: ${listing.name}
+- Product Name: ${listing.name}
 - Category: ${listing.category}
 - Condition: ${listing.condition}
-- Listed Price: $${listing.price}
+- Seller's Listed Price: $${listing.price}
 - MSRP (if available): ${listing.msrp ? '$' + listing.msrp : 'Not provided'}
+- Images for Context: ${listing.images?.join(', ') || 'No images provided'}
 
 Return ONLY valid JSON with this exact structure:
 {
   "itemIdentification": "What specific product this appears to be",
-  "originalRetailPrice": "Original MSRP/retail price when new",
-  "currentMarketValue": "Estimated current market value",
+  "releaseYear": "Year or era when this item first came out",
+  "originalRetailPrice": "Original MSRP (e.g. $12.99)",
+  "currentMarketValue": "Current inflated market range including collector premiums (e.g. $35 - $95)",
   "valueAssessment": "good deal / fair price / overpriced",
   "score": 0-100,
-  "reasoning": "Brief explanation",
+  "reasoning": "A coherent 3-4 sentence analytical summary. Identify the specific model, its release era, rarity factor, and justify the valuation based on inflation-adjusted historical data and current collector demand.",
   "recommendation": "buy / negotiate / avoid"
 }`;
   
@@ -860,12 +1065,58 @@ Return ONLY valid JSON with this exact structure:
 }
 
 function getFallbackListingAnalysis(listing) {
+  // Attempt to guess the release year from the title; NEVER return "Unknown"
+  let releaseYear = "2021"; 
+  const name = (listing.name || "").toLowerCase();
+  
+  // Regex for 4-digit years (1970-2029)
+  const yearMatch = name.match(/\b(19[7-9]\d|20[0-2]\d)\b/);
+  if (yearMatch) {
+    releaseYear = yearMatch[0];
+  } else {
+    if (name.includes("dark of the moon")) releaseYear = "2011";
+    else if (name.includes("g1") || name.includes("generation 1")) releaseYear = "1984";
+    else if (name.includes("beast wars")) releaseYear = "1996";
+    else if (name.includes("vintage")) releaseYear = "1980s/90s";
+    else if (name.includes("studio series")) releaseYear = "2018";
+    else if (listing.category === "Electronics") releaseYear = "2021";
+    else if (listing.category === "Collectibles") releaseYear = "2015";
+  }
+
+  // Guess MSRP based on common keywords; NEVER return "Unknown"
+  let guessedMsrp = listing.msrp;
+  if (!guessedMsrp) {
+    if (name.includes("deluxe")) guessedMsrp = 19.99;
+    else if (name.includes("voyager")) guessedMsrp = 29.99;
+    else if (name.includes("leader")) guessedMsrp = 49.99;
+    else if (name.includes("studio series")) guessedMsrp = 29.99;
+    else if (listing.category === "Electronics") guessedMsrp = listing.price * 1.5;
+    else guessedMsrp = listing.price || 25.00; 
+  }
+
+  const finalMsrpDisplay = `$${Number(guessedMsrp).toFixed(2)}`;
   let score = 50;
   let valueAssessment = "fair price";
   let recommendation = "consider";
   
-  if (listing.msrp && listing.msrp > 0) {
-    const percentOfMsrp = (listing.price / listing.msrp) * 100;
+  // Calculate Inflation and Collector Range for fallback
+  let minVal = Math.round((guessedMsrp || 20) * 1.1);
+  let maxVal = Math.round(minVal * 2.5);
+
+  const effectiveMsrp = guessedMsrp || listing.msrp;
+  if (effectiveMsrp && releaseYear !== "Unknown") {
+    const match = releaseYear.match(/\d{4}/);
+    const year = match ? parseInt(match[0]) : 2018;
+    const yearsPassed = Math.max(1, new Date().getFullYear() - year);
+    
+    // Base inflation (3%) + Scarcity Multiplier (3.5x for peak collector value)
+    const inflationAdjusted = effectiveMsrp * Math.pow(1.03, yearsPassed);
+    minVal = Math.round(inflationAdjusted);
+    maxVal = Math.round(inflationAdjusted * 3.5); 
+  }
+
+  if (effectiveMsrp && effectiveMsrp > 0) {
+    const percentOfMsrp = (listing.price / effectiveMsrp) * 100;
     if (percentOfMsrp <= 60) {
       score = 90;
       valueAssessment = "excellent deal";
@@ -889,29 +1140,31 @@ function getFallbackListingAnalysis(listing) {
     }
   }
   
-  const conditionAdjustment = {
-    'new': 1.0,
-    'like-new': 0.9,
-    'good': 0.75,
-    'fair': 0.6,
-    'poor': 0.4
-  };
-  score = Math.round(score * (conditionAdjustment[listing.condition] || 0.7));
+  // Condition weighting: 'Good' condition is common for collectors and shouldn't be heavily penalized
+  const condWeights = { 'new': 1.0, 'like-new': 0.98, 'good': 0.9, 'fair': 0.7, 'poor': 0.4 };
+  score = Math.round(score * (condWeights[listing.condition] || 0.85));
   
+  const fallbackReasoning = `This ${listing.name} from approximately ${releaseYear} is evaluated as a ${valueAssessment}. Given its ${listing.condition} condition and the historical MSRP of ${finalMsrpDisplay}, the current market value reflects standard inflation and typical collector demand within the ${listing.category} sector.`;
+
   return {
     itemIdentification: listing.name,
-    originalRetailPrice: listing.msrp ? `$${listing.msrp}` : "Unknown",
-    currentMarketValue: `$${Math.round(listing.price * 0.8)} - $${Math.round(listing.price * 1.2)}`,
+    releaseYear: releaseYear,
+    originalRetailPrice: finalMsrpDisplay,
+    currentMarketValue: `$${minVal} - $${maxVal}`,
     valueAssessment: valueAssessment,
     score: Math.min(100, Math.max(0, score)),
-    reasoning: `Based on ${listing.condition} condition in "${listing.category}" category.`,
+    reasoning: fallbackReasoning,
     recommendation: recommendation
   };
 }
 
-async function displayListingSuggestion(listingId) {
-  const suggestion = await generateAndSaveListingSuggestion(listingId);
+async function displayListingSuggestion(listingId, forceRefresh = false) {
   const container = document.getElementById(`ai-suggestions-${listingId}`);
+  if (forceRefresh && container) {
+    container.innerHTML = '<div style="text-align:center; padding:20px; background:var(--bg-2); border-radius:var(--radius-lg); height:100%; display:flex; flex-direction:column; justify-content:center;"><div class="spinner" style="margin:0 auto 10px;"></div> Updating Analysis...</div>';
+  }
+
+  const suggestion = await generateAndSaveListingSuggestion(listingId, forceRefresh);
   
   if (!container || !suggestion) return;
   
@@ -935,12 +1188,16 @@ async function displayListingSuggestion(listingId) {
           <div style="font-weight:600;">${escHtml(suggestion.itemIdentification)}</div>
         </div>
         <div style="background:var(--bg-3); padding:10px; border-radius:8px;">
+          <div style="font-size:11px; color:var(--text-muted);">📅 CAME OUT IN</div>
+          <div style="font-weight:600;">${suggestion.releaseYear || 'N/A'}</div>
+        </div>
+        <div style="background:var(--bg-3); padding:10px; border-radius:8px;">
           <div style="font-size:11px; color:var(--text-muted);">💰 ORIGINAL PRICE</div>
-          <div style="font-weight:600;">${suggestion.originalRetailPrice}</div>
+          <div style="font-weight:600;">${suggestion.originalRetailPrice || 'N/A'}</div>
         </div>
         <div style="background:var(--bg-3); padding:10px; border-radius:8px;">
           <div style="font-size:11px; color:var(--text-muted);">📈 CURRENT VALUE</div>
-          <div style="font-weight:600;">${suggestion.currentMarketValue}</div>
+          <div style="font-weight:600;">${suggestion.currentMarketValue || 'N/A'}</div>
         </div>
       </div>
       
@@ -950,8 +1207,8 @@ async function displayListingSuggestion(listingId) {
       </div>
       
       <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; padding-top:12px; border-top:1px solid var(--border);">
-        <span style="font-size:13px;">🏷️ ${suggestion.recommendation === 'buy' ? '✅ RECOMMENDED' : (suggestion.recommendation === 'negotiate' ? '🤝 TRY NEGOTIATING' : '⚠️ CONSIDER ALTERNATIVES')}</span>
-        <span style="font-size:11px; color:var(--text-muted);">AI analysis • generated once</span>
+        <div style="font-size:13px;">🏷️ ${suggestion.recommendation === 'buy' ? '✅ RECOMMENDED' : (suggestion.recommendation === 'negotiate' ? '🤝 TRY NEGOTIATING' : '⚠️ CONSIDER ALTERNATIVES')}</div>
+        <button class="btn btn-ghost btn-sm" onclick="displayListingSuggestion('${listingId}', true)" style="font-size:10px; padding:4px 8px;">🔄 REFRESH AI</button>
       </div>
     </div>
   `;
@@ -961,7 +1218,6 @@ async function displayListingSuggestion(listingId) {
 async function loadListings(forceRefresh = false) {
   if (!db) { renderListings([]); return; }
   try {
-    // PERFORMANCE: Use cache if available to prevent flicker and slow loads
     if (State.listings.length > 0 && !forceRefresh) {
       applyFilters();
       return;
@@ -971,16 +1227,8 @@ async function loadListings(forceRefresh = false) {
     
     const { data, error } = await db
       .from('listings')
-      .select(`
-        *,
-        profiles:seller_id (
-          id,
-          username,
-          avatar_url,
-          rating,
-          location
-        )
-      `)
+      // OPTIMIZATION: Only select columns needed for the grid view to reduce payload size
+      .select('id, name, price, images, category, condition, type, location, is_fair, is_sold, seller_id, created_at, ai_suggestions, profiles:seller_id(id, username, avatar_url, rating, location)')
       .eq('is_sold', false)
       .order('created_at', { ascending: false });
     
@@ -1475,6 +1723,7 @@ async function submitListing(e) {
   const btn = document.getElementById('create-submit');
   if (errEl) errEl.classList.remove('show');
   if (btn) setLoading(btn, true, isEditing ? 'SAVING...' : 'PUBLISHING...');
+  toggleProcessingOverlay(true, isEditing ? 'Updating listing...' : 'Uploading listing...');
   
   try {
     const price = parseFloat(document.getElementById('c-price')?.value || '0');
@@ -1555,25 +1804,29 @@ async function submitListing(e) {
       State.listings.unshift(savedListing);
     }
     
-    const form = document.getElementById('create-form');
-    if (form) form.reset();
+    // Reset listing state completely
+    const createForm = document.getElementById('create-form');
+    if (createForm) createForm.reset();
     State.imageFiles = [];
     State.keepExistingImages = [];
-    const previewGrid = document.getElementById('image-preview-grid');
-    if (previewGrid) previewGrid.innerHTML = '';
+    document.getElementById('image-preview-grid').innerHTML = '';
     State.editingListingId = null;
-    
+
     showToast(isEditing ? 'Listing updated!' : 'Listing published!', 'success');
-    navigate(isEditing ? 'profile' : 'shop');
-    
+    // Force refresh to clear local unshifted state and get fresh DB data
+    if (isEditing) navigate('profile');
+    else loadListings(true).then(() => navigate('shop'));
+
   } catch (err) {
     console.error('Error submitting listing:', err);
+    State.isSubmittingListing = false; // Reset on error
     if (errEl) {
       errEl.textContent = err.message || 'An unknown error occurred.';
       errEl.classList.add('show');
     }
   } finally {
     if (btn) setLoading(btn, false, isEditing ? 'SAVE CHANGES' : 'PUBLISH LISTING');
+    toggleProcessingOverlay(false);
   }
 }
 
@@ -1606,7 +1859,14 @@ async function loadProfile() {
     navigate('shop');
     return;
   }
-  
+  renderProfileUI(profile);
+}
+
+// New: Extracted UI logic to allow calling from cache or fresh fetch
+async function renderProfileUI(profile) {
+  const profileIdToLoad = profile.id;
+  const isOwnProfile = State.user && profileIdToLoad === State.user.id;
+
   const avatarEl = document.getElementById('profile-avatar-lg');
   const usernameEl = document.getElementById('profile-username');
   const emailEl = document.getElementById('profile-email');
@@ -1617,7 +1877,7 @@ async function loadProfile() {
   
   if (avatarEl) {
     if (profile?.avatar_url) {
-      avatarEl.innerHTML = `<img src="${escHtml(profile.avatar_url)}" alt="${escHtml(name)}" />`;
+      avatarEl.innerHTML = `<img src="${escHtml(profile.avatar_url)}" alt="${escHtml(name)}" decoding="async" />`;
     } else {
       avatarEl.textContent = name.charAt(0).toUpperCase();
     }
@@ -1648,16 +1908,6 @@ async function loadProfile() {
       editButton.innerHTML = '💬 Let\'s Chat';
       editButton.onclick = () => startChat(profile.id);
       editButton.style.display = 'inline-block';
-    }
-
-    // Add Rating Summary to Banner
-    const ratingValue = profile?.rating || 0;
-    if (usernameEl) {
-      const stars = generateStarRatingHtml(ratingValue);
-      usernameEl.innerHTML = `${escHtml(profile?.username || name).toUpperCase()} 
-        <span style="font-size:1rem; margin-left:12px; vertical-align:middle; display:inline-flex; align-items:center; gap:8px;">
-          ${stars} <small style="color:var(--text-muted); font-family:'Inter';">(${parseFloat(ratingValue).toFixed(1)})</small>
-        </span>`;
     }
     
     // Handle Review Button logic
@@ -1712,26 +1962,78 @@ async function loadProfile() {
   showProfileTab(tabToOpen);
 }
 
+async function refreshProfileRating() {
+  if (!State.user || State.viewingProfileId !== State.user.id) return;
+  const btn = document.getElementById('btn-refresh-rating');
+  const originalHtml = btn.innerHTML;
+  btn.innerHTML = '...';
+  btn.disabled = true;
+
+  try {
+    // Recalculate average from reviews table
+    const { data: allReviews, error: fetchErr } = await db
+      .from('reviews')
+      .select('rating')
+      .eq('seller_id', State.user.id);
+
+    if (fetchErr) throw fetchErr;
+
+    const avgRating = allReviews.length > 0 
+      ? allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length 
+      : 0;
+
+    // Sync back to profile
+    await db.from('profiles').update({ rating: avgRating }).eq('id', State.user.id);
+    
+    showToast('Rating updated from latest reviews!', 'success');
+    await loadProfile(); 
+  } catch (err) {
+    showToast('Failed to refresh rating.', 'error');
+  } finally {
+    btn.innerHTML = originalHtml;
+    btn.disabled = false;
+  }
+}
+
+// Update seller's rating after a review is submitted
+async function updateSellerRating(sellerId) {
+  if (!sellerId) return;
+  
+  try {
+    // Calculate average rating from all reviews for this seller
+    const { data: allReviews, error: fetchErr } = await db
+      .from('reviews')
+      .select('rating')
+      .eq('seller_id', sellerId);
+
+    if (fetchErr) throw fetchErr;
+
+    const avgRating = allReviews.length > 0 
+      ? allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length 
+      : 0;
+
+    // Update the profile with the new average rating
+    const { error: updateErr } = await db
+      .from('profiles')
+      .update({ rating: avgRating })
+      .eq('id', sellerId);
+
+    if (updateErr) throw updateErr;
+    
+    console.log(`Updated seller ${sellerId} rating to ${avgRating.toFixed(1)}`);
+  } catch (err) {
+    console.error('Error updating seller rating:', err);
+  }
+}
+
 function showProfileTab(tabName) {
   const myListingsDiv = document.getElementById('ptab-my-listings');
   const soldDiv = document.getElementById('ptab-sold');
   const settingsDiv = document.getElementById('ptab-settings');
   const reviewsDiv = document.getElementById('ptab-reviews');
-  let savedCharitiesDiv = document.getElementById('ptab-saved-charities');
   
   const targetId = State.viewingProfileId;
   const isOwnProfile = State.user && targetId === State.user.id;
-
-  // Auto-create ptab div if missing
-  if (!savedCharitiesDiv && isOwnProfile) {
-    const parent = myListingsDiv?.parentElement;
-    if (parent) {
-      savedCharitiesDiv = document.createElement('div');
-      savedCharitiesDiv.id = 'ptab-saved-charities';
-      savedCharitiesDiv.className = 'profile-tab-content hidden';
-      parent.appendChild(savedCharitiesDiv);
-    }
-  }
 
   // Security: Prevent access to settings if not own profile
   if (tabName === 'settings' && !isOwnProfile) {
@@ -1743,7 +2045,6 @@ function showProfileTab(tabName) {
   if (soldDiv) soldDiv.classList.add('hidden');
   if (settingsDiv) settingsDiv.classList.add('hidden');
   if (reviewsDiv) reviewsDiv.classList.add('hidden');
-  if (savedCharitiesDiv) savedCharitiesDiv.classList.add('hidden');
   
   if (tabName === 'my-listings' && myListingsDiv) {
     myListingsDiv.classList.remove('hidden');
@@ -1753,9 +2054,6 @@ function showProfileTab(tabName) {
   } else if (tabName === 'sold' && soldDiv) {
     soldDiv.classList.remove('hidden');
     loadProfileListings(targetId, isOwnProfile);
-  } else if (tabName === 'saved-charities' && savedCharitiesDiv && isOwnProfile) {
-    savedCharitiesDiv.classList.remove('hidden');
-    renderSavedCharities();
   } else if (tabName === 'settings' && settingsDiv) {
     settingsDiv.classList.remove('hidden');
   }
@@ -2200,6 +2498,10 @@ async function handleReviewSubmit(e) {
 
     const message = State.reviewId ? '✓ Review updated successfully!' : '✓ Review posted successfully!';
     showToast(message, 'success');
+    
+    // Update seller's rating after successful review submission
+    await updateSellerRating(State.currentReviewSellerId);
+    
     navigate('profile', { meta: { profileId: State.currentReviewSellerId } });
   } catch (err) {
     console.error('Submit error:', err);
@@ -2222,7 +2524,12 @@ async function loadSellerReviews(sellerId) {
   try {
     const { data: reviews, error } = await db
       .from('reviews')
-      .select('*, reviewer:reviewer_id(id, username, avatar_url), review_images(object_path)')
+      .select(`
+        *, 
+        reviewer:reviewer_id(id, username, avatar_url), 
+        review_images(object_path),
+        listings:listing_id(name, images)
+      `)
       .eq('seller_id', sellerId)
       .order('created_at', { ascending: false });
 
@@ -2236,7 +2543,15 @@ async function loadSellerReviews(sellerId) {
     }
     if (noReviewsMsg) noReviewsMsg.style.display = 'none';
 
-    container.innerHTML = reviews.map(r => `
+    container.innerHTML = reviews.map(r => {
+      const item = r.listings;
+      const itemHtml = item ? `
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px; padding:8px; background:var(--bg-3); border-radius:6px; border:1px solid var(--border);">
+          <img src="${item.images?.[0] || ''}" style="width:40px; height:40px; object-fit:cover; border-radius:4px;">
+          <span style="font-size:0.8rem; color:var(--text-secondary);">Reviewed: <strong>${escHtml(item.name)}</strong></span>
+        </div>` : '';
+
+      return `
       <div class="review-card" onclick="this.classList.toggle('expanded')" style="background:var(--bg-2); border-radius:var(--radius); padding:20px; margin-bottom:16px; border:1px solid var(--border); cursor:pointer; transition:all 0.3s ease;">
         <div style="display:flex; align-items:center; gap:16px;">
           <div class="reviewer-avatar" style="width:44px; height:44px; border-radius:50%; background:var(--bg-3); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:1.2rem; border:1px solid var(--border);">
@@ -2244,7 +2559,7 @@ async function loadSellerReviews(sellerId) {
           </div>
           <div style="flex:1;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-              <strong style="color:var(--text); font-size:1rem;">${escHtml(r.reviewer?.username || 'Anonymous')}</strong>
+              <strong style="color:var(--text); font-size:1rem; cursor:pointer; text-decoration:underline;" onclick="event.stopPropagation(); viewSellerProfile('${r.reviewer?.id}')">${escHtml(r.reviewer?.username || 'Anonymous')}</strong>
               ${generateStarRatingHtml(r.rating)}
             </div>
             <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">${new Date(r.created_at).toLocaleDateString()}</div>
@@ -2252,19 +2567,20 @@ async function loadSellerReviews(sellerId) {
           <div class="expand-icon" style="transition:transform 0.3s; font-size:0.8rem; color:var(--text-muted);">▼</div>
         </div>
         
-        <div class="review-details">
+        <div class="review-details" style="display:block;">
+          ${itemHtml}
           <div style="line-height:1.7; color:var(--text-secondary); white-space:pre-wrap;">${escHtml(r.body)}</div>
           ${r.review_images && r.review_images.length ? `
             <div class="review-images" style="display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;">
-              ${r.review_images.map(img => `<img src="${img.object_path}" style="width:90px; height:90px; object-fit:cover; border-radius:8px; border:1px solid var(--border); transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" onclick="event.stopPropagation(); window.open('${img.object_path}')">`).join('')}
+              ${r.review_images.map(img => `<img src="${img.object_path}" style="width:120px; height:120px; object-fit:cover; border-radius:8px; border:2px solid var(--border); transition:transform 0.2s; cursor:zoom-in; display:block;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" onclick="event.stopPropagation(); window.open('${img.object_path}')">`).join('')}
             </div>
           ` : ''}
           <div style="text-align:right; margin-top:12px;">
              <small style="color:var(--neon); font-size:0.65rem; text-transform:uppercase; font-weight:700;">Verified Transaction</small>
           </div>
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
   } catch (err) {
     console.error('Error loading reviews:', err);
     container.innerHTML = '<div class="empty-state">Failed to load reviews.</div>';
@@ -2599,7 +2915,7 @@ function createListingCard(listing, showOwnerActions = false) {
   if (listing.images && listing.images.length > 1) {
     imageHtml = createImageCarousel(listing.images, listing.id);
   } else if (listing.images && listing.images.length === 1) {
-    imageHtml = `<img src="${escHtml(listing.images[0])}" alt="${escHtml(listing.name)}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" />`;
+    imageHtml = `<img src="${escHtml(listing.images[0])}" alt="${escHtml(listing.name)}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" decoding="async" />`;
   } else {
     imageHtml = `<div class="card-no-image">📦</div>`;
   }
@@ -2823,7 +3139,7 @@ async function loadConversationThread(partnerId, listingId = null) {
   const { data: messages, error: mError } = await db
     .from('messages')
     .select('*')
-    .or(`and(sender_id.eq.${State.user.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${State.user.id})`)
+    .or(`sender_id.eq.${State.user.id},receiver_id.eq.${State.user.id}`)
     .order('created_at', { ascending: true });
   
   if (mError) return console.error("Error loading messages", mError);
@@ -2831,8 +3147,21 @@ async function loadConversationThread(partnerId, listingId = null) {
   const threadEl = document.getElementById('chatThread');
   if (!threadEl) return;
   threadEl.innerHTML = '';
+
   if (messages) {
-    messages.forEach(msg => renderMessage(msg, State.user.id));
+    // Filter logic handled in JS to ensure we don't lose messages due to NULL columns or complex SQL ORs
+    const filteredMessages = messages.filter(msg => {
+      // Only show messages belonging to this specific conversation
+      const isConversation = (msg.sender_id === State.user.id && msg.receiver_id === partnerId) || 
+                             (msg.sender_id === partnerId && msg.receiver_id === State.user.id);
+      
+      // Only hide if the user is the sender AND they explicitly clicked delete (true)
+      const isDeleted = msg.sender_id === State.user.id && msg.deleted_by_sender === true;
+      
+      return isConversation && !isDeleted;
+    });
+
+    filteredMessages.forEach(msg => renderMessage(msg, State.user.id));
   }
   threadEl.scrollTop = threadEl.scrollHeight;
 }
@@ -2859,28 +3188,37 @@ async function handleSendMessage(e) {
 }
 
 async function handleSendImage(e) {
-  const file = e.target.files[0];
+  const file = e.target.files?.[0];
   if (!file || !State.currentChatPartnerId) return;
-  
-  const filePath = `${State.user.id}/${Date.now()}_${file.name}`;
-  const { error: uploadError } = await db.storage.from('chat-images').upload(filePath, file);
-  
-  if (uploadError) {
-    showToast("Upload failed", 'error');
-    return;
+
+  toggleProcessingOverlay(true, 'Uploading image...');
+
+  try {
+    const filePath = `${State.user.id}/${Date.now()}_${file.name}`;
+    const { error: uploadError } = await db.storage.from('messages-images').upload(filePath, file);
+    
+    if (uploadError) throw uploadError;
+    
+    const { data: { publicUrl } } = db.storage.from('messages-images').getPublicUrl(filePath);
+    
+    const { error: msgError } = await db.from('messages').insert([{
+      sender_id: State.user.id,
+      receiver_id: State.currentChatPartnerId,
+      listing_id: State.currentListingId || null,
+      image_url: publicUrl,
+    }]);
+
+    if (msgError) throw msgError;
+    
+    e.target.value = ''; // Reset input
+    await loadConversationThread(State.currentChatPartnerId);
+    await loadMessages();
+  } catch (err) {
+    console.error("Image send error:", err);
+    showToast("Could not send image: " + err.message, 'error');
+  } finally {
+    toggleProcessingOverlay(false);
   }
-  
-  const { data: { publicUrl } } = db.storage.from('chat-images').getPublicUrl(filePath);
-  
-  await db.from('messages').insert([{
-    sender_id: State.user.id,
-    receiver_id: State.currentChatPartnerId,
-    listing_id: State.currentListingId,
-    image_url: publicUrl,
-  }]);
-  
-  await loadConversationThread(State.currentChatPartnerId);
-  await loadMessages();
 }
 
 function renderMessage(msg, currentUserId) {
@@ -2899,13 +3237,35 @@ function renderMessage(msg, currentUserId) {
   }
   
   if (msg.image_url) {
-    div.innerHTML = `<img src="${escHtml(msg.image_url)}" class="msg-image" style="max-width:200px;border-radius:8px;cursor:pointer;" onclick="window.open(this.src)">${timestampHtml}`;
+    div.innerHTML = `<img src="${escHtml(msg.image_url)}" class="msg-image" style="max-width:200px;border-radius:8px;cursor:pointer;" onclick="window.open(this.src)">
+                     ${isSent ? `<button onclick="deleteMessage('${msg.id}')" style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.7rem; display:block; margin-left:auto;">Delete</button>` : ''}
+                     ${timestampHtml}`;
   } else {
-    div.innerHTML = `${escHtml(msg.content)}${timestampHtml}`;
+    div.innerHTML = `${escHtml(msg.content)}
+                     ${isSent ? `<button onclick="deleteMessage('${msg.id}')" style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:0.7rem; display:block; margin-left:auto; padding-top:4px;">Delete</button>` : ''}
+                     ${timestampHtml}`;
   }
   
   thread.appendChild(div);
   thread.scrollTop = thread.scrollHeight;
+}
+
+async function deleteMessage(msgId) {
+  if (!confirm('Remove this message from your view? (It will still be saved in the database)')) return;
+  
+  try {
+    const { error } = await db
+      .from('messages')
+      .update({ deleted_by_sender: true })
+      .eq('id', msgId)
+      .eq('sender_id', State.user.id);
+    
+    if (error) throw error;
+    showToast('Message removed from your view.', 'info');
+    loadConversationThread(State.currentChatPartnerId);
+  } catch (err) {
+    showToast('Failed to delete message.', 'error');
+  }
 }
 
 function initChat() {
@@ -3016,7 +3376,10 @@ function setupEventListeners() {
   
   const imageInput = document.getElementById('image-input');
   const uploadZone = document.getElementById('upload-zone');
-  if (imageInput) imageInput.addEventListener('change', handleImageUpload);
+  if (imageInput) {
+    imageInput.addEventListener('change', handleImageUpload);
+    imageInput.addEventListener('click', e => e.stopPropagation()); // Prevent double dialog
+  }
   if (uploadZone) {
     uploadZone.addEventListener('click', () => {
       const input = document.getElementById('image-input');
@@ -3098,11 +3461,14 @@ function setupEventListeners() {
   // Review image handling (max 3 images)
   const reviewImgInput = document.getElementById('review-image-input');
   if (reviewImgInput) {
+    reviewImgInput.onclick = (e) => e.stopPropagation(); // Prevent double dialog
     reviewImgInput.onchange = (e) => {
-      const files = Array.from(e.target.files);
-      const existingCount = State.existingReviewImages?.length || 0;
-      const maxNewFiles = Math.max(0, 3 - existingCount);
-      State.reviewImageFiles = files.slice(0, maxNewFiles);
+      const newFiles = Array.from(e.target.files);
+      const currentTotal = (State.existingReviewImages?.length || 0) + (State.reviewImageFiles?.length || 0);
+      const remaining = Math.max(0, 3 - currentTotal);
+      // Append new files instead of replacing
+      State.reviewImageFiles = [...(State.reviewImageFiles || []), ...newFiles.slice(0, remaining)];
+      
       const preview = document.getElementById('review-image-previews');
       const countEl = document.getElementById('review-image-count');
       
@@ -3120,7 +3486,7 @@ function setupEventListeners() {
         </div>
       `).join('');
       
-      const totalCount = existingCount + State.reviewImageFiles.length;
+      const totalCount = currentTotal + newFiles.slice(0, remaining).length;
       if (countEl) countEl.textContent = `${totalCount} / 3 images`;
     };
   }
@@ -3157,6 +3523,7 @@ function setupEventListeners() {
 
 // ==================== INITIALIZATION ====================
 document.addEventListener('DOMContentLoaded', async () => {
+  injectCustomStyles();
   initTheme();
   setupEventListeners();
   await initAuth();
@@ -3291,404 +3658,6 @@ function toggleNavMode() {
   });
   
   if (toggleBtn) toggleBtn.classList.toggle('minimized');
-}
-
-// ==================== DONATION PAGE MODULE ====================
-async function initDonationPage() {
-  const container = document.getElementById('page-donate');
-  if (!container) return;
-
-  // Requirement: if user is signed out, it will refresh (reset) if user switches page
-  if (!State.user) {
-    State.donationLocation = null;
-    State.charityResults = null;
-    State.donationCategory = 'all';
-  }
-
-  if (!State.donationLocation) {
-    container.innerHTML = `
-      <div class="donation-welcome animate-fade" style="max-width: 600px; margin: 40px auto; text-align: center; padding: 40px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-neon);">
-        <div style="font-size: 4rem; margin-bottom: 24px; filter: drop-shadow(0 0 10px var(--neon));">🎁</div>
-        <h2 style="font-family: 'Orbitron'; color: var(--neon); margin-bottom: 16px; letter-spacing: 2px;">COMMUNITY GIVING</h2>
-        <p style="color: var(--text-secondary); margin-bottom: 32px; font-size: 1.1rem; line-height: 1.6;">Don't let your items go to waste. Find local charities and Salvation Army centers that can give your goods a second life.</p>
-        <form onsubmit="event.preventDefault(); handleDonationLocationSubmit();" style="display: flex; flex-direction: column; gap: 16px; background: var(--bg-2); padding: 16px; border-radius: var(--radius); border: 1px solid var(--border);">
-          <div style="text-align: left;">
-            <label class="form-label">Search Location</label>
-            <input type="text" id="donation-search-loc" placeholder="City, neighborhood, or zip code..." required style="background: var(--bg-3); border: 1px solid var(--border); margin-top: 4px;">
-          </div>
-          <div style="text-align: left;">
-            <label class="form-label">Item Category</label>
-            <select id="donation-search-cat" style="background: var(--bg-3); border: 1px solid var(--border); color: var(--text); margin-top: 4px; cursor: pointer;">
-              <option value="all">All Accepted Items</option>
-              <option value="clothing">Clothing & Textiles</option>
-              <option value="electronics">Electronics & Appliances</option>
-              <option value="furniture">Furniture & Household</option>
-              <option value="books">Books & Media</option>
-              <option value="toys">Toys & Games</option>
-            </select>
-          </div>
-          <button type="submit" class="btn btn-primary" id="btn-find-charities" style="padding: 12px 24px; margin-top: 8px;">FIND DONATION CENTERS</button>
-        </form>
-        <div style="margin-top: 24px; font-size: 0.75rem; color: var(--text-muted);">
-          Powered by OBTAINUM AI • Localized results via RAG
-        </div>
-      </div>
-    `;
-  } else if (!State.charityResults) {
-    container.innerHTML = '<div class="empty-state"><div class="spinner spinner-lg"></div></div>';
-  } else {
-    renderCharityResults();
-  }
-}
-
-async function handleDonationLocationSubmit() {
-  const input = document.getElementById('donation-search-loc');
-  const catInput = document.getElementById('donation-search-cat');
-  const loc = input?.value.trim();
-  const cat = catInput?.value || 'all';
-  if (!loc) return;
-
-  const btn = document.getElementById('btn-find-charities');
-  setLoading(btn, true, 'LOCATING...');
-
-  try {
-    State.donationLocation = loc;
-    State.donationCategory = cat;
-    await findCharities(loc, cat);
-  } finally {
-    setLoading(btn, false, 'FIND DONATION CENTERS');
-  }
-}
-
-async function findCharities(location, category = 'all') {
-  const container = document.getElementById('page-donate');
-  if (container) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <div class="spinner spinner-lg"></div>
-        <div class="empty-title" style="margin-top: 20px;">CONSULTING COMMUNITY RECORDS...</div>
-        <div class="empty-sub">Finding verified charities near ${escHtml(location)}</div>
-      </div>
-    `;
-  }
-
-  const categoryClause = category === 'all' ? 'local charities, thrift stores, and Salvation Army donation centers' : `verified local charities and donation centers that specifically accept "${category}" donations`;
-  const prompt = `You are OBTAINUM's community impact specialist. Search your database (RAG mode) for REAL, verified ${categoryClause} specifically near "${location}".
-  
-  Provide exactly 4 results. For each one, provide:
-  - name: Organization name
-  - address: Full street address
-  - description: Very brief note on what they accept (e.g., "Accepts used electronics and clothing")
-  - phone: Contact phone number
-  - website: Official website URL
-  - lat: Approx latitude
-  - lon: Approx longitude
-  
-  Return the results as a standard JSON array. Only the JSON, no extra text.`;
-
-  try {
-    const response = await callGemini(prompt, 'application/json');
-    const jsonMatch = response.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      const results = JSON.parse(jsonMatch[0]);
-      
-      for (let c of results) {
-        if (!c.lat || !c.lon) {
-          try {
-            const coords = await geocodeLocation(c.address);
-            c.lat = coords.lat;
-            c.lon = coords.lon;
-          } catch (e) { }
-        }
-      }
-      
-      State.charityResults = results;
-      State.donationCategory = category;
-      renderCharityResults();
-    } else {
-      throw new Error("Structure mismatch");
-    }
-  } catch (err) {
-    console.error('Charity retrieval error:', err);
-    showToast('AI could not retrieve charity data.', 'error');
-    State.donationLocation = null;
-    initDonationPage();
-  }
-}
-
-function renderCharityResults() {
-  const container = document.getElementById('page-donate');
-  if (!container || !State.charityResults) return;
-
-  const mapId = `donation-map-${Date.now()}`;
-  
-  container.innerHTML = `
-    <div class="donation-results-container animate-fade" style="padding: 24px; max-width: 1200px; margin: 0 auto;">
-      <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 32px; border-bottom: 1px solid var(--border); padding-bottom: 16px;">
-        <div>
-          <h2 style="font-family: 'Orbitron'; color: var(--neon); margin: 0;">LOCAL DONATION CENTERS</h2>
-          <p style="color: var(--text-muted); margin-top: 4px;">Verified <strong>${escHtml(State.donationCategory.toUpperCase())}</strong> results near <strong>${escHtml(State.donationLocation.toUpperCase())}</strong></p>
-        </div>
-        <button class="btn btn-outline btn-sm" onclick="State.donationLocation = null; State.charityResults = null; initDonationPage();">REFINE SEARCH</button>
-      </div>
-      
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 32px;">
-        <div class="charity-sidebar">
-          <div style="display: flex; flex-direction: column; gap: 16px;">
-            ${State.charityResults.map((c, idx) => `
-              <div class="charity-card" style="padding: 20px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); cursor: pointer; transition: all 0.3s;" onclick="focusCharity(${idx})">
-                <div style="display: flex; gap: 12px; align-items: flex-start;">
-                  <div style="background: var(--neon); color: #000; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; margin-top: 2px;">${idx + 1}</div>
-                  <div style="flex: 1;">
-                    <h3 style="color: var(--text); font-size: 1.1rem; margin: 0 0 4px 0;">${escHtml(c.name)}</h3>
-                    <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px;">
-                      <div style="display: flex; align-items: center; gap: 4px;"><span>📍</span> ${escHtml(c.address)}</div>
-                      ${c.phone ? `<div style="display: flex; align-items: center; gap: 4px;"><span>📞</span> ${escHtml(c.phone)}</div>` : ''}
-                      ${c.website ? `<div style="display: flex; align-items: center; gap: 4px;"><span>🌐</span> <a href="${escHtml(c.website)}" target="_blank" onclick="event.stopPropagation();" style="color:var(--neon); text-decoration:none;">${escHtml(c.website.replace(/^https?:\/\//,'').substring(0,30))}...</a></div>` : ''}
-                    </div>
-                    <div style="font-size: 0.9rem; line-height: 1.5; color: var(--text-secondary); background: var(--bg-3); padding: 8px 12px; border-radius: 8px;">
-                      ${escHtml(c.description)}
-                    </div>
-                    <button class="btn btn-primary btn-sm" style="margin-top: 16px; width: 100%; border-radius: 4px; font-family: 'Orbitron'; font-size: 0.75rem;" onclick="event.stopPropagation(); openRouteSafetyModal('${escHtml(c.address)}')">🛡️ AI SAFE ROUTE</button>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px;">
-                      <button class="btn btn-outline btn-sm" style="border-radius: 4px; font-size: 0.65rem; padding: 6px; font-family: 'Orbitron';" onclick="event.stopPropagation(); copyToClipboard('${escHtml(c.address)}')">📋 ADDR</button>
-                      <button class="btn btn-outline btn-sm" style="border-radius: 4px; font-size: 0.65rem; padding: 6px; font-family: 'Orbitron';" onclick="event.stopPropagation(); window.open('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent('${escHtml(c.address)}'), '_blank')">🌐 MAPS</button>
-                      <button class="btn btn-outline btn-sm favorite-charity-btn ${State.favoriteCharityIds.has(c.name + c.address) ? 'active' : ''}" style="border-radius: 4px; font-size: 0.65rem; padding: 6px; font-family: 'Orbitron';" onclick="toggleFavoriteCharity(event, ${idx})">❤️ FAV</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-        
-        <div style="position: sticky; top: 100px; height: calc(100vh - 200px); min-height: 400px;">
-          <div id="${mapId}" style="height: 100%; border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--bg-3); box-shadow: var(--shadow-neon-sm);"></div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  setTimeout(() => {
-    if (typeof L === 'undefined') return;
-    const map = L.map(mapId);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; CartoDB' }).addTo(map);
-    const markers = [];
-    const neonIcon = (index) => L.divIcon({
-      className: 'custom-neon-marker',
-      html: `<div style="background-color:var(--neon); width:28px; height:28px; border-radius:50%; border:2px solid #000; box-shadow:0 0 15px var(--neon); display:flex; align-items:center; justify-content:center; color:#000; font-weight:bold; font-size:14px;">${index+1}</div>`,
-      iconSize: [28, 28],
-      iconAnchor: [14, 14]
-    });
-    State.charityResults.forEach((c, idx) => {
-      if (c.lat && c.lon) {
-        const marker = L.marker([c.lat, c.lon], { icon: neonIcon(idx) }).addTo(map)
-          .bindPopup(`<strong>${escHtml(c.name)}</strong><br>${escHtml(c.address)}`);
-        markers.push(marker);
-      }
-    });
-    if (markers.length > 0) map.fitBounds(new L.featureGroup(markers).getBounds().pad(0.2));
-    window.donationMap = map; window.donationMarkers = markers;
-  }, 100);
-}
-
-function focusCharity(idx) {
-  const c = State.charityResults[idx];
-  if (window.donationMap && c.lat && c.lon) {
-    window.donationMap.setView([c.lat, c.lon], 16);
-    window.donationMarkers[idx].openPopup();
-  }
-}
-
-async function loadFavoriteCharities() {
-  if (!State.user) return;
-  try {
-    const { data, error } = await db
-      .from('favorite_charities')
-      .select('charity_data')
-      .eq('user_id', State.user.id);
-    
-    if (error) throw error;
-    State.favoriteCharityIds = new Set((data || []).map(f => f.charity_data.name + f.charity_data.address));
-  } catch (err) {
-    console.error('Error loading favorite charities:', err);
-  }
-}
-
-async function toggleFavoriteCharity(e, idx) {
-  e.stopPropagation();
-  if (!State.user) { openAuthModal(); return; }
-
-  const c = State.charityResults[idx];
-  const key = c.name + c.address;
-  const isFav = State.favoriteCharityIds.has(key);
-  const btn = e.currentTarget;
-
-  try {
-    if (isFav) {
-      const { error } = await db
-        .from('favorite_charities')
-        .delete()
-        .eq('user_id', State.user.id)
-        .filter('charity_data->>name', 'eq', c.name)
-        .filter('charity_data->>address', 'eq', c.address);
-      
-      if (error) throw error;
-      State.favoriteCharityIds.delete(key);
-      btn.classList.remove('active');
-      showToast('Removed from favorites.', 'info');
-    } else {
-      const { error } = await db
-        .from('favorite_charities')
-        .insert({ user_id: State.user.id, charity_data: c });
-      
-      if (error) throw error;
-      State.favoriteCharityIds.add(key);
-      btn.classList.add('active');
-      showToast('Saved to favorites!', 'success');
-    }
-  } catch (err) {
-    console.error('Error toggling favorite charity:', err);
-    showToast('Failed to update favorites.', 'error');
-  }
-}
-
-async function renderSavedCharities() {
-  const container = document.getElementById('ptab-saved-charities');
-  if (!container || !State.user) return;
-  
-  container.innerHTML = '<div class="spinner" style="margin:40px auto; display:block;"></div>';
-  
-  try {
-    const { data, error } = await db.from('favorite_charities').select('*').eq('user_id', State.user.id);
-    if (error) throw error;
-    if (!data || data.length === 0) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-icon">🎁</div><div class="empty-title">NO SAVED CHARITIES</div></div>';
-      return;
-    }
-    container.innerHTML = `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:20px; padding:20px;">
-      ${data.map(item => `
-        <div class="charity-card" style="padding:20px; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg);">
-          <h3 style="color:var(--text); font-size:1.1rem; margin:0 0 4px 0;">${escHtml(item.charity_data.name)}</h3>
-          <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">📍 ${escHtml(item.charity_data.address)}</div>
-          <button class="btn btn-primary btn-sm" style="width:100%; margin-top:8px; font-family:'Orbitron'; font-size:0.75rem;" onclick="openRouteSafetyModal('${escHtml(item.charity_data.address)}')">🛡️ AI SAFE ROUTE</button>
-        </div>
-      `).join('')}</div>`;
-  } catch (err) {
-    container.innerHTML = '<div class="empty-state">Failed to load saved charities.</div>';
-  }
-}
-
-window.initDonationPage = initDonationPage;
-window.handleDonationLocationSubmit = handleDonationLocationSubmit;
-window.focusCharity = focusCharity;
-window.copyToClipboard = copyToClipboard;
-window.toggleFavoriteCharity = toggleFavoriteCharity;
-
-// ==================== AI ROUTE SAFETY MODULE ====================
-const safetyDatabase = {
-  "downtown,new york": 65,
-  "midtown,new york": 70,
-  "upper east side,new york": 85,
-  "harlem,new york": 55,
-  "bronx,new york": 45,
-  "south side,chicago": 40,
-  "loop,chicago": 70,
-  "lincoln park,chicago": 80,
-  "hollywood,los angeles": 65,
-  "beverly hills,los angeles": 85,
-  "skid row,los angeles": 25,
-  "default": 50
-};
-
-function getSafetyScore(location) {
-  if (!location) return safetyDatabase.default;
-  const lowerLoc = location.toLowerCase();
-  let bestScore = safetyDatabase.default;
-  for (const [key, score] of Object.entries(safetyDatabase)) {
-    if (lowerLoc.includes(key)) {
-      bestScore = Math.max(bestScore, score);
-    }
-  }
-  return bestScore;
-}
-
-function buildSafetyContext(start, end) {
-  const startScore = getSafetyScore(start);
-  const endScore = getSafetyScore(end);
-  const startSafe = startScore >= 70 ? "safe" : (startScore >= 50 ? "moderately safe" : "unsafe");
-  const endSafe = endScore >= 70 ? "safe" : (endScore >= 50 ? "moderately safe" : "unsafe");
-  return `
-Local safety data:
-- Starting area (${start}): ${startSafe} (score ${startScore}/100)
-- Destination area (${end}): ${endSafe} (score ${endScore}/100)
-
-Consider typical crime rates, lighting, foot traffic, and public transportation safety. Suggest a route that avoids known high-crime zones, uses well-lit streets, and prefers busy areas.
-`;
-}
-
-async function openRouteSafetyModal(defaultDest = '') {
-  const modal = document.getElementById('route-safety-modal');
-  const contentDiv = document.getElementById('route-safety-content');
-  if (!modal || !contentDiv) return;
-
-  contentDiv.innerHTML = `
-    <form id="route-safety-form" onsubmit="event.preventDefault(); findSafeRoute();">
-      <div class="form-group">
-        <label class="form-label">📍 Starting point</label>
-        <input type="text" id="route-start" placeholder="e.g., Downtown, Los Angeles" required class="form-input">
-      </div>
-      <div class="form-group">
-        <label class="form-label">🏁 Destination</label>
-        <input type="text" id="route-end" value="${escHtml(defaultDest)}" placeholder="e.g., Beverly Hills, CA" required class="form-input">
-      </div>
-      <button type="submit" class="btn btn-primary w-full" id="route-find-btn">🔍 Find Safe Route</button>
-    </form>
-    <div id="route-result" style="margin-top: 20px;"></div>
-  `;
-  modal.classList.add('open');
-}
-
-async function findSafeRoute() {
-  const start = document.getElementById('route-start')?.value.trim();
-  const end = document.getElementById('route-end')?.value.trim();
-  if (!start || !end) {
-    showToast("Please enter both start and destination.", "error");
-    return;
-  }
-
-  const resultDiv = document.getElementById('route-result');
-  const findBtn = document.getElementById('route-find-btn');
-  if (!resultDiv || !findBtn) return;
-
-  setLoading(findBtn, true, "Analyzing...");
-  resultDiv.innerHTML = '<div class="spinner"></div> Generating safe route...';
-
-  try {
-    const aiResponse = await getSafeRouteFromGemini(start, end);
-    
-    resultDiv.innerHTML = `
-      <div style="background:var(--bg-3); border-radius:var(--radius); padding:16px;">
-        <h3 style="color:var(--neon); margin-bottom:12px;">🛡️ AI Suggested Safe Route</h3>
-        <div style="line-height:1.6;">${aiResponse.replace(/\n/g, '<br>')}</div>
-        <div id="route-map-preview" style="height: 200px; margin-top: 16px; border-radius: 8px;"></div>
-        <p class="msg-timestamp" style="margin-top:12px;">⚠️ Always verify local conditions. AI suggestions are advisory only.</p>
-      </div>
-    `;
-    const mapContainer = document.getElementById('route-map-preview');
-    if (mapContainer && typeof L !== 'undefined') {
-      const map = L.map(mapContainer).setView([40.7128, -74.0060], 10);
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; CartoDB'
-      }).addTo(map);
-      mapContainer.innerHTML = '<p style="text-align:center; padding:20px;">📍 Interactive map could show suggested route. For demo, enter real addresses for better results.</p>';
-    }
-  } catch (err) {
-    console.error("Route safety error:", err);
-    resultDiv.innerHTML = `<div class="auth-error show">⚠️ Error: ${err.message || "Could not fetch safe route."}</div>`;
-  } finally {
-    setLoading(findBtn, false, "🔍 Find Safe Route");
-  }
 }
 
 async function getSafeRouteFromGemini(start, end) {
@@ -3907,8 +3876,9 @@ async function generatePickupRoute(listingId) {
 
     // Extract step-by-step instructions
     let stepsHtml = '<ul style="margin: 8px 0 0 20px;">';
-    route.legs[0].steps.forEach(step => {
-      stepsHtml += `<li>${step.maneuver.instruction} (${(step.distance / 1000).toFixed(1)} km)</li>`;
+    (route.legs[0]?.steps || []).forEach(step => {
+      const instruction = step.maneuver?.instruction || "Proceed forward";
+      stepsHtml += `<li>${instruction} (${(step.distance / 1000).toFixed(1)} km)</li>`;
     });
     stepsHtml += '</ul>';
 
@@ -3986,6 +3956,43 @@ async function generatePickupRoute(listingId) {
   }
 }
 
+function getSafetyScore(location) {
+  if (!location) return 50;
+  const lowerLoc = location.toLowerCase();
+  const safetyDatabase = {
+    "downtown,new york": 65, "midtown,new york": 70, "upper east side,new york": 85,
+    "harlem,new york": 55, "bronx,new york": 45, "south side,chicago": 40,
+    "loop,chicago": 70, "lincoln park,chicago": 80, "hollywood,los angeles": 65,
+    "beverly hills,los angeles": 85, "skid row,los angeles": 25
+  };
+  let bestScore = 50;
+  for (const [key, score] of Object.entries(safetyDatabase)) {
+    if (lowerLoc.includes(key)) bestScore = Math.max(bestScore, score);
+  }
+  return bestScore;
+}
+
+function buildSafetyContext(start, end) {
+  const startScore = getSafetyScore(start);
+  const endScore = getSafetyScore(end);
+  const startSafe = startScore >= 70 ? "safe" : (startScore >= 50 ? "moderately safe" : "unsafe");
+  const endSafe = endScore >= 70 ? "safe" : (endScore >= 50 ? "moderately safe" : "unsafe");
+  return `Local safety data: Starting area: ${startSafe}; Destination: ${endSafe}. Suggest a route avoiding unsafe zones.`;
+}
+
+async function openRouteSafetyModal() {
+  const modal = document.getElementById('route-safety-modal');
+  const contentDiv = document.getElementById('route-safety-content');
+  if (!modal || !contentDiv) return;
+  contentDiv.innerHTML = `
+    <form onsubmit="event.preventDefault(); findSafeRoute();">
+      <div class="form-group"><label class="form-label">📍 Start</label><input type="text" id="route-start" class="form-input" required></div>
+      <div class="form-group"><label class="form-label">🏁 End</label><input type="text" id="route-end" class="form-input" required></div>
+      <button type="submit" class="btn btn-primary w-full" id="route-find-btn">🔍 Find Safe Route</button>
+    </form><div id="route-result" style="margin-top: 20px;"></div>`;
+  modal.classList.add('open');
+}
+
 async function findSafeRoute() {
   const start = document.getElementById('route-start')?.value.trim();
   const end = document.getElementById('route-end')?.value.trim();
@@ -4017,28 +4024,28 @@ async function findSafeRoute() {
     const durationMin = Math.round(route.duration / 60);
 
     let stepsHtml = '<ul style="margin: 8px 0 0 20px;">';
-    route.legs[0].steps.forEach(step => {
-      stepsHtml += `<li>${step.maneuver.instruction} (${(step.distance / 1000).toFixed(1)} km)</li>`;
+    (route.legs[0]?.steps || []).forEach(step => {
+      const instruction = step.maneuver?.instruction || "Continue on route";
+      stepsHtml += `<li>${instruction} (${(step.distance / 1000).toFixed(1)} km)</li>`;
     });
     stepsHtml += '</ul>';
 
     // Gemini transit suggestion
     let transitHtml = '';
-    if (genAI) {
-      resultDiv.innerHTML = '<div class="spinner"></div> Generating transit suggestions...';
+    try {
       const transitPrompt = `Suggest public transit from "${start}" to "${end}". Include line names, station names, and estimated time. Be specific and concise.`;
-      const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
-      const transitResult = await model.generateContent(transitPrompt);
-      const transitResponse = await transitResult.response;
+      const transitResponse = await callGemini(transitPrompt);
       transitHtml = `
         <div style="margin-top: 20px; padding: 16px; background: var(--bg-2); border-radius: var(--radius); border-left: 3px solid var(--blue);">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
             <span>🚇</span>
             <strong style="color: var(--blue);">Public Transit Suggestions</strong>
           </div>
-          <div style="line-height: 1.6;">${transitResponse.text().replace(/\n/g, '<br>')}</div>
+          <div style="line-height: 1.6;">${formatMarkdown(transitResponse)}</div>
         </div>
       `;
+    } catch (e) {
+      console.warn("Transit fetch failed", e);
     }
 
     const mapId = `route-map-modal-${Date.now()}`;
@@ -4050,10 +4057,7 @@ async function findSafeRoute() {
           <span style="margin-left: auto;">${distanceKm} km • ${durationMin} min</span>
         </div>
         <div id="${mapId}" style="height: 300px; border-radius: var(--radius); margin-bottom: 12px;"></div>
-        <details>
-          <summary style="cursor: pointer;">Turn-by-turn directions</summary>
-          ${stepsHtml}
-        </details>
+        <details><summary style="cursor: pointer;">Turn-by-turn directions</summary>${stepsHtml}</details>
         ${transitHtml}
         <div style="margin-top: 12px; font-size:0.7rem; color:var(--text-muted);">⚠️ Always verify local conditions.</div>
       </div>
@@ -4068,14 +4072,31 @@ async function findSafeRoute() {
         }).addTo(map);
         L.marker([startCoords.lat, startCoords.lon]).addTo(map).bindPopup(`Start: ${start}`);
         L.marker([endCoords.lat, endCoords.lon]).addTo(map).bindPopup(`Destination: ${end}`);
-        const routeLayer = L.geoJSON(route.geometry, { style: { color: 'var(--neon)', weight: 5 } }).addTo(map);
+        const routeLayer = L.geoJSON(route.geometry, { style: { color: 'var(--neon)', weight: 5, opacity: 0.8 } }).addTo(map);
         map.fitBounds(routeLayer.getBounds());
       }
     }, 100);
-
   } catch (err) {
     resultDiv.innerHTML = `<div class="auth-error show">⚠️ Error: ${err.message}</div>`;
   } finally {
     setLoading(findBtn, false, "🔍 Find Safe Route");
   }
 }
+
+/**
+ * Bridges the Charity Finder to the OSRM/Gemini Route Safety system
+ */
+async function getCharityDirections(name, address) {
+  const start = document.getElementById('charity-location-input')?.value.trim();
+  if (!start) {
+    showToast("Please enter your starting location in the search box first.", "info");
+    return;
+  }
+
+  await openRouteSafetyModal();
+  document.getElementById('route-start').value = start;
+  document.getElementById('route-end').value = address;
+  findSafeRoute();
+}
+
+window.getCharityDirections = getCharityDirections;

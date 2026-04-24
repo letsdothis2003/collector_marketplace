@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "@google/genai": "^1.50.1"
+    "ai": "^6.0.168",
+    "google": "^2.1.0"
   }
 }
