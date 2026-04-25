@@ -37,6 +37,29 @@ if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
   document.head.appendChild(script);
 }
 
+async function reloadGeminiConfig() {
+  return new Promise((resolve) => {
+    const reloadScript = document.createElement('script');
+    reloadScript.src = `config.js?reload=${Date.now()}`;
+    reloadScript.onload = () => {
+      if (typeof CONFIG !== 'undefined' && CONFIG.GEMINI_API_KEY && !CONFIG.GEMINI_API_KEY.includes('PLACEHOLDER')) {
+        GEMINI_API_KEY = CONFIG.GEMINI_API_KEY;
+        console.log('[OBTAINUM AI] Reloaded local Gemini API key from config.js.');
+        resolve(true);
+      } else {
+        console.warn('[OBTAINUM AI] Reloaded config.js but GEMINI_API_KEY is missing or invalid.');
+        resolve(false);
+      }
+    };
+    reloadScript.onerror = () => {
+      console.warn('[OBTAINUM AI] Failed to reload config.js.');
+      resolve(false);
+    };
+    document.head.appendChild(reloadScript);
+  });
+}
+window.reloadGeminiConfig = reloadGeminiConfig;
+
 // Use a more robust check for the global db instance
 if (typeof window.db === 'undefined') {
   window.db = null;
