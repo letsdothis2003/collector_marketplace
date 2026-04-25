@@ -4250,8 +4250,8 @@ async function generateTransitRoute(listingId) {
       mapHtml = `<div id="${mapId}" style="height: 320px; border-radius: var(--radius); margin-top: 16px; border: 1px solid var(--border);"></div>`;
       resultContainer.innerHTML = `
         <div style="background: var(--bg-3); border-radius: var(--radius); padding: 16px; border: 1px solid var(--border);">
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;"><span>🚉</span><strong style="color: var(--neon);">Transit Route</strong></div>
-          <div style="font-size:0.95rem; color:var(--text-muted); margin-bottom:12px;">Map shows the walking route and directions; AI notes below explain transit safety and local context.</div>
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;"><span>�‍♂️</span><strong style="color: var(--neon);">Walking Route Preview</strong></div>
+          <div style="font-size:0.95rem; color:var(--text-muted); margin-bottom:12px;">Map shows the walking route from your start location to the listing. AI notes below provide transit safety and local context.</div>
           ${mapHtml}
           ${walkingInstructions.length ? `<div style="margin-top:16px; font-weight:700;">Walking directions:</div><div style="margin-top:8px; line-height:1.6;">${walkingInstructions.join('<br>')}</div>` : ''}
           <div style="margin-top: 16px; font-weight:700;">Transit safety context:</div>

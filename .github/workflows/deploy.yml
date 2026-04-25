@@ -33,11 +33,11 @@ jobs:
             exit 1
           fi
           
-          # Replace the placeholder in script.js with the actual key
-          # We use single quotes for the search pattern to avoid shell expansion issues
-          # and double quotes for the replacement to inject the variable.
-          sed -i 's|YOUR_GEMINI_API_KEY_PLACEHOLDER|'"$GEMINI_KEY"'|g' script.js
-          echo "Successfully injected API key into script.js"
+          # Create the config.js file that script.js expects
+          # This mimics your local setup and keeps the key out of source control.
+          echo "const CONFIG = { GEMINI_API_KEY: '$GEMINI_KEY' };" > config.js
+          
+          echo "Successfully generated config.js for deployment."
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
