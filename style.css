@@ -109,6 +109,8 @@ body {
 .animate-fade { animation: fadeIn 0.4s ease both; }
 .animate-slide { animation: slideIn 0.3s ease both; }
 .animate-glow { animation: glowPulse 2s ease-in-out infinite; }
+.scroll-reveal { opacity: 0; transform: translateY(16px) scale(0.98); will-change: transform, opacity; transition: opacity 0.45s ease, transform 0.45s ease; }
+.scroll-reveal.visible { opacity: 1; transform: translateY(0) scale(1); }
 
 /* ========== BASE STYLES ========== */
 button { cursor: pointer; font-family: inherit; border: none; background: none; }
@@ -137,6 +139,7 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--n
   transition: transform 0.3s ease;
 }
 .btn:hover::after { transform: translateX(0); }
+.btn:active { transform: scale(0.98); }
 .btn-primary { background: var(--neon); color: #001a07; box-shadow: 0 0 16px var(--neon-glow); }
 .btn-primary:hover { box-shadow: 0 0 28px var(--neon-glow-strong); transform: scale(1.02); }
 .btn-outline { border: 1px solid var(--neon); color: var(--neon); background: transparent; }
@@ -451,6 +454,8 @@ body.light-mode .chip.active { background: rgba(0, 138, 42, 0.12); }
 .upload-icon { font-size: 2.5rem; margin-bottom: 8px; opacity: 0.6; }
 .upload-text span { color: var(--neon); }
 .upload-input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.image-upload-zone.drag-over, .review-upload-zone.drag-over { border-color: var(--neon); background: rgba(0,255,65,0.12); box-shadow: 0 0 24px rgba(0,255,65,0.16); }
+.image-upload-zone.drag-over .upload-icon, .review-upload-zone.drag-over .upload-icon { transform: scale(1.08); }
 .image-preview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 8px; margin-top: 12px; }
 .image-preview-item { aspect-ratio: 1; border-radius: 8px; overflow: hidden; position: relative; border: 1px solid var(--border); animation: fadeIn 0.3s ease; }
 .image-preview-item img { width: 100%; height: 100%; object-fit: cover; }

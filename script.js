@@ -292,6 +292,33 @@ function showToast(message, type = 'info') {
   }, 3500);
 }
 
+function registerScrollRevealTargets() {
+  const selectors = ['.page', '.section-title', '.page-title', '.image-upload-zone', '.assistant-container', '.profile-banner', '.detail-container', '.create-container'];
+  document.querySelectorAll(selectors.join(', ')).forEach(el => {
+    if (!el.classList.contains('scroll-reveal')) {
+      el.classList.add('scroll-reveal');
+    }
+  });
+}
+
+function setupScrollReveal() {
+  const revealEls = document.querySelectorAll('.scroll-reveal');
+  if (!('IntersectionObserver' in window)) {
+    revealEls.forEach(el => el.classList.add('visible'));
+    return;
+  }
+  const observer = new IntersectionObserver((entries, obs) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        obs.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.18 });
+
+  revealEls.forEach(el => observer.observe(el));
+}
+
 function closeModal(id) {
   document.getElementById(id)?.classList.remove('open');
 }
@@ -3410,6 +3437,68 @@ function setupEventListeners() {
       const input = document.getElementById('image-input');
       if (input) input.click();
     });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+      uploadZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        uploadZone.classList.add('drag-over');
+      });
+    });
+    ['dragleave', 'drop'].forEach(eventName => {
+      uploadZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove('drag-over');
+      });
+    });
+    uploadZone.addEventListener('drop', (e) => {
+      const input = document.getElementById('image-input');
+      const files = Array.from(e.dataTransfer.files || []).filter(file => file.type.startsWith('image/'));
+      if (input && files.length) {
+        try {
+          const dataTransfer = new DataTransfer();
+          files.forEach(file => dataTransfer.items.add(file));
+          input.files = dataTransfer.files;
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        } catch (err) {
+          console.warn('Drag drop assignment failed:', err);
+          handleImageUpload({ target: { files } });
+        }
+      }
+    });
+  }
+
+  const reviewUploadZone = document.getElementById('review-upload-zone');
+  if (reviewUploadZone) {
+    reviewUploadZone.addEventListener('click', () => {
+      document.getElementById('review-image-input')?.click();
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+      reviewUploadZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        reviewUploadZone.classList.add('drag-over');
+      });
+    });
+    ['dragleave', 'drop'].forEach(eventName => {
+      reviewUploadZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        reviewUploadZone.classList.remove('drag-over');
+      });
+    });
+    reviewUploadZone.addEventListener('drop', (e) => {
+      const input = document.getElementById('review-image-input');
+      const files = Array.from(e.dataTransfer.files || []).filter(file => file.type.startsWith('image/'));
+      if (input && files.length) {
+        try {
+          const dataTransfer = new DataTransfer();
+          files.forEach(file => dataTransfer.items.add(file));
+          input.files = dataTransfer.files;
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        } catch (err) {
+          console.warn('Review drag drop assignment failed:', err);
+        }
+      }
+    });
   }
 
   window.addEventListener('scroll', () => {
@@ -3537,13 +3626,6 @@ function setupEventListeners() {
     });
   });
 
-  // Review upload zone click handler
-  const reviewUploadZone = document.getElementById('review-upload-zone');
-  if (reviewUploadZone) {
-    reviewUploadZone.addEventListener('click', () => {
-      document.getElementById('review-image-input')?.click();
-    });
-  }
 }
 
 // ==================== INITIALIZATION ====================
@@ -3553,6 +3635,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
   await initAuth();
   initChat();
+  registerScrollRevealTargets();
+  setupScrollReveal();
 
   const route = parseRouteFromHash();
   
