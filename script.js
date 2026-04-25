@@ -3905,18 +3905,18 @@ async function getFallbackSafeRoute(start, end) {
   return advice;
 }
 
-function buildTransitPrompt(start, destination, startDetails, destinationDetails) {
+function buildTransitSafetyPrompt(start, destination, startDetails, destinationDetails) {
   const startContext = startDetails?.address ? `${startDetails.address.road ? startDetails.address.road + ', ' : ''}${startDetails.address.city || startDetails.address.town || startDetails.address.village || ''}${startDetails.address.state ? ', ' + startDetails.address.state : ''}${startDetails.address.country ? ', ' + startDetails.address.country : ''}`.replace(/(^, |, $)/g, '') : '';
   const destContext = destinationDetails?.address ? `${destinationDetails.address.road ? destinationDetails.address.road + ', ' : ''}${destinationDetails.address.city || destinationDetails.address.town || destinationDetails.address.village || ''}${destinationDetails.address.state ? ', ' + destinationDetails.address.state : ''}${destinationDetails.address.country ? ', ' + destinationDetails.address.country : ''}`.replace(/(^, |, $)/g, '') : '';
-  return `You are OBTAINUM's transit safety assistant. Plan a walking + transit route from "${start}"${startContext ? ` (${startContext})` : ''} to "${destination}"${destContext ? ` (${destContext})` : ''}. Include the first walk to a nearby transit stop, train or bus route names, station/stop names, transfers, and the final walk to the destination. Mention safety facts for neighborhoods and transit hubs along the way. Keep it concise and actionable.`;
+  return `You are OBTAINUM's transit safety assistant. Provide safety context for a transit journey from "${start}"${startContext ? ` (${startContext})` : ''} to "${destination}"${destContext ? ` (${destContext})` : ''}. Mention nearby stations, busy or unsafe neighborhoods, transit hub safety, and any local route facts that would help a rider stay safe. Do not replace the walking directions or map above - this is supplemental safety and awareness information.`;
 }
 
-async function getTransitRouteFromGemini(start, destination, startDetails, destinationDetails) {
-  const prompt = buildTransitPrompt(start, destination, startDetails, destinationDetails);
+async function getTransitSafetyNotes(start, destination, startDetails, destinationDetails) {
+  const prompt = buildTransitSafetyPrompt(start, destination, startDetails, destinationDetails);
   try {
     return await callGemini(prompt);
   } catch (err) {
-    console.warn('Transit AI unavailable, using safe route fallback:', err);
+    console.warn('Transit safety AI unavailable:', err);
     return await getFallbackSafeRoute(start, destination);
   }
 }
@@ -4072,6 +4072,12 @@ async function getDrivingRoute(startLat, startLon, endLat, endLon) {
   return data;
 }
 
+async function getRouteDistanceKm(startLat, startLon, endLat, endLon) {
+  const data = await getDrivingRoute(startLat, startLon, endLat, endLon);
+  if (!data.routes?.[0]) throw new Error('No route returned');
+  return data.routes[0].distance / 1000;
+}
+
 async function getWalkingRoute(startLat, startLon, endLat, endLon) {
   const url = `https://router.project-osrm.org/route/v1/foot/${startLon},${startLat};${endLon},${endLat}?overview=full&geometries=geojson&steps=true`;
   const response = await fetch(url);
@@ -4094,8 +4100,13 @@ function getDistanceKm(lat1, lon1, lat2, lon2) {
 
 function estimateShippingCost(distanceKm, shippingMode, isInternational) {
   if (shippingMode === 'free') return 0;
-  const base = isInternational ? 18 : 8;
-  const perKm = isInternational ? 1.25 : 0.75;
+  if (shippingMode === 'local') {
+    const base = 10;
+    const perKm = 0.75;
+    return Math.max(12, Math.round((base + distanceKm * perKm) * 100) / 100);
+  }
+  const base = isInternational ? 35 : 25;
+  const perKm = isInternational ? 0.18 : 0.12;
   return Math.max(base, Math.round((base + distanceKm * perKm) * 100) / 100);
 }
 
@@ -4141,7 +4152,13 @@ async function calculateShippingRate(listingId) {
       geocodeLocation(destination, true)
     ]);
 
-    const distanceKm = getDistanceKm(sellerCoords.lat, sellerCoords.lon, destinationCoords.lat, destinationCoords.lon);
+    let distanceKm;
+    try {
+      distanceKm = await getRouteDistanceKm(sellerCoords.lat, sellerCoords.lon, destinationCoords.lat, destinationCoords.lon);
+    } catch (routeError) {
+      console.warn('Shipping distance route lookup failed, falling back to straight-line distance:', routeError);
+      distanceKm = getDistanceKm(sellerCoords.lat, sellerCoords.lon, destinationCoords.lat, destinationCoords.lon);
+    }
     const isInternational = sellerCoords.address?.country && destinationCoords.address?.country && sellerCoords.address.country !== destinationCoords.address.country;
     const cost = estimateShippingCost(distanceKm, listing.shipping, isInternational);
     const costDisplay = cost === 0 ? 'Free shipping' : `$${cost.toFixed(2)}`;
@@ -4213,12 +4230,12 @@ async function generateTransitRoute(listingId) {
       geocodeLocation(destination, true)
     ]);
 
-    let transitAdvice = '';
+    let transitSafetyNotes = '';
     try {
-      transitAdvice = await getTransitRouteFromGemini(start, destination, startCoords, destinationCoords);
+      transitSafetyNotes = await getTransitSafetyNotes(start, destination, startCoords, destinationCoords);
     } catch (err) {
-      console.error('Transit route fallback failed:', err);
-      transitAdvice = getFallbackSafeRoute(start, destination);
+      console.error('Transit safety AI failed:', err);
+      transitSafetyNotes = getFallbackSafeRoute(start, destination);
     }
 
     const walkingInstructions = [];
@@ -4234,9 +4251,11 @@ async function generateTransitRoute(listingId) {
       resultContainer.innerHTML = `
         <div style="background: var(--bg-3); border-radius: var(--radius); padding: 16px; border: 1px solid var(--border);">
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;"><span>🚉</span><strong style="color: var(--neon);">Transit Route</strong></div>
+          <div style="font-size:0.95rem; color:var(--text-muted); margin-bottom:12px;">Map shows the walking route and directions; AI notes below explain transit safety and local context.</div>
           ${mapHtml}
-          ${walkingInstructions.length ? `<div style="margin-top:16px; font-weight:700;">Walking leg preview:</div><div style="margin-top:8px; line-height:1.6;">${walkingInstructions.join('<br>')}</div>` : ''}
-          <div style="margin-top: 16px; line-height:1.6;">${formatMarkdown(transitAdvice)}</div>
+          ${walkingInstructions.length ? `<div style="margin-top:16px; font-weight:700;">Walking directions:</div><div style="margin-top:8px; line-height:1.6;">${walkingInstructions.join('<br>')}</div>` : ''}
+          <div style="margin-top: 16px; font-weight:700;">Transit safety context:</div>
+          <div style="margin-top:8px; line-height:1.6;">${formatMarkdown(transitSafetyNotes)}</div>
         </div>
       `;
       setTimeout(() => {
