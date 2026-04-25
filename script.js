@@ -3905,6 +3905,22 @@ async function getFallbackSafeRoute(start, end) {
   return advice;
 }
 
+function buildTransitPrompt(start, destination, startDetails, destinationDetails) {
+  const startContext = startDetails?.address ? `${startDetails.address.road ? startDetails.address.road + ', ' : ''}${startDetails.address.city || startDetails.address.town || startDetails.address.village || ''}${startDetails.address.state ? ', ' + startDetails.address.state : ''}${startDetails.address.country ? ', ' + startDetails.address.country : ''}`.replace(/(^, |, $)/g, '') : '';
+  const destContext = destinationDetails?.address ? `${destinationDetails.address.road ? destinationDetails.address.road + ', ' : ''}${destinationDetails.address.city || destinationDetails.address.town || destinationDetails.address.village || ''}${destinationDetails.address.state ? ', ' + destinationDetails.address.state : ''}${destinationDetails.address.country ? ', ' + destinationDetails.address.country : ''}`.replace(/(^, |, $)/g, '') : '';
+  return `You are OBTAINUM's transit safety assistant. Plan a walking + transit route from "${start}"${startContext ? ` (${startContext})` : ''} to "${destination}"${destContext ? ` (${destContext})` : ''}. Include the first walk to a nearby transit stop, train or bus route names, station/stop names, transfers, and the final walk to the destination. Mention safety facts for neighborhoods and transit hubs along the way. Keep it concise and actionable.`;
+}
+
+async function getTransitRouteFromGemini(start, destination, startDetails, destinationDetails) {
+  const prompt = buildTransitPrompt(start, destination, startDetails, destinationDetails);
+  try {
+    return await callGemini(prompt);
+  } catch (err) {
+    console.warn('Transit AI unavailable, using safe route fallback:', err);
+    return await getFallbackSafeRoute(start, destination);
+  }
+}
+
 function formatMarkdown(text) {
   // Convert markdown to HTML for better readability
   let formatted = text;
@@ -4199,11 +4215,10 @@ async function generateTransitRoute(listingId) {
 
     let transitAdvice = '';
     try {
-      const prompt = buildTransitPrompt(start, destination, startCoords, destinationCoords);
-      transitAdvice = await callGemini(prompt);
+      transitAdvice = await getTransitRouteFromGemini(start, destination, startCoords, destinationCoords);
     } catch (err) {
-      console.warn('Transit AI advice unavailable:', err);
-      transitAdvice = getFallbackTransitAdvice(start, destination);
+      console.error('Transit route fallback failed:', err);
+      transitAdvice = getFallbackSafeRoute(start, destination);
     }
 
     const walkingInstructions = [];
