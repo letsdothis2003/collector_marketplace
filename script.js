@@ -68,6 +68,7 @@ function scrub(text) {
 async function callGemini(prompt, responseType = 'text/plain') {
   await geminiKeyReady;
   if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
+    showToast('Gemini API key is missing. Copy config.example.js to config.js and add your key.', 'error');
     throw new Error("AI service is not configured. Please add your Gemini API Key.");
   }
 
