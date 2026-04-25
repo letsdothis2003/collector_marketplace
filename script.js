@@ -12,37 +12,29 @@ const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
 let GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_PLACEHOLDER";
 let geminiKeyReady = Promise.resolve();
 
-// Dynamically load local config only if running in a dev environment.
+// Dynamically load local config when the placeholder key is present.
 // config.js is gitignored and should be used only for local development.
 // On GitHub Pages, the workflow will inject the secret from repository secrets.
 if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
-  const isLocal = window.location.hostname === 'localhost' || 
-                  window.location.hostname === '127.0.0.1' || 
-                  window.location.hostname.includes('github.dev') ||
-                  window.location.hostname.includes('app.github.dev') ||
-                  window.location.protocol === 'file:';
-
-  if (isLocal) {
-    let resolveGeminiKey;
-    geminiKeyReady = new Promise((resolve) => { resolveGeminiKey = resolve; });
-    console.log('[OBTAINUM AI] Development environment detected. Loading config.js...');
-    const script = document.createElement('script');
-    script.src = 'config.js';
-    script.onload = () => {
-      if (typeof CONFIG !== 'undefined' && CONFIG.GEMINI_API_KEY) {
-        GEMINI_API_KEY = CONFIG.GEMINI_API_KEY;
-        console.log('[OBTAINUM AI] Local API Key successfully loaded.');
-      } else {
-        console.warn('[OBTAINUM AI] config.js loaded but CONFIG.GEMINI_API_KEY is missing.');
-      }
-      resolveGeminiKey();
-    };
-    script.onerror = () => {
-      console.warn('[OBTAINUM AI] config.js not found. AI features will be limited.');
-      resolveGeminiKey();
-    };
-    document.head.appendChild(script);
-  }
+  let resolveGeminiKey;
+  geminiKeyReady = new Promise((resolve) => { resolveGeminiKey = resolve; });
+  console.log('[OBTAINUM AI] Gemini API placeholder detected. Attempting to load local config.js...');
+  const script = document.createElement('script');
+  script.src = 'config.js';
+  script.onload = () => {
+    if (typeof CONFIG !== 'undefined' && CONFIG.GEMINI_API_KEY && !CONFIG.GEMINI_API_KEY.includes('PLACEHOLDER')) {
+      GEMINI_API_KEY = CONFIG.GEMINI_API_KEY;
+      console.log('[OBTAINUM AI] Local API key successfully loaded from config.js.');
+    } else {
+      console.warn('[OBTAINUM AI] config.js loaded but CONFIG.GEMINI_API_KEY is missing or invalid.');
+    }
+    resolveGeminiKey();
+  };
+  script.onerror = () => {
+    console.warn('[OBTAINUM AI] config.js not found. AI features will remain disabled until the key is configured.');
+    resolveGeminiKey();
+  };
+  document.head.appendChild(script);
 }
 
 // Use a more robust check for the global db instance
@@ -64,11 +56,52 @@ function scrub(text) {
   return text.split(GEMINI_API_KEY).join('[REDACTED_KEY]');
 }
 
+function formatRouteInstruction(step, index = 0, total = 0) {
+  const name = step.name || step.ref || '';
+  const type = step.maneuver?.type || '';
+  const modifier = step.maneuver?.modifier || '';
+  const distanceKm = (step.distance / 1000).toFixed(1);
+  const maneuverInstruction = step.maneuver?.instruction;
+  let instruction = '';
+
+  if (maneuverInstruction) {
+    instruction = maneuverInstruction;
+  } else if (type === 'depart') {
+    instruction = name ? `Start on ${name}` : 'Start your route';
+  } else if (type === 'arrive') {
+    instruction = `Arrive at your destination${name ? ` ${name}` : ''}`;
+  } else if (type === 'turn') {
+    instruction = name ? `Turn ${modifier || 'ahead'} onto ${name}` : `Turn ${modifier || 'ahead'}`;
+  } else if (type === 'continue' || type === 'straight') {
+    instruction = name ? `Continue on ${name}` : 'Continue straight';
+  } else if (type === 'merge') {
+    instruction = name ? `Merge onto ${name}` : 'Merge into traffic';
+  } else if (type === 'roundabout' || type === 'rotary') {
+    instruction = name ? `Take the ${modifier || ''} exit onto ${name}` : `Use the ${modifier || 'next'} exit`; 
+  } else if (type === 'fork') {
+    instruction = name ? `Keep ${modifier || 'right'} toward ${name}` : `Keep ${modifier || 'right'}`;
+  } else if (type === 'take_exit' || type === 'exit_roundabout') {
+    instruction = name ? `Take the exit toward ${name}` : 'Take the exit';
+  } else if (name) {
+    instruction = `Proceed on ${name}`;
+  } else {
+    instruction = 'Continue on the route';
+  }
+
+  if (!maneuverInstruction && distanceKm && distanceKm !== '0.0') {
+    instruction += ` for ${distanceKm} km`;
+  }
+  if (index === total - 1 && type !== 'arrive') {
+    instruction += '.';
+  }
+  return instruction;
+}
+
 // ==================== DIRECT API HELPER (REPLACES LIBRARY) ====================
 async function callGemini(prompt, responseType = 'text/plain') {
   await geminiKeyReady;
   if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
-    showToast('Gemini API key is missing. Copy config.example.js to config.js and add your key.', 'error');
+    showToast('Gemini API key is missing. Copy config.example.js to config.js and add your key locally, or configure GEMINI_API_KEY in your deployment workflow.', 'error');
     throw new Error("AI service is not configured. Please add your Gemini API Key.");
   }
 
@@ -4018,12 +4051,15 @@ async function generatePickupRoute(listingId) {
     const distanceKm = (route.distance / 1000).toFixed(1);
     const durationMin = Math.round(route.duration / 60);
 
-    // Extract step-by-step instructions
+    const steps = route.legs[0]?.steps || [];
     let stepsHtml = '<ul style="margin: 8px 0 0 20px;">';
-    (route.legs[0]?.steps || []).forEach(step => {
-      const instruction = step.maneuver?.instruction || "Proceed forward";
-      stepsHtml += `<li>${instruction} (${(step.distance / 1000).toFixed(1)} km)</li>`;
-    });
+    if (steps.length === 0) {
+      stepsHtml += '<li>Step-by-step directions unavailable. Please follow the map above and local road signs.</li>';
+    } else {
+      stepsHtml += steps.map((step, index, all) => {
+        return `<li>${formatRouteInstruction(step, index, all.length)}</li>`;
+      }).join('');
+    }
     stepsHtml += '</ul>';
 
     // 3. Generate transit directions using Gemini (no API key needed for free transit data)
@@ -4167,11 +4203,15 @@ async function findSafeRoute() {
     const distanceKm = (route.distance / 1000).toFixed(1);
     const durationMin = Math.round(route.duration / 60);
 
+    const steps = route.legs[0]?.steps || [];
     let stepsHtml = '<ul style="margin: 8px 0 0 20px;">';
-    (route.legs[0]?.steps || []).forEach(step => {
-      const instruction = step.maneuver?.instruction || "Continue on route";
-      stepsHtml += `<li>${instruction} (${(step.distance / 1000).toFixed(1)} km)</li>`;
-    });
+    if (steps.length === 0) {
+      stepsHtml += '<li>Route instructions unavailable. Please review the map and use local signage.</li>';
+    } else {
+      stepsHtml += steps.map((step, index, all) => {
+        return `<li>${formatRouteInstruction(step, index, all.length)}</li>`;
+      }).join('');
+    }
     stepsHtml += '</ul>';
 
     // Gemini transit suggestion
