@@ -4166,8 +4166,11 @@ async function generateTransitRoute(listingId) {
     return;
   }
 
-  const resultContainer = document.getElementById(`transit-planner-result-${listing.id}`);
-  if (!resultContainer) return;
+  const resultContainer = document.getElementById(`transit-planner-result-${listingId}`);
+  if (!resultContainer) {
+    console.error('Transit result container not found for listing:', listingId);
+    return;
+  }
 
   resultContainer.innerHTML = '<div class="spinner"></div> Planning transit route...';
 

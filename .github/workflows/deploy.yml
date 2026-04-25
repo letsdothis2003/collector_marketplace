@@ -24,10 +24,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Inject Gemini API Key
+        env:
+          GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           # This keeps the API key out of source control.
           # Set GEMINI_API_KEY in your repository secrets before deploying.
-          sed -i 's|YOUR_GEMINI_API_KEY_PLACEHOLDER|${{ secrets.GEMINI_API_KEY }}|g' script.js
+          sed -i "s|YOUR_GEMINI_API_KEY_PLACEHOLDER|$GEMINI_KEY|g" script.js
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
