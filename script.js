@@ -4129,21 +4129,23 @@ async function calculateShippingRate(listingId) {
     const isInternational = sellerCoords.address?.country && destinationCoords.address?.country && sellerCoords.address.country !== destinationCoords.address.country;
     const cost = estimateShippingCost(distanceKm, listing.shipping, isInternational);
     const costDisplay = cost === 0 ? 'Free shipping' : `$${cost.toFixed(2)}`;
+    const modeLabel = listing.shipping === 'local' ? 'Local delivery' : listing.shipping === 'shipping-only' ? 'Shipping only' : listing.shipping === 'paid' ? 'Paid shipping' : 'Free shipping';
 
     let aiText = '';
     try {
       const prompt = buildShippingPrompt(sellerLocation, destination, listing.shipping, isInternational);
       aiText = await callGemini(prompt);
     } catch (err) {
+      console.warn('Shipping AI advice unavailable:', err);
       aiText = 'AI shipping advice is unavailable. Configure Gemini API to get safety and location-specific shipping facts.';
     }
 
     resultContainer.innerHTML = `
       <div style="background: var(--bg-2); border-radius: var(--radius); padding: 16px; border: 1px solid var(--border);">
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;"><span>🚚</span><strong style="color: var(--neon);">Shipping Estimate</strong></div>
-        <div><strong>Mode:</strong> ${listing.shipping}</div>
+        <div><strong>Mode:</strong> ${modeLabel}</div>
         <div><strong>Distance:</strong> ${distanceKm.toFixed(1)} km</div>
-        <div><strong>Estimated cost:</strong> ${costDisplay}</div>
+        <div><strong>Estimate:</strong> ${costDisplay}</div>
         <div style="margin-top:12px; line-height:1.6;">${formatMarkdown(aiText)}</div>
       </div>
     `;
@@ -4176,12 +4178,14 @@ async function generateTransitRoute(listingId) {
 
   resultContainer.innerHTML = '<div class="spinner"></div> Planning transit route...';
 
+  let listing;
   try {
-    const { data: listing, error } = await db
+    const { data, error } = await db
       .from('listings')
       .select('location')
       .eq('id', listingId)
       .single();
+    listing = data;
 
     if (error || !listing || !listing.location) {
       throw new Error('Listing location is unavailable.');
@@ -4189,27 +4193,34 @@ async function generateTransitRoute(listingId) {
 
     const destination = listing.location;
     const [startCoords, destinationCoords] = await Promise.all([
-      geocodeLocation(start),
-      geocodeLocation(destination)
+      geocodeLocation(start, true),
+      geocodeLocation(destination, true)
     ]);
 
     let transitAdvice = '';
     try {
-      const prompt = `You are OBTAINUM's transit safety assistant. Provide a walking + transit itinerary from "${start}" to "${destination}". Include a first walking segment to a transit station or stop, the train or bus route names, station/stop names, transfer points, and the final walk to the destination. Also mention safety facts for the neighborhoods and transit hubs along the route.`;
+      const prompt = buildTransitPrompt(start, destination, startCoords, destinationCoords);
       transitAdvice = await callGemini(prompt);
     } catch (err) {
-      transitAdvice = 'AI transit guidance is unavailable. Configure Gemini API to get transit safety and route facts.';
+      console.warn('Transit AI advice unavailable:', err);
+      transitAdvice = getFallbackTransitAdvice(start, destination);
     }
 
+    const walkingInstructions = [];
     let mapHtml = '';
     try {
       const walkingRoute = await getWalkingRoute(startCoords.lat, startCoords.lon, destinationCoords.lat, destinationCoords.lon);
+      const walkingSteps = walkingRoute.routes[0]?.legs?.[0]?.steps || [];
+      if (walkingSteps.length) {
+        walkingInstructions.push(...walkingSteps.map((step, index) => `• ${formatRouteInstruction(step, index, walkingSteps.length)}`));
+      }
       const mapId = `transit-map-${listingId}-${Date.now()}`;
       mapHtml = `<div id="${mapId}" style="height: 320px; border-radius: var(--radius); margin-top: 16px; border: 1px solid var(--border);"></div>`;
       resultContainer.innerHTML = `
         <div style="background: var(--bg-3); border-radius: var(--radius); padding: 16px; border: 1px solid var(--border);">
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;"><span>🚉</span><strong style="color: var(--neon);">Transit Route</strong></div>
           ${mapHtml}
+          ${walkingInstructions.length ? `<div style="margin-top:16px; font-weight:700;">Walking leg preview:</div><div style="margin-top:8px; line-height:1.6;">${walkingInstructions.join('<br>')}</div>` : ''}
           <div style="margin-top: 16px; line-height:1.6;">${formatMarkdown(transitAdvice)}</div>
         </div>
       `;
@@ -4226,6 +4237,7 @@ async function generateTransitRoute(listingId) {
         }
       }, 100);
     } catch (routeErr) {
+      console.warn('Walking route preview unavailable:', routeErr);
       resultContainer.innerHTML = `
         <div style="background: var(--bg-3); border-radius: var(--radius); padding: 16px; border: 1px solid var(--border);">
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;"><span>🚉</span><strong style="color: var(--neon);">Transit Route</strong></div>

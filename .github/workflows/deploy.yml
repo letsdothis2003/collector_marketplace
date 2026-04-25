@@ -34,7 +34,9 @@ jobs:
           fi
           
           # Replace the placeholder in script.js with the actual key
-          sed -i "s|YOUR_GEMINI_API_KEY_PLACEHOLDER|$GEMINI_KEY|g" script.js
+          # We use single quotes for the search pattern to avoid shell expansion issues
+          # and double quotes for the replacement to inject the variable.
+          sed -i 's|YOUR_GEMINI_API_KEY_PLACEHOLDER|'"$GEMINI_KEY"'|g' script.js
           echo "Successfully injected API key into script.js"
 
       - name: Setup Pages
