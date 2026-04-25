@@ -62,9 +62,12 @@ function formatRouteInstruction(step, index = 0, total = 0) {
   const modifier = step.maneuver?.modifier || '';
   const distanceKm = (step.distance / 1000).toFixed(1);
   const maneuverInstruction = step.maneuver?.instruction;
+  const genericInstructionPattern = /^(proceed|continue|head)\b/i;
   let instruction = '';
 
-  if (maneuverInstruction) {
+  const shouldUseCustom = !maneuverInstruction || genericInstructionPattern.test(maneuverInstruction);
+
+  if (!shouldUseCustom && maneuverInstruction) {
     instruction = maneuverInstruction;
   } else if (type === 'depart') {
     instruction = name ? `Start on ${name}` : 'Start your route';
@@ -77,7 +80,7 @@ function formatRouteInstruction(step, index = 0, total = 0) {
   } else if (type === 'merge') {
     instruction = name ? `Merge onto ${name}` : 'Merge into traffic';
   } else if (type === 'roundabout' || type === 'rotary') {
-    instruction = name ? `Take the ${modifier || ''} exit onto ${name}` : `Use the ${modifier || 'next'} exit`; 
+    instruction = name ? `Take the ${modifier || 'next'} exit onto ${name}` : `Use the ${modifier || 'next'} exit`;
   } else if (type === 'fork') {
     instruction = name ? `Keep ${modifier || 'right'} toward ${name}` : `Keep ${modifier || 'right'}`;
   } else if (type === 'take_exit' || type === 'exit_roundabout') {
@@ -88,7 +91,7 @@ function formatRouteInstruction(step, index = 0, total = 0) {
     instruction = 'Continue on the route';
   }
 
-  if (!maneuverInstruction && distanceKm && distanceKm !== '0.0') {
+  if (distanceKm && distanceKm !== '0.0') {
     instruction += ` for ${distanceKm} km`;
   }
   if (index === total - 1 && type !== 'arrive') {
