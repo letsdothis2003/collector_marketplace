@@ -4061,10 +4061,18 @@ function getDistanceKm(lat1, lon1, lat2, lon2) {
 }
 
 function estimateShippingCost(distanceKm, shippingMode, isInternational) {
-  if (shippingMode === 'free') return 0;
-  const base = isInternational ? 18 : 8;
-  const perKm = isInternational ? 1.25 : 0.75;
-  return Math.max(base, Math.round((base + distanceKm * perKm) * 100) / 100);
+  // Fix: Zero or near-zero distance makes zero sense to charge for shipping
+  if (shippingMode === 'free' || distanceKm < 1) return 0;
+  
+  const handlingFee = 5.50; // Base packaging/handling
+  const baseTransit = isInternational ? 25.00 : 12.00;
+  const ratePerKm = isInternational ? 0.08 : 0.04;
+  
+  let total = handlingFee + baseTransit + (distanceKm * ratePerKm);
+  
+  // Apply a minimum floor for transit costs
+  const floor = isInternational ? 45.00 : 15.00;
+  return Math.max(floor, Math.round(total * 100) / 100);
 }
 
 function buildShippingPrompt(start, destination, shippingMode, isInternational) {
@@ -4122,15 +4130,68 @@ async function calculateShippingRate(listingId) {
       aiText = 'AI shipping advice is unavailable. Configure Gemini API to get safety and location-specific shipping facts.';
     }
 
+    const mapId = `shipping-map-${listingId}`;
     resultContainer.innerHTML = `
-      <div style="background: var(--bg-2); border-radius: var(--radius); padding: 16px; border: 1px solid var(--border);">
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;"><span>🚚</span><strong style="color: var(--neon);">Shipping Estimate</strong></div>
-        <div><strong>Mode:</strong> ${listing.shipping}</div>
-        <div><strong>Distance:</strong> ${distanceKm.toFixed(1)} km</div>
-        <div><strong>Estimated cost:</strong> ${costDisplay}</div>
-        <div style="margin-top:12px; line-height:1.6;">${formatMarkdown(aiText)}</div>
+      <div style="background: var(--bg-2); border-radius: var(--radius-lg); padding: 20px; border: 1px solid var(--border); animation: fadeIn 0.4s ease-out;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:15px;">
+          <span style="font-size:1.2rem;">🚚</span>
+          <strong style="color: var(--neon); font-family:'Orbitron';">SHIPPING LOGISTICS</strong>
+        </div>
+        
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap:10px; margin-bottom:20px;">
+          <div style="background:var(--bg-3); padding:10px; border-radius:8px; border:1px solid var(--border);">
+            <div style="font-size:0.65rem; color:var(--text-muted);">DISTANCE</div>
+            <div style="font-weight:bold; color:var(--neon);">${distanceKm.toFixed(1)} km</div>
+          </div>
+          <div style="background:var(--bg-3); padding:10px; border-radius:8px; border:1px solid var(--border);">
+            <div style="font-size:0.65rem; color:var(--text-muted);">ESTIMATED COST</div>
+            <div style="font-weight:bold; color:var(--neon);">${costDisplay}</div>
+          </div>
+        </div>
+
+        <div id="${mapId}" style="width: 100%; height: 350px; background: var(--bg-3); border-radius: var(--radius); margin-bottom: 20px; border: 1px solid var(--border);"></div>
+        
+        <div style="background:rgba(0,255,65,0.03); padding:15px; border-radius:8px; border-left:3px solid var(--neon);">
+          <div style="font-size:0.75rem; font-weight:bold; margin-bottom:8px; color:var(--text-secondary);">🤖 AI SHIPPING ADVICE</div>
+          <div style="line-height:1.6; font-size:0.9rem;">${formatMarkdown(aiText)}</div>
+        </div>
       </div>
     `;
+
+    // Initialize amCharts v5
+    setTimeout(() => {
+      if (typeof am5 === 'undefined') return;
+      
+      const root = am5.Root.new(mapId);
+      root.setThemes([am5themes_Animated.new(root)]);
+
+      const chart = root.container.children.push(am5map.MapChart.new(root, {
+        panX: "rotateX",
+        projection: am5map.geoMercator()
+      }));
+
+      const polygonSeries = chart.series.push(am5map.MapPolygonSeries.new(root, {
+        geoJSON: am5geodata_worldLow,
+        fill: am5.color(0x2a2a2a),
+        stroke: am5.color(0x3f3f3f)
+      }));
+
+      const pointSeries = chart.series.push(am5map.MapPointSeries.new(root, {}));
+      const lineSeries = chart.series.push(am5map.MapLineSeries.new(root, {}));
+      lineSeries.mapLines.template.setAll({ stroke: am5.color(0x00ff41), strokeOpacity: 0.6, strokeWidth: 2 });
+
+      pointSeries.data.setAll([
+        { geometry: { type: "Point", coordinates: [sellerCoords.lon, sellerCoords.lat] }, name: "Origin" },
+        { geometry: { type: "Point", coordinates: [destinationCoords.lon, destinationCoords.lat] }, name: "Destination" }
+      ]);
+
+      lineSeries.data.setAll([{
+        geometry: { type: "LineString", coordinates: [[sellerCoords.lon, sellerCoords.lat], [destinationCoords.lon, destinationCoords.lat]] }
+      }]);
+
+      chart.appear(1000, 100);
+    }, 100);
+
   } catch (err) {
     console.error('Shipping estimate error:', err);
     resultContainer.innerHTML = `<div class="auth-error show">⚠️ ${err.message || 'Could not calculate shipping.'}</div>`;
