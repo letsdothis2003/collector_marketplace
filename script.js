@@ -11,22 +11,30 @@ const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
 // Do not change the placeholder string; it must match deploy.yml.
 let GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_PLACEHOLDER";
 
-// Dynamically load local config only if running in a dev environment
-// This prevents 404 errors on the live GitHub Pages site
+// Dynamically load local config only if running in a dev environment.
+// config.js is gitignored and should be used only for local development.
+// On GitHub Pages, the workflow will inject the secret from repository secrets.
 if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
   const isLocal = window.location.hostname === 'localhost' || 
                   window.location.hostname === '127.0.0.1' || 
                   window.location.hostname.includes('github.dev') ||
-                  window.location.hostname.includes('app.github.dev');
+                  window.location.hostname.includes('app.github.dev') ||
+                  window.location.protocol === 'file:';
 
   if (isLocal) {
+    console.log('[OBTAINUM AI] Development environment detected. Loading config.js...');
     const script = document.createElement('script');
     script.src = 'config.js';
     script.onload = () => {
       if (typeof CONFIG !== 'undefined' && CONFIG.GEMINI_API_KEY) {
         GEMINI_API_KEY = CONFIG.GEMINI_API_KEY;
-        console.log('[OBTAINUM AI] Local API Key successfully loaded from config.js');
+        console.log('[OBTAINUM AI] Local API Key successfully loaded.');
+      } else {
+        console.warn('[OBTAINUM AI] config.js loaded but CONFIG.GEMINI_API_KEY is missing.');
       }
+    };
+    script.onerror = () => {
+      console.warn('[OBTAINUM AI] config.js not found. AI features will be limited.');
     };
     document.head.appendChild(script);
   }
@@ -57,11 +65,12 @@ async function callGemini(prompt, responseType = 'text/plain') {
     throw new Error("AI service is not configured. Please add your Gemini API Key.");
   }
 
-  // Priority list including requested future-proof models
+  // Priority list including a known public Google Generative Language model first.
+  // A 404 here usually means the model name is not available for this key, not that the key itself is invalid.
   const models = [
-    "gemini-pro", // Stable and widely available text model
-    "gemini-1.5-flash", // Keeping as a fallback, but if it consistently 404s, consider removing or checking API key access.
-    // "gemini-1.5-flash-8b" // This model name might be incorrect or not publicly available.
+    "text-bison-001", // Public text generation model for API keys with Generative Language access
+    "gemini-pro", // Gemini-style model; may require special access or a different project setup
+    "gemini-1.5-flash", // Fallback if available
   ];
   
   for (const model of models) {
@@ -71,12 +80,11 @@ async function callGemini(prompt, responseType = 'text/plain') {
     while (retries >= 0) {
       console.log(`[OBTAINUM AI] Attempting ${model}...`);
       try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta2/models/${model}:generateText?key=${GEMINI_API_KEY}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: responseType }
+            prompt: { text: prompt }
           })
         });
 
@@ -89,16 +97,20 @@ async function callGemini(prompt, responseType = 'text/plain') {
           continue;
         }
 
-        // If model doesn't exist (404) or other error, break to try the NEXT model in the list
+        const data = await response.json();
         if (!response.ok) {
-          console.warn(`[OBTAINUM AI] ${model} unavailable (Status: ${response.status}). Trying fallback...`);
-          break; 
+          const apiMessage = data?.error?.message || data?.error?.status || 'Unknown API error';
+          console.warn(`[OBTAINUM AI] ${model} unavailable (Status: ${response.status}). Trying fallback...`, apiMessage, data);
+          if (response.status === 404) {
+            console.warn('[OBTAINUM AI] 404 means this model is not available for this API key or the Generative Language API is not enabled on the project.');
+          }
+          break;
         }
 
-        const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const text = data?.candidates?.[0]?.output || data?.output?.[0]?.content?.[0]?.text || data?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (text) return text;
         
+        console.warn(`[OBTAINUM AI] ${model} returned no text in response.`, data);
         break; 
       } catch (err) {
         console.error(`[OBTAINUM AI] Connection error with ${model}:`, err);
