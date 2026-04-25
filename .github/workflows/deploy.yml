@@ -27,9 +27,15 @@ jobs:
         env:
           GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          # This keeps the API key out of source control.
-          # Set GEMINI_API_KEY in your repository secrets before deploying.
+          if [ -z "$GEMINI_KEY" ]; then
+            echo "ERROR: GEMINI_API_KEY secret is not set in GitHub Settings."
+            echo "Go to Settings > Secrets and variables > Actions to add it."
+            exit 1
+          fi
+          
+          # Replace the placeholder in script.js with the actual key
           sed -i "s|YOUR_GEMINI_API_KEY_PLACEHOLDER|$GEMINI_KEY|g" script.js
+          echo "Successfully injected API key into script.js"
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

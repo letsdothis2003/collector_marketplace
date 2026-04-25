@@ -18,7 +18,7 @@ let geminiKeyReady = Promise.resolve();
 if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
   let resolveGeminiKey;
   geminiKeyReady = new Promise((resolve) => { resolveGeminiKey = resolve; });
-  console.log('[OBTAINUM AI] Gemini API placeholder detected. Attempting to load local config.js...');
+  console.log('[OBTAINUM AI] 🛠️ Local development mode detected. Loading config.js...');
   const script = document.createElement('script');
   script.src = 'config.js';
   script.onload = () => {
@@ -31,10 +31,12 @@ if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
     resolveGeminiKey();
   };
   script.onerror = () => {
-    console.warn('[OBTAINUM AI] config.js not found. AI features will remain disabled until the key is configured.');
+    console.warn('[OBTAINUM AI] ❌ config.js not found. If this is local, create it. If this is GitHub Pages, the injection failed.');
     resolveGeminiKey();
   };
   document.head.appendChild(script);
+} else {
+  console.log('[OBTAINUM AI] ✅ Production mode: API Key successfully injected by GitHub Actions.');
 }
 
 async function reloadGeminiConfig() {
