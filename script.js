@@ -2855,7 +2855,6 @@ function renderDetail(listing) {
   const seller = listing.profiles || {};
   const isOwner = State.user && State.user.id === listing.seller_id;
   const isWished = State.wishlistIds.has(listing.id);
-  
   let imagesHtml = '';
   if (listing.images && listing.images.length > 0) {
     if (listing.images.length === 1) {
@@ -2895,7 +2894,6 @@ function renderDetail(listing) {
     : 'Cash';
   const isShippingOnly = listing.shipping === 'shipping-only';
   const showPickupPlanner = listing.location && !isShippingOnly;
-  const showTransitPlanner = listing.location;
   const showShippingSection = !!listing.shipping && listing.shipping !== 'pickup';
   
   let actionsHtml;
@@ -2968,21 +2966,6 @@ function renderDetail(listing) {
         </div>
         ` : ''}
 
-        ${showTransitPlanner ? `
-        <div class="transit-route-planner" style="margin: 24px 0; padding: 24px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); animation: fadeIn 0.5s ease-out;">
-          <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
-            <span style="font-size:1.5rem;">🚆</span>
-            <h3 style="color: var(--neon); font-family: 'Orbitron', sans-serif; font-size: 1.1rem;">AI TRANSIT ROUTE PLANNER</h3>
-          </div>
-          <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 20px;">Create a walking + transit route with station/bus route guidance, safety facts, and local location insight.</p>
-          <div style="display:flex; gap:12px; flex-wrap:wrap;">
-            <input type="text" id="transit-start-loc-${listing.id}" placeholder="Your location or station..." style="flex:1; min-width:200px;">
-            <button class="btn btn-primary" onclick="generateTransitRoute('${listing.id}')">PLAN TRANSIT</button>
-          </div>
-          <div id="transit-planner-result-${listing.id}" style="margin-top:20px;"></div>
-        </div>
-        ` : ''}
-
         ${showShippingSection ? `
         <div class="shipping-rate-planner" style="margin: 24px 0; padding: 24px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); animation: fadeIn 0.5s ease-out;">
           <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
@@ -3014,191 +2997,6 @@ function renderDetail(listing) {
     displayListingSuggestion(listing.id);
     if (listing.location) initListingMap(listing.location, `map-${listing.id}`);
   }, 500);
-}
-
-function viewSellerProfile(sellerId, updateHash = true) {
-  if (updateHash) {
-    window.location.hash = `profile/${sellerId}`;
-    return;
-  }
-  window.selectedProfileId = sellerId;
-  navigate('profile', { updateUrl: false, meta: { profileId: sellerId } });
-}
-
-async function editListing(listingId) {
-  State.editingListingId = listingId;
-  navigate('create');
-}
-
-async function deleteListing(listingId) {
-  if (!confirm('Are you sure you want to permanently delete this listing? This cannot be undone.')) return;
-  
-  try {
-    const { error } = await db
-      .from('listings')
-      .delete()
-      .eq('id', listingId)
-      .eq('seller_id', State.user.id);
-    if (error) throw error;
-    
-    State.listings = State.listings.filter(l => l.id !== listingId);
-    applyFilters();
-    
-    showToast('Listing deleted.', 'success');
-    if (State.currentPage === 'detail') navigate('profile');
-  } catch (err) {
-    console.error('Error deleting listing:', err);
-    showToast('Failed to delete listing: ' + err.message, 'error');
-  }
-}
-
-async function loadSimilarItems(listing) {
-  const scroll = document.getElementById('similar-scroll');
-  if (!scroll) return;
-  scroll.innerHTML = '<div style="padding:20px;">Loading...</div>';
-  
-  try {
-    const { data } = await db
-      .from('listings')
-      .select('*, profiles:seller_id(id, username, avatar_url, rating, location)')
-      .eq('category', listing.category)
-      .eq('is_sold', false)
-      .neq('id', listing.id)
-      .limit(8);
-    
-    const items = data || [];
-    if (items.length === 0) {
-      const section = document.getElementById('similar-section');
-      if (section) section.style.display = 'none';
-      return;
-    }
-    
-    scroll.innerHTML = '';
-    items.forEach(l => scroll.appendChild(createListingCard(l)));
-  } catch (err) {
-    const section = document.getElementById('similar-section');
-    if (section) section.style.display = 'none';
-  }
-}
-
-// ==================== RENDER ENGINE ====================
-function createListingCard(listing, showOwnerActions = false) {
-  const card = document.createElement('div');
-  card.className = 'listing-card animate-fade';
-  card.onclick = (e) => {
-    if (e.target.closest('.wishlist-btn, .owner-btn, .carousel-btn, .carousel-dot')) return;
-    openListing(listing.id);
-  };
-  
-  const isWished = State.wishlistIds.has(listing.id);
-  const isOwner = State.user && State.user.id === listing.seller_id;
-  const showActions = showOwnerActions !== undefined ? showOwnerActions : isOwner;
-  
-  let imageHtml;
-  if (listing.images && listing.images.length > 1) {
-    imageHtml = createImageCarousel(listing.images, listing.id);
-  } else if (listing.images && listing.images.length === 1) {
-    imageHtml = `<img src="${escHtml(listing.images[0])}" alt="${escHtml(listing.name)}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" decoding="async" />`;
-  } else {
-    imageHtml = `<div class="card-no-image">📦</div>`;
-  }
-  
-  const paymentIcons = {
-    'cash': '💵', 'card': '💳', 'paypal': '🅿️', 'venmo': 'V', 'crypto': '₿', 'trade': '🔄'
-  };
-  const paymentDisplay = listing.payment_methods && listing.payment_methods.length > 0
-    ? listing.payment_methods.slice(0, 3).map(p => paymentIcons[p] || p).join(' ')
-    : '💵';
-  
-  let wishlistBtn = '';
-  if (State.user && !isOwner) {
-    wishlistBtn = `
-      <button class="wishlist-btn ${isWished ? 'active' : ''}"
-        onclick="toggleWishlist(event, '${listing.id}')"
-        style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;z-index:20;transition:all 0.2s;"
-      >${isWished ? '❤️' : '🤍'}</button>
-    `;
-  }
-  
-  let ownerActions = '';
-  if (showActions && isOwner && !listing.is_sold) {
-    ownerActions = `
-      <div style="display:flex;gap:8px;margin-top:8px;">
-        <button class="owner-btn" onclick="event.stopPropagation(); editListing('${listing.id}')" style="background:var(--neon);color:#001a07;padding:4px 8px;border-radius:4px;border:none;cursor:pointer;font-size:11px;transition:all 0.2s;">EDIT</button>
-        <button class="owner-btn" onclick="event.stopPropagation(); openMarkSoldModal('${listing.id}')" style="background:var(--warning);color:#001a07;padding:4px 8px;border-radius:4px;border:none;cursor:pointer;font-size:11px;transition:all 0.2s;">SOLD</button>
-      </div>
-    `;
-  }
-  
-  const hasAiSuggestion = listing.ai_suggestions ? true : false;
-  
-  const soldOverlay = listing.is_sold ? '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);padding:8px 16px;border-radius:8px;font-weight:bold;color:var(--danger);z-index:15;">SOLD</div>' : '';
-  const locationDisplay = listing.location ? `📍 ${listing.location.substring(0, 25)}` : '';
-  
-  card.innerHTML = `
-    <div class="card-image-wrap" style="position:relative;aspect-ratio:1;background:var(--bg-3);overflow:hidden;">
-      ${imageHtml}
-      ${listing.is_fair ? '<span style="position:absolute;top:8px;left:8px;background:var(--neon);color:#001a07;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:bold;z-index:20;">AI FAIR</span>' : ''}
-      ${hasAiSuggestion ? '<span style="position:absolute;top:8px;left:70px;background:var(--blue);color:#001a07;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:bold;z-index:20;">🤖 AI ANALYZED</span>' : ''}
-      ${soldOverlay}
-      ${wishlistBtn}
-    </div>
-    <div class="card-body" style="padding:12px;">
-      <div class="card-title" style="font-weight:700;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;">${escHtml(listing.name)}</div>
-      <div class="card-price" style="color:var(--neon);font-weight:bold;font-size:1.1rem;margin-bottom:4px;">$${parseFloat(listing.price).toFixed(2)}</div>
-      <div class="card-meta" style="font-size:0.7rem;color:var(--text-muted);display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px;">
-        <span>🏷️ ${listing.condition || 'N/A'}</span>
-        <span>📦 ${listing.type || 'buy-now'}</span>
-      </div>
-      ${locationDisplay ? `<div class="card-location" style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;display:flex;align-items:center;gap:4px;">${locationDisplay}</div>` : ''}
-      <div class="card-payment" style="font-size:0.7rem;color:var(--text-muted);display:flex;align-items:center;gap:6px;background:rgba(0,255,65,0.08);padding:4px 8px;border-radius:6px;margin-top:4px;flex-wrap:wrap;">
-        <span>💳 Accepts:</span>
-        <span>${paymentDisplay}</span>
-      </div>
-      ${ownerActions}
-    </div>
-  `;
-  
-  return card;
-}
-
-function renderListings(listings) {
-  const grid = document.getElementById('listings-grid');
-  if (!grid) return;
-  
-  if (listings.length === 0) {
-    grid.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">NO LISTINGS FOUND</div></div>`;
-    return;
-  }
-  
-  grid.innerHTML = '';
-  listings.forEach(l => grid.appendChild(createListingCard(l)));
-}
-
-function showSkeletons() {
-  const grid = document.getElementById('listings-grid');
-  if (!grid) return;
-  grid.innerHTML = Array(8).fill(0).map(() => `<div class="skeleton-card skeleton" style="height:280px;background:var(--bg-2);border-radius:var(--radius-lg);"></div>`).join('');
-}
-
-function animateNumber(el, target) {
-  const duration = 800;
-  const start = performance.now();
-  const startVal = parseInt(el.textContent) || 0;
-  
-  function step(timestamp) {
-    const elapsed = timestamp - start;
-    const progress = Math.min(elapsed / duration, 1);
-    const eased = 1 - Math.pow(1 - progress, 3);
-    el.textContent = Math.round(startVal + (target - startVal) * eased);
-    if (progress < 1) requestAnimationFrame(step);
-  }
-  requestAnimationFrame(step);
-}
-
-function toggleMobileSidebar() {
-  const sidebar = document.getElementById('sidebar');
-  if (sidebar) sidebar.classList.toggle('mobile-open');
 }
 
 // ==================== CHAT SYSTEM ====================
@@ -4188,106 +3986,7 @@ async function calculateShippingRate(listingId) {
   }
 }
 
-async function generateTransitRoute(listingId) {
-  if (!listingId) {
-    showToast('Invalid listing ID.', 'error');
-    return;
-  }
-
-  const startInput = document.getElementById(`transit-start-loc-${listingId}`);
-  if (!startInput) return;
-  const start = startInput.value.trim();
-  if (!start) {
-    showToast('Enter your start location for transit planning.', 'info');
-    startInput.focus();
-    return;
-  }
-
-  const resultContainer = document.getElementById(`transit-planner-result-${listingId}`);
-  if (!resultContainer) {
-    console.error('Transit result container not found for listing:', listingId);
-    return;
-  }
-
-  resultContainer.innerHTML = '<div class="spinner"></div> Planning transit route...';
-
-  let listing;
-  try {
-    const { data, error } = await db
-      .from('listings')
-      .select('location')
-      .eq('id', listingId)
-      .single();
-    listing = data;
-
-    if (error || !listing || !listing.location) {
-      throw new Error('Listing location is unavailable.');
-    }
-
-    const destination = listing.location;
-    const [startCoords, destinationCoords] = await Promise.all([
-      geocodeLocation(start, true),
-      geocodeLocation(destination, true)
-    ]);
-
-    let transitSafetyNotes = '';
-    try {
-      transitSafetyNotes = await getTransitSafetyNotes(start, destination, startCoords, destinationCoords);
-    } catch (err) {
-      console.error('Transit safety AI failed:', err);
-      transitSafetyNotes = getFallbackSafeRoute(start, destination);
-    }
-
-    const walkingInstructions = [];
-    let mapHtml = '';
-    try {
-      const walkingRoute = await getWalkingRoute(startCoords.lat, startCoords.lon, destinationCoords.lat, destinationCoords.lon);
-      const walkingSteps = walkingRoute.routes[0]?.legs?.[0]?.steps || [];
-      if (walkingSteps.length) {
-        walkingInstructions.push(...walkingSteps.map((step, index) => `• ${formatRouteInstruction(step, index, walkingSteps.length)}`));
-      }
-      const mapId = `transit-map-${listingId}-${Date.now()}`;
-      mapHtml = `<div id="${mapId}" style="height: 320px; border-radius: var(--radius); margin-top: 16px; border: 1px solid var(--border);"></div>`;
-      resultContainer.innerHTML = `
-        <div style="background: var(--bg-3); border-radius: var(--radius); padding: 16px; border: 1px solid var(--border);">
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;"><span>�‍♂️</span><strong style="color: var(--neon);">Walking Route Preview</strong></div>
-          <div style="font-size:0.95rem; color:var(--text-muted); margin-bottom:12px;">Map shows the walking route from your start location to the listing. AI notes below provide transit safety and local context.</div>
-          ${mapHtml}
-          ${walkingInstructions.length ? `<div style="margin-top:16px; font-weight:700;">Walking directions:</div><div style="margin-top:8px; line-height:1.6;">${walkingInstructions.join('<br>')}</div>` : ''}
-          <div style="margin-top: 16px; font-weight:700;">Transit safety context:</div>
-          <div style="margin-top:8px; line-height:1.6;">${formatMarkdown(transitSafetyNotes)}</div>
-        </div>
-      `;
-      setTimeout(() => {
-        if (typeof L !== 'undefined') {
-          const map = L.map(mapId).setView([startCoords.lat, startCoords.lon], 12);
-          L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OSM & CartoDB'
-          }).addTo(map);
-          L.marker([startCoords.lat, startCoords.lon]).addTo(map).bindPopup('Start');
-          L.marker([destinationCoords.lat, destinationCoords.lon]).addTo(map).bindPopup('Destination');
-          const routeLayer = L.geoJSON(walkingRoute.routes[0].geometry, { style: { color: '#00ff99', weight: 4, opacity: 0.8 } }).addTo(map);
-          map.fitBounds(routeLayer.getBounds());
-        }
-      }, 100);
-    } catch (routeErr) {
-      console.warn('Walking route preview unavailable:', routeErr);
-      resultContainer.innerHTML = `
-        <div style="background: var(--bg-3); border-radius: var(--radius); padding: 16px; border: 1px solid var(--border);">
-          <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;"><span>🚉</span><strong style="color: var(--neon);">Transit Route</strong></div>
-          <div style="margin-top:16px; line-height:1.6;">${formatMarkdown(transitAdvice)}</div>
-          <div style="margin-top:12px; color: var(--text-muted);">Map preview unavailable for walking route. See the transit guidance above.</div>
-        </div>
-      `;
-    }
-  } catch (err) {
-    console.error('Transit route error:', err);
-    resultContainer.innerHTML = `<div class="auth-error show">⚠️ ${err.message || 'Could not generate transit route.'}</div>`;
-  }
-}
-
 window.calculateShippingRate = calculateShippingRate;
-window.generateTransitRoute = generateTransitRoute;
 
 // ==================== UPDATED PICKUP ROUTE PLANNER ====================
 async function generatePickupRoute(listingId) {
@@ -4567,6 +4266,10 @@ async function findSafeRoute() {
     setLoading(findBtn, false, "🔍 Find Safe Route");
   }
 }
+
+window.openRouteSafetyModal = openRouteSafetyModal;
+window.findSafeRoute = findSafeRoute;
+window.generatePickupRoute = generatePickupRoute;
 
 /**
  * Bridges the Charity Finder to the OSRM/Gemini Route Safety system
