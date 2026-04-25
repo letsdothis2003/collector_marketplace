@@ -2891,6 +2891,10 @@ function renderDetail(listing) {
   const paymentMethodsList = listing.payment_methods && listing.payment_methods.length > 0
     ? listing.payment_methods.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' · ')
     : 'Cash';
+  const isShippingOnly = listing.shipping === 'shipping-only';
+  const showPickupPlanner = listing.location && !isShippingOnly;
+  const showTransitPlanner = listing.location;
+  const showShippingSection = !!listing.shipping && listing.shipping !== 'pickup';
   
   let actionsHtml;
   if (isOwner) {
@@ -2947,6 +2951,7 @@ function renderDetail(listing) {
           </div>
         </div>
 
+        ${showPickupPlanner ? `
         <div class="pickup-route-planner" style="margin: 24px 0; padding: 24px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); animation: fadeIn 0.5s ease-out;">
           <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
             <span style="font-size:1.5rem;">🗺️</span>
@@ -2959,6 +2964,37 @@ function renderDetail(listing) {
           </div>
           <div id="route-planner-result-${listing.id}" style="margin-top:20px;"></div>
         </div>
+        ` : ''}
+
+        ${showTransitPlanner ? `
+        <div class="transit-route-planner" style="margin: 24px 0; padding: 24px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); animation: fadeIn 0.5s ease-out;">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+            <span style="font-size:1.5rem;">🚆</span>
+            <h3 style="color: var(--neon); font-family: 'Orbitron', sans-serif; font-size: 1.1rem;">AI TRANSIT ROUTE PLANNER</h3>
+          </div>
+          <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 20px;">Create a walking + transit route with station/bus route guidance, safety facts, and local location insight.</p>
+          <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            <input type="text" id="transit-start-loc-${listing.id}" placeholder="Your location or station..." style="flex:1; min-width:200px;">
+            <button class="btn btn-primary" onclick="generateTransitRoute('${listing.id}')">PLAN TRANSIT</button>
+          </div>
+          <div id="transit-planner-result-${listing.id}" style="margin-top:20px;"></div>
+        </div>
+        ` : ''}
+
+        ${showShippingSection ? `
+        <div class="shipping-rate-planner" style="margin: 24px 0; padding: 24px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); animation: fadeIn 0.5s ease-out;">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+            <span style="font-size:1.5rem;">📦</span>
+            <h3 style="color: var(--neon); font-family: 'Orbitron', sans-serif; font-size: 1.1rem;">SHIPPING RATE ESTIMATOR</h3>
+          </div>
+          <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom:20px;">Estimate local, national, or international shipping cost and get AI advice for route safety and customs.</p>
+          <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            <input type="text" id="shipping-dest-loc-${listing.id}" placeholder="Destination address or city..." style="flex:1; min-width:200px;">
+            <button class="btn btn-primary" onclick="calculateShippingRate('${listing.id}')">CALCULATE SHIPPING</button>
+          </div>
+          <div id="shipping-result-${listing.id}" style="margin-top:20px;"></div>
+        </div>
+        ` : ''}
 
         <div class="seller-card">
           <div class="seller-avatar">${seller.username?.charAt(0) || '?'}</div>
@@ -3977,34 +4013,38 @@ window.generatePickupRoute = generatePickupRoute;
 
 
 // ==================== GEOCODING & OSRM ROUTING HELPERS ====================
-async function geocodeLocation(location) {
-  // Returns { lat, lon } for a location string
+async function geocodeLocation(location, includeDetails = false) {
+  // Returns { lat, lon, address } for a location string
+  const query = `format=json&addressdetails=${includeDetails ? 1 : 0}&q=${encodeURIComponent(location)}&limit=1`;
   try {
-    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}&limit=1`, {
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?${query}`, {
       headers: {
-        'User-Agent': 'ObtainumMarketplace/1.0 (https://letsdothis2003.github.io)' // Required by Nominatim usage policy
+        'User-Agent': 'ObtainumMarketplace/1.0 (https://letsdothis2003.github.io)'
       }
     });
-    
+
     if (!response.ok) {
       throw new Error(`Geocoding service returned status ${response.status}: ${response.statusText || 'Unknown error'}.`);
     }
-    
+
     const data = await response.json();
     if (data && data.length > 0) {
-      return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+      const result = { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+      if (includeDetails) {
+        result.address = data[0].address || {};
+      }
+      return result;
     }
     throw new Error(`Could not find precise coordinates for "${location}". Try a more specific address.`);
   } catch (err) {
     if (err instanceof TypeError && err.message === 'Failed to fetch') {
       throw new Error(`Geocoding failed due to network error or browser security (CORS). This often happens when running locally without a proxy or if Nominatim blocks the request. Try again later or use a different browser.`);
     }
-    throw err; // Re-throw other errors
+    throw err;
   }
 }
 
 async function getDrivingRoute(startLat, startLon, endLat, endLon) {
-  // OSRM driving route
   const url = `https://router.project-osrm.org/route/v1/driving/${startLon},${startLat};${endLon},${endLat}?overview=full&geometries=geojson&steps=true`;
   const response = await fetch(url);
   const data = await response.json();
@@ -4013,6 +4053,190 @@ async function getDrivingRoute(startLat, startLon, endLat, endLon) {
   }
   return data;
 }
+
+async function getWalkingRoute(startLat, startLon, endLat, endLon) {
+  const url = `https://router.project-osrm.org/route/v1/foot/${startLon},${startLat};${endLon},${endLat}?overview=full&geometries=geojson&steps=true`;
+  const response = await fetch(url);
+  const data = await response.json();
+  if (!response.ok || data.code !== 'Ok') {
+    throw new Error(data.message || 'No walking route found between these locations.');
+  }
+  return data;
+}
+
+function getDistanceKm(lat1, lon1, lat2, lon2) {
+  const toRad = (deg) => deg * Math.PI / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function estimateShippingCost(distanceKm, shippingMode, isInternational) {
+  if (shippingMode === 'free') return 0;
+  const base = isInternational ? 18 : 8;
+  const perKm = isInternational ? 1.25 : 0.75;
+  return Math.max(base, Math.round((base + distanceKm * perKm) * 100) / 100);
+}
+
+function buildShippingPrompt(start, destination, shippingMode, isInternational) {
+  const routeType = isInternational ? 'international' : 'domestic';
+  return `You are OBTAINUM's shipping advisor. A seller in "${start}" needs to ship an item to "${destination}" using ${shippingMode === 'free' ? 'free' : 'paid'} shipping. Provide a concise ${routeType} shipping summary with estimated costs, transit hubs if relevant, package safety tips, customs reminders, and any location-specific facts about the route. Keep the answer practical and mention whether local pickup is unavailable.`;
+}
+
+async function calculateShippingRate(listingId) {
+  if (!listingId) {
+    showToast('Invalid listing ID.', 'error');
+    return;
+  }
+
+  const destInput = document.getElementById(`shipping-dest-loc-${listingId}`);
+  if (!destInput) return;
+  const destination = destInput.value.trim();
+  if (!destination) {
+    showToast('Enter a destination address or city for shipping.', 'info');
+    destInput.focus();
+    return;
+  }
+
+  const resultContainer = document.getElementById(`shipping-result-${listingId}`);
+  if (!resultContainer) return;
+
+  resultContainer.innerHTML = '<div class="spinner"></div> Calculating shipping estimate...';
+
+  try {
+    const { data: listing, error } = await db
+      .from('listings')
+      .select('location,shipping')
+      .eq('id', listingId)
+      .single();
+
+    if (error || !listing || !listing.location) {
+      throw new Error('Listing address is unavailable for shipping calculation.');
+    }
+
+    const sellerLocation = listing.location;
+    const [sellerCoords, destinationCoords] = await Promise.all([
+      geocodeLocation(sellerLocation, true),
+      geocodeLocation(destination, true)
+    ]);
+
+    const distanceKm = getDistanceKm(sellerCoords.lat, sellerCoords.lon, destinationCoords.lat, destinationCoords.lon);
+    const isInternational = sellerCoords.address?.country && destinationCoords.address?.country && sellerCoords.address.country !== destinationCoords.address.country;
+    const cost = estimateShippingCost(distanceKm, listing.shipping, isInternational);
+    const costDisplay = cost === 0 ? 'Free shipping' : `$${cost.toFixed(2)}`;
+
+    let aiText = '';
+    try {
+      const prompt = buildShippingPrompt(sellerLocation, destination, listing.shipping, isInternational);
+      aiText = await callGemini(prompt);
+    } catch (err) {
+      aiText = 'AI shipping advice is unavailable. Configure Gemini API to get safety and location-specific shipping facts.';
+    }
+
+    resultContainer.innerHTML = `
+      <div style="background: var(--bg-2); border-radius: var(--radius); padding: 16px; border: 1px solid var(--border);">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;"><span>🚚</span><strong style="color: var(--neon);">Shipping Estimate</strong></div>
+        <div><strong>Mode:</strong> ${listing.shipping}</div>
+        <div><strong>Distance:</strong> ${distanceKm.toFixed(1)} km</div>
+        <div><strong>Estimated cost:</strong> ${costDisplay}</div>
+        <div style="margin-top:12px; line-height:1.6;">${formatMarkdown(aiText)}</div>
+      </div>
+    `;
+  } catch (err) {
+    console.error('Shipping estimate error:', err);
+    resultContainer.innerHTML = `<div class="auth-error show">⚠️ ${err.message || 'Could not calculate shipping.'}</div>`;
+  }
+}
+
+async function generateTransitRoute(listingId) {
+  if (!listingId) {
+    showToast('Invalid listing ID.', 'error');
+    return;
+  }
+
+  const startInput = document.getElementById(`transit-start-loc-${listingId}`);
+  if (!startInput) return;
+  const start = startInput.value.trim();
+  if (!start) {
+    showToast('Enter your start location for transit planning.', 'info');
+    startInput.focus();
+    return;
+  }
+
+  const resultContainer = document.getElementById(`transit-planner-result-${listing.id}`);
+  if (!resultContainer) return;
+
+  resultContainer.innerHTML = '<div class="spinner"></div> Planning transit route...';
+
+  try {
+    const { data: listing, error } = await db
+      .from('listings')
+      .select('location')
+      .eq('id', listingId)
+      .single();
+
+    if (error || !listing || !listing.location) {
+      throw new Error('Listing location is unavailable.');
+    }
+
+    const destination = listing.location;
+    const [startCoords, destinationCoords] = await Promise.all([
+      geocodeLocation(start),
+      geocodeLocation(destination)
+    ]);
+
+    let transitAdvice = '';
+    try {
+      const prompt = `You are OBTAINUM's transit safety assistant. Provide a walking + transit itinerary from "${start}" to "${destination}". Include a first walking segment to a transit station or stop, the train or bus route names, station/stop names, transfer points, and the final walk to the destination. Also mention safety facts for the neighborhoods and transit hubs along the route.`;
+      transitAdvice = await callGemini(prompt);
+    } catch (err) {
+      transitAdvice = 'AI transit guidance is unavailable. Configure Gemini API to get transit safety and route facts.';
+    }
+
+    let mapHtml = '';
+    try {
+      const walkingRoute = await getWalkingRoute(startCoords.lat, startCoords.lon, destinationCoords.lat, destinationCoords.lon);
+      const mapId = `transit-map-${listingId}-${Date.now()}`;
+      mapHtml = `<div id="${mapId}" style="height: 320px; border-radius: var(--radius); margin-top: 16px; border: 1px solid var(--border);"></div>`;
+      resultContainer.innerHTML = `
+        <div style="background: var(--bg-3); border-radius: var(--radius); padding: 16px; border: 1px solid var(--border);">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;"><span>🚉</span><strong style="color: var(--neon);">Transit Route</strong></div>
+          ${mapHtml}
+          <div style="margin-top: 16px; line-height:1.6;">${formatMarkdown(transitAdvice)}</div>
+        </div>
+      `;
+      setTimeout(() => {
+        if (typeof L !== 'undefined') {
+          const map = L.map(mapId).setView([startCoords.lat, startCoords.lon], 12);
+          L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OSM & CartoDB'
+          }).addTo(map);
+          L.marker([startCoords.lat, startCoords.lon]).addTo(map).bindPopup('Start');
+          L.marker([destinationCoords.lat, destinationCoords.lon]).addTo(map).bindPopup('Destination');
+          const routeLayer = L.geoJSON(walkingRoute.routes[0].geometry, { style: { color: '#00ff99', weight: 4, opacity: 0.8 } }).addTo(map);
+          map.fitBounds(routeLayer.getBounds());
+        }
+      }, 100);
+    } catch (routeErr) {
+      resultContainer.innerHTML = `
+        <div style="background: var(--bg-3); border-radius: var(--radius); padding: 16px; border: 1px solid var(--border);">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;"><span>🚉</span><strong style="color: var(--neon);">Transit Route</strong></div>
+          <div style="margin-top:16px; line-height:1.6;">${formatMarkdown(transitAdvice)}</div>
+          <div style="margin-top:12px; color: var(--text-muted);">Map preview unavailable for walking route. See the transit guidance above.</div>
+        </div>
+      `;
+    }
+  } catch (err) {
+    console.error('Transit route error:', err);
+    resultContainer.innerHTML = `<div class="auth-error show">⚠️ ${err.message || 'Could not generate transit route.'}</div>`;
+  }
+}
+
+window.calculateShippingRate = calculateShippingRate;
+window.generateTransitRoute = generateTransitRoute;
 
 // ==================== UPDATED PICKUP ROUTE PLANNER ====================
 async function generatePickupRoute(listingId) {
