@@ -10,6 +10,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
 // 1. This placeholder is replaced by GitHub Actions during deployment.
 // Do not change the placeholder string; it must match deploy.yml.
 let GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_PLACEHOLDER";
+let geminiKeyReady = Promise.resolve();
 
 // Dynamically load local config only if running in a dev environment.
 // config.js is gitignored and should be used only for local development.
@@ -22,6 +23,8 @@ if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
                   window.location.protocol === 'file:';
 
   if (isLocal) {
+    let resolveGeminiKey;
+    geminiKeyReady = new Promise((resolve) => { resolveGeminiKey = resolve; });
     console.log('[OBTAINUM AI] Development environment detected. Loading config.js...');
     const script = document.createElement('script');
     script.src = 'config.js';
@@ -32,9 +35,11 @@ if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
       } else {
         console.warn('[OBTAINUM AI] config.js loaded but CONFIG.GEMINI_API_KEY is missing.');
       }
+      resolveGeminiKey();
     };
     script.onerror = () => {
       console.warn('[OBTAINUM AI] config.js not found. AI features will be limited.');
+      resolveGeminiKey();
     };
     document.head.appendChild(script);
   }
@@ -61,6 +66,7 @@ function scrub(text) {
 
 // ==================== DIRECT API HELPER (REPLACES LIBRARY) ====================
 async function callGemini(prompt, responseType = 'text/plain') {
+  await geminiKeyReady;
   if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
     throw new Error("AI service is not configured. Please add your Gemini API Key.");
   }
