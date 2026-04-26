@@ -151,22 +151,23 @@ async function callGemini(prompt, responseType = 'text/plain') {
   }
 
   const models = [
+    'gemini-3-flash-preview',
+   'gemini-2.0-flash-preview',
+    'gemini-2.0-flash-exp',
     'gemini-1.5-flash',
-    'gemini-1.5-pro'
+    'gemini-1.5-pro',
+    'gemini-pro'
   ];
+  const apiVersions = ['v1', 'v1beta'];
 
-  const endpoints = ['generateContent', 'generateText'];
-
-  for (const model of models) {
-    for (const endpoint of endpoints) {
+  for (const version of apiVersions) {
+    for (const model of models) {
       try {
-        console.log(`[OBTAINUM AI] Trying ${model}:${endpoint}...`);
+        console.log(`[OBTAINUM AI] Trying ${model} via ${version}...`);
 
-        const body = endpoint === 'generateContent'
-          ? { contents: [{ parts: [{ text: prompt }] }] }
-          : { text: prompt };
+        const body = { contents: [{ parts: [{ text: prompt }] }] };
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:${endpoint}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/${version}/models/${model}:generateContent`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -177,8 +178,8 @@ async function callGemini(prompt, responseType = 'text/plain') {
 
         const data = await response.json();
 
-        if (data.error) {
-          console.warn(`[OBTAINUM AI] ${model}:${endpoint} error:`, data.error.message);
+        if (!response.ok || data.error) {
+          console.warn(`[OBTAINUM AI] ${model} via ${version} error:`, data.error?.message || response.statusText);
           continue;
         }
 
@@ -187,9 +188,9 @@ async function callGemini(prompt, responseType = 'text/plain') {
           || data?.output;
 
         if (text) return text;
-        console.warn(`[OBTAINUM AI] ${model}:${endpoint} returned no usable text.`);
+        console.warn(`[OBTAINUM AI] ${model} via ${version} returned no usable text.`);
       } catch (err) {
-        console.warn(`[OBTAINUM AI] ${model}:${endpoint} request failed:`, err);
+        console.warn(`[OBTAINUM AI] ${model} via ${version} request failed:`, err);
         continue;
       }
     }
@@ -4792,3 +4793,4 @@ async function getCharityDirections(name, address) {
 }
 
 window.getCharityDirections = getCharityDirections;
+
