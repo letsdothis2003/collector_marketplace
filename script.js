@@ -11,29 +11,38 @@ const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
 // Do not change the placeholder string; it must match deploy.yml.
 let GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_PLACEHOLDER"; // Auto-injected on deploy
 let geminiKeyReady = Promise.resolve();
+let apiKey = GEMINI_API_KEY; 
+let conversationHistory = [];
+
+function sendExample(text) {
+    const input = document.getElementById('assistantInput');
+    if (input) {
+        input.value = text;
+        if (typeof askAssistant === 'function') askAssistant();
+    }
+}
 
 // Dynamically load local config when the placeholder key is present.
-if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
-  let resolveGeminiKey;
-  geminiKeyReady = new Promise((resolve) => { resolveGeminiKey = resolve; });
-  console.log('[OBTAINUM AI] 🛠️ Local development mode detected. Loading config.js...');
-  const script = document.createElement('script');
-  script.src = `config.js?v=${Date.now()}`;
-  script.onload = () => {
-    const cfg = window.CONFIG || (typeof CONFIG !== 'undefined' ? CONFIG : null);
-    if (cfg && cfg.GEMINI_API_KEY && !cfg.GEMINI_API_KEY.includes('PLACEHOLDER')) {
-      GEMINI_API_KEY = cfg.GEMINI_API_KEY;
-      console.log('[OBTAINUM AI] Local API key successfully loaded from config.js.');
-      setupConsoleSanitizer();
-    }
-    resolveGeminiKey();
-  };
-  script.onerror = () => {
-    resolveGeminiKey();
-  };
-  document.head.appendChild(script);
+if (apiKey.includes("PLACEHOLDER")) {
+    let resolveGeminiKey;
+    geminiKeyReady = new Promise((resolve) => { resolveGeminiKey = resolve; });
+    console.log('[OBTAINUM AI] 🛠️ Local development mode detected. Loading config.js...');
+    const script = document.createElement('script');
+    script.src = `config.js?v=${Date.now()}`;
+    script.onload = () => {
+        const cfg = window.CONFIG || (typeof CONFIG !== 'undefined' ? CONFIG : null);
+        if (cfg && cfg.GEMINI_API_KEY && !cfg.GEMINI_API_KEY.includes('PLACEHOLDER')) {
+            apiKey = cfg.GEMINI_API_KEY;
+            GEMINI_API_KEY = cfg.GEMINI_API_KEY;
+            console.log('[OBTAINUM AI] Local API key successfully loaded from config.js.');
+            setupConsoleSanitizer();
+        }
+        resolveGeminiKey();
+    };
+    script.onerror = () => { resolveGeminiKey(); };
+    document.head.appendChild(script);
 } else {
-  setupConsoleSanitizer();
+    setupConsoleSanitizer();
 }
 
 /**
@@ -59,11 +68,11 @@ function setupConsoleSanitizer() {
 }
 
 function scrub(text) {
-  if (!text || typeof text !== 'string' || !GEMINI_API_KEY || GEMINI_API_KEY.includes("PLACEHOLDER")) return text;
-  return text.replaceAll(GEMINI_API_KEY, '[REDACTED_AI_KEY]');
+  if (!text || typeof text !== 'string' || !apiKey || apiKey.includes("PLACEHOLDER")) return text;
+  return text.replaceAll(apiKey, '[REDACTED_AI_KEY]');
 }
 
-let assistantConversationHistory = [];
+let assistantConversationHistory = conversationHistory;
 // Use a more robust check for the global db instance
 if (typeof window.db === 'undefined') {
   window.db = null;
@@ -132,59 +141,61 @@ function formatRouteInstruction(step, index = 0, total = 0) {
 // ==================== DIRECT API HELPER (REPLACES LIBRARY) ====================
 async function callGemini(prompt, responseType = 'text/plain') {
   await geminiKeyReady;
-  if (!GEMINI_API_KEY || GEMINI_API_KEY.includes("PLACEHOLDER")) {
+  if (!apiKey || apiKey.includes("PLACEHOLDER")) {
     throw new Error("AI service is not configured.");
   }
 
-  // Priority list of specific model and API version pairs 
-  const configs = [
-    { model: 'gemini-1.5-flash', version: 'v1beta' },
-    { model: 'gemini-1.5-pro', version: 'v1beta' },
-    { model: 'gemini-2.0-flash-exp', version: 'v1beta' }
-  ];
+    // Try multiple models in order as defined in the requested system
+    const models = [
+        'gemini-3-flash-preview',
+        'gemini-1.5-flash',
+        'gemini-1.5-pro',
+        'gemini-pro'
+    ];
 
-  for (const config of configs) {
-    const { model, version } = config;
-    try {
-      const url = `https://generativelanguage.googleapis.com/${version}/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-      console.log(`[OBTAINUM AI] Requesting analysis via ${model} (${version})...`);
+    for (const model of models) {
+        try {
+            console.log(`Trying model: ${model}`);
+            
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': apiKey
+                },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{
+                            text: prompt
+                        }]
+                    }]
+                })
+            });
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }]
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || data.error) {
-        if (response.status === 429 || response.status === 503) {
-          console.warn(`[OBTAINUM AI] ${model} ${response.status === 429 ? 'rate limited (429)' : 'overloaded (503)'}. Waiting 2s before switching to next available model...`);
-          // Simple backoff delay to avoid hitting global rate limits too quickly when switching models
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          continue;
+            const data = await response.json();
+            console.log(`Response from ${model}:`, data);
+            
+            if (data.error) {
+                if (response.status === 429 || response.status === 503) {
+                    console.warn(`[OBTAINUM AI] ${model} ${response.status === 429 ? 'rate limited' : 'overloaded'}. Waiting 2s before switching to next available model...`);
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+                console.log(`Model ${model} failed:`, data.error.message);
+                continue; // Try next model
+            }
+            
+            if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+                const text = data.candidates[0].content.parts[0].text;
+                console.log(`✓ Success with model: ${model}`);
+                return text;
+            }
+        } catch (error) {
+            console.error(`Error with model ${model}:`, error);
+            continue; // Try next model
         }
-
-        const errMsg = data.error?.message || response.statusText;
-        console.warn(`[OBTAINUM AI] ${model} error:`, errMsg);
-        
-        if (errMsg.includes("expired") || errMsg.includes("API_KEY_INVALID")) {
-          throw new Error("API Key is reported as expired/invalid by Google. If you just replaced it, ensure your deployment or config.js is using the NEW key.");
-        }
-        continue;
-      }
-
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (text) return text;
-    } catch (err) {
-      if (err.message.includes("leaked") || err.message.includes("expired")) throw err;
-      console.warn(`[OBTAINUM AI] Network error for ${model}:`, err.message);
     }
-  }
 
-  throw new Error('Could not connect to any Gemini model. Please check your API key.');
+    throw new Error('Could not connect with any available AI model. Please check your API key and connection.');
 }
 
 // ==================== CHARITY FINDER (RAG-STYLE AI) ====================
