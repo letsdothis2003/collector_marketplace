@@ -3281,11 +3281,16 @@ async function loadMessages() {
   if (allMessages) {
     allMessages.forEach(msg => {
       const partner = msg.sender.id === State.user.id ? msg.receiver : msg.sender;
+      const isUnread = !msg.is_read && msg.receiver_id === State.user.id;
+
       if (!conversations.has(partner.id)) {
         conversations.set(partner.id, {
           partnerProfile: partner,
-          lastMessage: msg
+          lastMessage: msg,
+          unreadCount: isUnread ? 1 : 0
         });
+      } else if (isUnread) {
+        conversations.get(partner.id).unreadCount++;
       }
     });
   }
@@ -3303,9 +3308,10 @@ async function loadMessages() {
     sortedConversations.forEach(convo => {
       const partnerProfile = convo.partnerProfile;
       const isActive = State.currentChatPartnerId === partnerProfile.id;
+      const hasUnread = convo.unreadCount > 0;
       
       const li = document.createElement('div');
-      li.className = `convo-item ${isActive ? 'active' : ''}`;
+      li.className = `convo-item ${isActive ? 'active' : ''} ${hasUnread ? 'unread' : ''}`;
       li.setAttribute('data-id', partnerProfile.id);
       li.onclick = () => loadConversationThread(partnerProfile.id);
       
@@ -3317,6 +3323,7 @@ async function loadMessages() {
           <div class="convo-username">${escHtml(partnerProfile.username)}</div>
           <div class="convo-preview">${escHtml(previewText?.substring(0, 35) || '...')}</div>
         </div>
+        ${hasUnread ? `<div class="convo-unread-badge">${convo.unreadCount}</div>` : ''}
       `;
       convoListEl.appendChild(li);
     });
@@ -3337,6 +3344,15 @@ async function loadMessages() {
 async function loadConversationThread(partnerId, listingId = null) {
   State.currentChatPartnerId = partnerId;
   
+  // Mark messages as read in the database
+  if (State.user) {
+    await db.from('messages')
+      .update({ is_read: true })
+      .eq('receiver_id', State.user.id)
+      .eq('sender_id', partnerId)
+      .eq('is_read', false);
+  }
+
   document.querySelectorAll('.convo-item').forEach(el => {
     el.classList.toggle('active', el.getAttribute('data-id') === partnerId);
   });
@@ -3381,7 +3397,10 @@ async function loadConversationThread(partnerId, listingId = null) {
 
     filteredMessages.forEach(msg => renderMessage(msg, State.user.id));
   }
-  threadEl.scrollTop = threadEl.scrollHeight;
+  // Ensure scroll happens after render
+  setTimeout(() => {
+    threadEl.scrollTo({ top: threadEl.scrollHeight, behavior: 'smooth' });
+  }, 50);
 }
 
 function detectSensitiveMessageContent(text) {
@@ -3434,6 +3453,9 @@ function showSensitiveMessageConfirmation(content, reasons) {
   };
   modal.classList.add('open');
 }
+
+window.confirmSensitiveMessageProceed = confirmSensitiveMessageProceed;
+window.cancelSensitiveMessage = cancelSensitiveMessage;
 
 async function confirmSensitiveMessageProceed() {
   const pending = State.pendingSensitiveMessage;
@@ -3535,7 +3557,10 @@ function renderMessage(msg, currentUserId) {
   }
   
   thread.appendChild(div);
-  thread.scrollTop = thread.scrollHeight;
+  // Smooth scroll to bottom for new messages
+  setTimeout(() => {
+    thread.scrollTo({ top: thread.scrollHeight, behavior: 'smooth' });
+  }, 50);
 }
 
 function initChat() {
