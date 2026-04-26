@@ -1,0 +1,73 @@
+name: Build Jekyll, Inject Secrets, and Deploy
+
+on:
+  push:
+    branches: ["main", "**"]
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate and inject Gemini API key
+        env:
+          GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ -z "$GEMINI_KEY" ]; then
+            echo "ERROR: GEMINI_API_KEY secret is missing."
+            echo "Add it under: Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+          if ! grep -q "YOUR_GEMINI_API_KEY_PLACEHOLDER" script.js; then
+            echo "ERROR: Placeholder not found in script.js."
+            exit 1
+          fi
+
+          sed -i "s|YOUR_GEMINI_API_KEY_PLACEHOLDER|$GEMINI_KEY|g" script.js
+          echo "API key successfully injected into script.js."
+
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Build Jekyll site
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./
+          destination: ./_site
+
+      - name: Upload built site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./_site
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
