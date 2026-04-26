@@ -138,9 +138,10 @@ async function callGemini(prompt, responseType = 'text/plain') {
 
   // Priority list of specific model and API version pairs 
   const configs = [
-    { model: 'gemini-1.5-flash', version: 'v1beta' },
-    { model: 'gemini-1.5-pro', version: 'v1beta' },
-    { model: 'gemini-2.0-flash-exp', version: 'v1beta' }
+     { model: 'gemini-3-flash-preview' },
+    { model: 'gemini-1.5-flash' },
+    { model: 'gemini-1.5-pro'},
+    { model: 'gemini-2.0-flash-exp' }
   ];
 
   for (const config of configs) {
