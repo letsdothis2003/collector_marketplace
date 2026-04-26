@@ -24,6 +24,7 @@ if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
     if (cfg && cfg.GEMINI_API_KEY && !cfg.GEMINI_API_KEY.includes('PLACEHOLDER')) {
       GEMINI_API_KEY = cfg.GEMINI_API_KEY;
       console.log('[OBTAINUM AI] Local API key successfully loaded from config.js.');
+      setupConsoleSanitizer();
     }
     resolveGeminiKey();
   };
@@ -31,12 +32,35 @@ if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
     resolveGeminiKey();
   };
   document.head.appendChild(script);
+} else {
+  setupConsoleSanitizer();
 }
 
-// Debugging utility to prevent accidental key leaks in logs
+/**
+ * Automatically intercepts all console logs to redact the API key.
+ */
+function setupConsoleSanitizer() {
+  if (!GEMINI_API_KEY || GEMINI_API_KEY.includes("PLACEHOLDER")) return;
+  
+  const methods = ['log', 'warn', 'error', 'info', 'debug'];
+  methods.forEach(method => {
+    const original = console[method];
+    console[method] = (...args) => {
+      const scrubbedArgs = args.map(arg => {
+        if (typeof arg === 'string') return scrub(arg);
+        if (typeof arg === 'object' && arg !== null) {
+          try { return JSON.parse(scrub(JSON.stringify(arg))); } catch (e) { return arg; }
+        }
+        return arg;
+      });
+      original.apply(console, scrubbedArgs);
+    };
+  });
+}
+
 function scrub(text) {
-  if (!text || typeof text !== 'string' || GEMINI_API_KEY.includes("PLACEHOLDER")) return text;
-  return text.split(GEMINI_API_KEY).join('[REDACTED_KEY]');
+  if (!text || typeof text !== 'string' || !GEMINI_API_KEY || GEMINI_API_KEY.includes("PLACEHOLDER")) return text;
+  return text.replaceAll(GEMINI_API_KEY, '[REDACTED_AI_KEY]');
 }
 
 let assistantConversationHistory = [];
@@ -112,10 +136,10 @@ async function callGemini(prompt, responseType = 'text/plain') {
     throw new Error("AI service is not configured.");
   }
 
-  // Priority list of specific model and API version pairs
+  // Priority list of specific model and API version pairs 
   const configs = [
-    { model: 'gemini-1.5-flash', version: 'v1' },
-    { model: 'gemini-1.5-pro', version: 'v1' },
+    { model: 'gemini-1.5-flash', version: 'v1beta' },
+    { model: 'gemini-1.5-pro', version: 'v1beta' },
     { model: 'gemini-2.0-flash-exp', version: 'v1beta' }
   ];
 
@@ -123,8 +147,7 @@ async function callGemini(prompt, responseType = 'text/plain') {
     const { model, version } = config;
     try {
       const url = `https://generativelanguage.googleapis.com/${version}/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-      const keyPreview = `${GEMINI_API_KEY.substring(0, 6)}...${GEMINI_API_KEY.slice(-4)}`;
-      console.log(`[OBTAINUM AI] Trying ${model} (${version}) | Key: ${keyPreview}`);
+      console.log(`[OBTAINUM AI] Requesting analysis via ${model} (${version})...`);
 
       const response = await fetch(url, {
         method: 'POST',
