@@ -323,7 +323,8 @@ const State = {
   selectedReviewListingId: null,
   allSellerItems: [],
   viewingProfileId: null,
-  isSubmittingListing: false
+  isSubmittingListing: false,
+  guestAiCount: 0
 };
 
 // ==================== HELPER FUNCTIONS ====================
@@ -610,7 +611,7 @@ function navigate(page, options = {}) {
   if (!pages.includes(page)) page = 'shop';
 
   // Guard restricted pages for unsigned users
-  const restricted = ['create', 'wishlist', 'messages', 'assistant', 'review'];
+  const restricted = ['create', 'wishlist', 'messages', 'review'];
   if (restricted.includes(page) && !State.user) {
     openAuthModal();
     return;
@@ -681,23 +682,36 @@ function updateAssistantUI() {
   const assistantInput = document.getElementById('assistantInput');
   const assistantBtn = document.getElementById('askAssistantBtn');
   const assistantSuggestions = document.querySelector('.assistant-suggestions');
+  const guestProgressContainer = document.getElementById('guest-progress-container');
+  const guestProgressFill = document.getElementById('guest-progress-fill');
+  const guestProgressText = document.getElementById('guest-progress-text');
   
+  if (assistantInput) assistantInput.disabled = false;
+  if (assistantBtn) assistantBtn.disabled = false;
+  if (assistantSuggestions) {
+    assistantSuggestions.style.opacity = '1';
+    assistantSuggestions.style.pointerEvents = 'auto';
+  }
+
   if (!State.user) {
-    if (assistantLoginNotice) assistantLoginNotice.classList.remove('hidden');
-    if (assistantInput) assistantInput.disabled = true;
-    if (assistantBtn) assistantBtn.disabled = true;
-    if (assistantSuggestions) {
-      assistantSuggestions.style.opacity = '0.5';
-      assistantSuggestions.style.pointerEvents = 'none';
+    if (guestProgressContainer) guestProgressContainer.classList.remove('hidden');
+    const count = State.guestAiCount || 0;
+    const percent = Math.min((count / 3) * 100, 100);
+    
+    if (guestProgressFill) guestProgressFill.style.width = `${percent}%`;
+    if (guestProgressText) guestProgressText.textContent = `${count} / 3 guest prompts used`;
+
+    if (assistantLoginNotice) {
+      assistantLoginNotice.classList.remove('hidden');
+      const remaining = Math.max(0, 3 - (State.guestAiCount || 0));
+      assistantLoginNotice.innerHTML = `
+        <p>✨ <strong>Guest Mode:</strong> Log in for unlimited access and personalized insights!</p>
+        <button class="btn btn-primary btn-sm" onclick="openAuthModal()">Login / Register</button>
+      `;
     }
   } else {
+    if (guestProgressContainer) guestProgressContainer.classList.add('hidden');
     if (assistantLoginNotice) assistantLoginNotice.classList.add('hidden');
-    if (assistantInput) assistantInput.disabled = false;
-    if (assistantBtn) assistantBtn.disabled = false;
-    if (assistantSuggestions) {
-      assistantSuggestions.style.opacity = '1';
-      assistantSuggestions.style.pointerEvents = 'auto';
-    }
   }
 }
 
@@ -1054,8 +1068,13 @@ async function saveAIMessage(senderType, content) {
 
 async function askAssistant() {
   if (!State.user) {
-    openAuthModal();
-    return;
+    if ((State.guestAiCount || 0) >= 3) {
+      showToast("Guest limit reached. Please log in to continue chatting!", "info");
+      openAuthModal();
+      return;
+    }
+    State.guestAiCount = (State.guestAiCount || 0) + 1;
+    updateAssistantUI();
   }
   
   const input = document.getElementById('assistantInput');
@@ -1073,7 +1092,7 @@ async function askAssistant() {
   messagesDiv.appendChild(userMsgDiv);
   assistantConversationHistory.push({ role: 'user', content: question });
   
-  await saveAIMessage('user', question);
+  if (State.user) await saveAIMessage('user', question);
   
   if (input) input.value = '';
   
@@ -1095,7 +1114,7 @@ async function askAssistant() {
     messagesDiv.appendChild(botMsgDiv);
     assistantConversationHistory.push({ role: 'assistant', content: aiResponse });
     
-    await saveAIMessage('ai', aiResponse);
+    if (State.user) await saveAIMessage('ai', aiResponse);
     
   } catch (err) {
     console.error('[OBTAINUM Assistant] Error:', err);

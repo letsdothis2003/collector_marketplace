@@ -1781,3 +1781,19 @@ body.light-mode::after { opacity: 0; }
   background: var(--bg-3);
   font-family: 'Inter', 'Rajdhani', sans-serif;
 }
+
+/* Guest Progress Bar Styles */
+.progress-bar-bg {
+  background: var(--bg-3);
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.progress-bar-fill {
+  background: var(--neon);
+  height: 100%;
+  width: 0%;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 10px var(--neon-glow);
+}

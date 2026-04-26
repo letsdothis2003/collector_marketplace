@@ -438,6 +438,13 @@
           <div class="assistant-messages" id="assistantMessages">
             <div class="assistant-message bot">✨ Hi! I'm your OBTAINUM AI assistant. Ask me anything about the marketplace!</div>
           </div>
+          <!-- Guest Progress Bar -->
+          <div id="guest-progress-container" class="hidden" style="padding: 0 16px;">
+            <div class="progress-bar-bg">
+              <div id="guest-progress-fill" class="progress-bar-fill"></div>
+            </div>
+            <div id="guest-progress-text" style="font-size: 0.7rem; color: var(--text-muted); text-align: right; margin-top: 4px;">0/3 prompts used</div>
+          </div>
           <div class="assistant-input-area">
             <input type="text" id="assistantInput" placeholder="Ask anything (e.g., 'What's a fair price for used GPU?')" maxlength="300" />
             <button class="btn btn-primary" id="askAssistantBtn">ASK</button>

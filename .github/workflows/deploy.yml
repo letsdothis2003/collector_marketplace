@@ -33,11 +33,10 @@ jobs:
             exit 1
           fi
           
-          # Create the config.js file that script.js expects
-          # This mimics your local setup and keeps the key out of source control.
-          echo "window.CONFIG = { GEMINI_API_KEY: '$GEMINI_KEY' };" > config.js
-          
-          echo "Successfully generated config.js for deployment."
+          # Inject the key directly into script.js for production
+          # This replaces the placeholder variable assignment
+          sed -i "s|YOUR_GEMINI_API_KEY_PLACEHOLDER|$GEMINI_KEY|g" script.js
+          echo "Successfully injected API key into script.js."
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
