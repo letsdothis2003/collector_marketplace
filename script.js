@@ -36,6 +36,7 @@ function scrub(text) {
 
 // ==================== DIRECT API HELPER (REPLACES LIBRARY) ====================
 /** Direct fetch call to Gemini 2.0 Flash API */
+/** Direct fetch call to Gemini API with robust model fallback and versioning */
 async function callGemini(prompt, responseType = 'text/plain') {
   if (!isAiConfigured()) {
     throw new Error("AI service is not configured. API Key is missing.");
@@ -43,6 +44,16 @@ async function callGemini(prompt, responseType = 'text/plain') {
 
   const model = "gemini-2.0-flash";
   console.log(`[OBTAINUM AI] Calling ${model} directly...`);
+  const models = [
+    'gemini-2.0-flash-exp',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+    'gemini-pro'
+  ];
+  
+  const apiVersions = ['v1beta', 'v1'];
+  let lastError = null;
 
   // Using headers instead of query parameters hides the key from the URL in Network logs
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`, {
@@ -55,6 +66,43 @@ async function callGemini(prompt, responseType = 'text/plain') {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         responseMimeType: responseType
+  for (const model of models) {
+    for (const version of apiVersions) {
+      try {
+        console.log(`[OBTAINUM AI] Trying ${model} via ${version}...`);
+
+        // Using headers instead of query parameters for better security
+        const response = await fetch(`https://generativelanguage.googleapis.com/${version}/models/${model}:generateContent`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-goog-api-key': GEMINI_API_KEY 
+          },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              responseMimeType: responseType
+            }
+          })
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok || data.error) {
+          const msg = data.error?.message || response.statusText;
+          console.warn(`[OBTAINUM AI] ${model} (${version}) failed: ${msg}`);
+          lastError = scrub(msg);
+          continue; 
+        }
+
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) {
+          console.log(`[OBTAINUM AI] Success with ${model} (${version})`);
+          return text;
+        }
+      } catch (err) {
+        console.warn(`[OBTAINUM AI] Connection error for ${model} (${version}):`, err);
+        lastError = err.message;
       }
     })
   });
@@ -64,12 +112,14 @@ async function callGemini(prompt, responseType = 'text/plain') {
     // Scrub error messages in case they echo back the API key or sensitive URL params
     const safeError = scrub(data.error.message);
     throw new Error(safeError);
+    }
   }
   
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error("No response from Gemini");
   
   return text;
+  throw new Error(`AI Request Failed: ${lastError || "Could not connect to any Gemini model."}`);
 }
 
 // ==================== CHARITY FINDER ====================
