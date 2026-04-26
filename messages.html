@@ -137,6 +137,17 @@
     </div>
   </div>
 
+  <!-- Sensitive Message Confirmation Modal -->
+  <div class="modal-overlay" id="sensitive-message-modal" onclick="closeOnOverlay(event, 'sensitive-message-modal')">
+    <div class="modal" style="max-width:480px;"><button class="modal-close" onclick="closeModal('sensitive-message-modal')">&times;</button>
+      <div class="modal-logo" style="font-size:1.1rem;">⚠️ Confirm Personal Info</div>
+      <p id="sensitive-message-detail" style="margin: 14px 0 18px; line-height:1.5; color: var(--text);"></p>
+      <div style="font-size:0.9rem; color: var(--text-muted); margin-bottom:18px;">This message appears to include sensitive details such as payment handle, phone number, or address. If you continue, it will be sent and stored in the database.</div>
+      <button class="btn btn-primary w-full" onclick="confirmSensitiveMessageProceed()">YES, SEND IT</button>
+      <button class="btn btn-ghost w-full" onclick="cancelSensitiveMessage()">CANCEL</button>
+    </div>
+  </div>
+
   <!-- AI Route Safety Modal with Map -->
   <div class="modal-overlay" id="route-safety-modal" onclick="closeOnOverlay(event, 'route-safety-modal')">
     <div class="modal" style="max-width: 600px; max-height: 90vh; overflow-y: auto;"><button class="modal-close" onclick="closeModal('route-safety-modal')">&times;</button>

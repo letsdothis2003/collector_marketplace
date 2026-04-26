@@ -312,6 +312,7 @@ const State = {
   keepExistingImages: [],
   currentChatPartnerId: null,
   currentListingId: null,
+  pendingSensitiveMessage: null,
   aiSessionId: null,
   aiMessages: [],
   currentReviewSellerId: null,
@@ -3354,24 +3355,96 @@ async function loadConversationThread(partnerId, listingId = null) {
   threadEl.scrollTop = threadEl.scrollHeight;
 }
 
+function detectSensitiveMessageContent(text) {
+  if (!text || typeof text !== 'string') return [];
+  const lower = text.toLowerCase();
+  const reasons = [];
+  
+  const paymentTagPattern = /(?:\$[A-Za-z0-9_]{2,}|@\w{2,}|(?:cashapp|venmo)\b)/i;
+  const phonePattern = /(?:\+?1[\s\-.–]?\(?\d{3}\)?[\s\-.–]?\d{3}[\s\-.–]?\d{4}|\b\d{3}[\s\-.–]?\d{4}\b)/;
+  const addressPattern = /\b\d{1,5}\s+[A-Za-z0-9]+(?:\s+(?:Street|St\.?|Avenue|Ave\.?|Road|Rd\.?|Lane|Ln\.?|Boulevard|Blvd\.?|Drive|Dr\.?|Way|Court|Ct\.?))\b|\b(?:Street|Avenue|Road|Lane|Boulevard|Drive|Way|Court|Ave|Rd|St|Blvd|Dr|Ln|Ct)\b/i;
+  
+  if (paymentTagPattern.test(text) && (lower.includes('cashapp') || lower.includes('venmo') || /\$[A-Za-z0-9_]{2,}/.test(text) || /@\w{2,}/.test(text))) {
+    reasons.push('payment tag or handle (CashApp / Venmo)');
+  }
+  if (phonePattern.test(text)) {
+    reasons.push('phone number');
+  }
+  if (addressPattern.test(text)) {
+    reasons.push('street address');
+  }
+  
+  return Array.from(new Set(reasons));
+}
+
+async function sendChatMessage(content, receiverId, listingId = null) {
+  if (!content || !receiverId) return;
+  const { error } = await db.from('messages').insert([{
+    sender_id: State.user.id,
+    receiver_id: receiverId,
+    listing_id: listingId,
+    content: content,
+  }]);
+
+  if (error) throw error;
+  await loadConversationThread(receiverId);
+  await loadMessages();
+}
+
+function showSensitiveMessageConfirmation(content, reasons) {
+  const modal = document.getElementById('sensitive-message-modal');
+  const detail = document.getElementById('sensitive-message-detail');
+  if (!modal || !detail) return;
+
+  const summary = reasons.length > 0 ? reasons.join(', ') : 'sensitive information';
+  detail.innerHTML = `This message appears to include <strong>${escHtml(summary)}</strong>. Are you sure you want to send it? It will be stored in the database if you continue.`;
+  State.pendingSensitiveMessage = {
+    content,
+    receiverId: State.currentChatPartnerId,
+    listingId: State.currentListingId || null
+  };
+  modal.classList.add('open');
+}
+
+async function confirmSensitiveMessageProceed() {
+  const pending = State.pendingSensitiveMessage;
+  if (!pending) return closeModal('sensitive-message-modal');
+
+  const input = document.getElementById('chatMessageInput');
+  try {
+    await sendChatMessage(pending.content, pending.receiverId, pending.listingId);
+    if (input) input.value = '';
+    closeModal('sensitive-message-modal');
+  } catch (err) {
+    console.error('Message send failed:', err);
+    showToast('Error: ' + err.message, 'error');
+  } finally {
+    State.pendingSensitiveMessage = null;
+  }
+}
+
+function cancelSensitiveMessage() {
+  State.pendingSensitiveMessage = null;
+  closeModal('sensitive-message-modal');
+}
+
 async function handleSendMessage(e) {
   e.preventDefault();
   const input = document.getElementById('chatMessageInput');
   const content = input?.value.trim();
   if (!content || !State.currentChatPartnerId) return;
-  
-  const { error } = await db.from('messages').insert([{
-    sender_id: State.user.id,
-    receiver_id: State.currentChatPartnerId,
-    listing_id: State.currentListingId,
-    content: content,
-  }]);
-  
-  if (error) showToast("Error: " + error.message, 'error');
-  else {
+
+  const sensitiveReasons = detectSensitiveMessageContent(content);
+  if (sensitiveReasons.length > 0) {
+    showSensitiveMessageConfirmation(content, sensitiveReasons);
+    return;
+  }
+
+  try {
+    await sendChatMessage(content, State.currentChatPartnerId, State.currentListingId);
     if (input) input.value = '';
-    await loadConversationThread(State.currentChatPartnerId);
-    await loadMessages();
+  } catch (error) {
+    showToast("Error: " + error.message, 'error');
   }
 }
 
