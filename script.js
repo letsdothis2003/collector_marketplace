@@ -7,6 +7,38 @@
 const SUPABASE_URL = "https://gotzmuobwuubsugnowxq.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
 
+// 1. This placeholder is replaced by GitHub Actions during deployment.
+// Do not change the placeholder string; it must match deploy.yml.
+let GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_PLACEHOLDER"; // Auto-injected on deploy
+let geminiKeyReady = Promise.resolve();
+
+// Dynamically load local config when the placeholder key is present.
+if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
+  let resolveGeminiKey;
+  geminiKeyReady = new Promise((resolve) => { resolveGeminiKey = resolve; });
+  console.log('[OBTAINUM AI] 🛠️ Local development mode detected. Loading config.js...');
+  const script = document.createElement('script');
+  script.src = `config.js?v=${Date.now()}`;
+  script.onload = () => {
+    const cfg = window.CONFIG || (typeof CONFIG !== 'undefined' ? CONFIG : null);
+    if (cfg && cfg.GEMINI_API_KEY && !cfg.GEMINI_API_KEY.includes('PLACEHOLDER')) {
+      GEMINI_API_KEY = cfg.GEMINI_API_KEY;
+      console.log('[OBTAINUM AI] Local API key successfully loaded from config.js.');
+    }
+    resolveGeminiKey();
+  };
+  script.onerror = () => {
+    resolveGeminiKey();
+  };
+  document.head.appendChild(script);
+}
+
+// Debugging utility to prevent accidental key leaks in logs
+function scrub(text) {
+  if (!text || typeof text !== 'string' || GEMINI_API_KEY.includes("PLACEHOLDER")) return text;
+  return text.split(GEMINI_API_KEY).join('[REDACTED_KEY]');
+}
+
 let assistantConversationHistory = [];
 // Use a more robust check for the global db instance
 if (typeof window.db === 'undefined') {
