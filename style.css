@@ -781,6 +781,7 @@ body.light-mode::after { opacity: 0; }
   #header { 
     display: grid;
     grid-template-columns: 1fr auto auto;
+    grid-template-areas:
       "logo actions hamburger"
       "search search search";
     height: auto;
