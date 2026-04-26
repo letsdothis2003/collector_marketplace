@@ -133,57 +133,37 @@ async function callGemini(prompt, responseType = 'text/plain') {
     throw new Error("AI service is not configured. Please add your Gemini API Key.");
   }
 
-  // Priority list including a known public Google Generative Language model first.
-  // A 404 here usually means the model name is not available for this key, not that the key itself is invalid.
-  const models = [
-    "text-bison-001", // Public text generation model for API keys with Generative Language access
-    "gemini-pro", // Gemini-style model; may require special access or a different project setup
-    "gemini-1.5-flash", // Fallback if available
-  ];
-  
-  for (const model of models) {
-    let retries = 2; // Retries per model specifically for rate limits
-    let delay = 2000;
+  // SYSTEMATIC IMPROVEMENT: Standardized Gemini API Integration
+  // Uses gemini-1.5-flash via generateContent for optimal performance and broader API project compatibility.
+  const model = "gemini-1.5-flash";
+  let retries = 2;
+  let delay = 2000;
 
-    while (retries >= 0) {
-      console.log(`[OBTAINUM AI] Attempting ${model}...`);
-      try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta2/models/${model}:generateText?key=${GEMINI_API_KEY}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt: { text: prompt }
-          })
-        });
+  while (retries >= 0) {
+    console.log(`[OBTAINUM AI] Calling ${model}...`);
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
+        })
+      });
 
-        // If rate limited, wait and retry THIS model
-        if (response.status === 429) {
-          console.warn(`[OBTAINUM AI] 429 Rate Limit on ${model}. Retrying...`);
-          await new Promise(res => setTimeout(res, delay));
-          retries--;
-          delay *= 2;
-          continue;
-        }
-
-        const data = await response.json();
-        if (!response.ok) {
-          const apiMessage = data?.error?.message || data?.error?.status || 'Unknown API error';
-          console.warn(`[OBTAINUM AI] ${model} unavailable (Status: ${response.status}). Trying fallback...`, apiMessage, data);
-          if (response.status === 404) {
-            console.warn('[OBTAINUM AI] 404 means this model is not available for this API key or the Generative Language API is not enabled on the project.');
-          }
-          break;
-        }
-
-        const text = data?.candidates?.[0]?.output || data?.output?.[0]?.content?.[0]?.text || data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) return text;
-        
-        console.warn(`[OBTAINUM AI] ${model} returned no text in response.`, data);
-        break; 
-      } catch (err) {
-        console.error(`[OBTAINUM AI] Connection error with ${model}:`, err);
-        break;
+      if (response.status === 429) {
+        await new Promise(res => setTimeout(res, delay));
+        retries--; delay *= 2; continue;
       }
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error?.message || 'API service error');
+
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || data?.candidates?.[0]?.output;
+      if (text) return text;
+      throw new Error("No valid text returned from AI.");
+    } catch (err) {
+      if (retries === 0) throw err;
+      retries--; await new Promise(res => setTimeout(res, delay));
     }
   }
   throw new Error("AI service currently unavailable. Please check your API key.");
@@ -390,6 +370,35 @@ function setupScrollReveal() {
 function closeModal(id) {
   document.getElementById(id)?.classList.remove('open');
 }
+
+/**
+ * SYSTEMATIC IMPROVEMENT: Granular Geolocation Support
+ * Leverages browser API to improve planner accuracy without DB changes.
+ */
+async function getUserLocation(inputId) {
+  const input = document.getElementById(inputId);
+  if (!navigator.geolocation) {
+    showToast("Geolocation not supported.", "warning");
+    return;
+  }
+  showToast("Detecting your location...", "info");
+  navigator.geolocation.getCurrentPosition(
+    async (position) => {
+      const { latitude, longitude } = position.coords;
+      input.dataset.lat = latitude;
+      input.dataset.lon = longitude;
+      try {
+        const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+        const data = await resp.json();
+        input.value = data.display_name || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+        showToast("Location detected!", "success");
+      } catch (err) { input.value = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`; }
+    },
+    (err) => showToast("GPS error: " + err.message, "error"),
+    { enableHighAccuracy: true, timeout: 5000 }
+  );
+}
+window.getUserLocation = getUserLocation;
 
 function closeOnOverlay(e, id) {
   if (e.target === e.currentTarget) closeModal(id);
@@ -2959,8 +2968,11 @@ function renderDetail(listing) {
             <h3 style="color: var(--neon); font-family: 'Orbitron', sans-serif; font-size: 1.1rem;">AI PICKUP ROUTE PLANNER</h3>
           </div>
           <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 20px;">Planning a pickup? Get AI-powered travel routes and area safety assessments.</p>
-          <div style="display:flex; gap:12px; flex-wrap:wrap;">
-            <input type="text" id="pickup-start-loc-${listing.id}" placeholder="Your location (City or neighborhood)..." style="flex:1; min-width:200px;">
+          <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+            <div class="input-with-gps" style="flex:1; min-width:200px;">
+              <input type="text" id="pickup-start-loc-${listing.id}" placeholder="Your location (City or neighborhood)...">
+              <button class="gps-btn" onclick="getUserLocation('pickup-start-loc-${listing.id}')" title="Use current location">📍</button>
+            </div>
             <button class="btn btn-primary" onclick="generatePickupRoute('${listing.id}')">PLAN ROUTE</button>
           </div>
           <div id="route-planner-result-${listing.id}" style="margin-top:20px;"></div>
@@ -2974,8 +2986,11 @@ function renderDetail(listing) {
             <h3 style="color: var(--neon); font-family: 'Orbitron', sans-serif; font-size: 1.1rem;">SHIPPING RATE ESTIMATOR</h3>
           </div>
           <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom:20px;">Estimate local, national, or international shipping cost and get AI advice for route safety and customs.</p>
-          <div style="display:flex; gap:12px; flex-wrap:wrap;">
-            <input type="text" id="shipping-dest-loc-${listing.id}" placeholder="Destination address or city..." style="flex:1; min-width:200px;">
+          <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+            <div class="input-with-gps" style="flex:1; min-width:200px;">
+              <input type="text" id="shipping-dest-loc-${listing.id}" placeholder="Destination address or city...">
+              <button class="gps-btn" onclick="getUserLocation('shipping-dest-loc-${listing.id}')" title="Use current location">📍</button>
+            </div>
             <button class="btn btn-primary" onclick="calculateShippingRate('${listing.id}')">CALCULATE SHIPPING</button>
           </div>
           <div id="shipping-result-${listing.id}" style="margin-top:20px;"></div>
@@ -4061,30 +4076,33 @@ function getDistanceKm(lat1, lon1, lat2, lon2) {
 }
 
 function estimateShippingCost(distanceKm, shippingMode, isInternational) {
-  // Logic: Heuristic based on commercial carrier rates (FedEx/UPS style)
-  if (shippingMode === 'free' || distanceKm < 1) {
+  // SYSTEMATIC IMPROVEMENT: Non-linear cost scaling based on distance and route complexity
+  if (shippingMode === 'free' || distanceKm < 0.5) {
     return { cost: 0, minDays: 1, maxDays: 3 };
   }
 
-  const handlingFee = 6.75;
-  const fuelSurcharge = 1.12; 
-  const baseTransit = isInternational ? 35.00 : 14.50;
-  const ratePerKm = isInternational ? 0.09 : 0.045;
+  const baseHandling = 7.50;
+  const internationalFee = isInternational ? 45.00 : 0;
+  
+  // Tiered rate logic: shorter distances have higher per-km costs due to logistical overhead
+  let ratePerKm = 0.045;
+  if (distanceKm < 100) ratePerKm = 0.15;
+  else if (distanceKm < 500) ratePerKm = 0.08;
+  else if (distanceKm > 5000) ratePerKm = 0.03;
 
-  let total = handlingFee + fuelSurcharge + baseTransit + (distanceKm * ratePerKm);
-  const floor = isInternational ? 55.00 : 18.00;
+  let total = baseHandling + internationalFee + (distanceKm * ratePerKm);
+  const floor = isInternational ? 65.00 : 15.00;
   const finalCost = Math.max(floor, Math.round(total * 100) / 100);
 
-  // ETA Calculation logic
-  let minDays = 3, maxDays = 5;
+  // Granular ETA Calculation
+  let minDays, maxDays;
   if (isInternational) {
     minDays = 7; maxDays = 21;
-  } else if (distanceKm < 400) {
+  } else if (distanceKm < 50) {
+    minDays = 1; maxDays = 1;
+  } else if (distanceKm < 600) {
     minDays = 1; maxDays = 2;
-  } else if (distanceKm > 2000) {
-    minDays = 4; maxDays = 8;
-  }
-
+  } else { minDays = 3; maxDays = 7; }
   return { cost: finalCost, minDays, maxDays };
 }
 
@@ -4125,10 +4143,15 @@ async function calculateShippingRate(listingId) {
     }
 
     const sellerLocation = listing.location;
-    const [sellerCoords, destinationCoords] = await Promise.all([
-      geocodeLocation(sellerLocation, true),
-      geocodeLocation(destination, true)
-    ]);
+    
+    // FUNCTIONAL IMPROVEMENT: Prefer high-accuracy GPS coordinates from dataset if available
+    let destinationCoords;
+    if (destInput.dataset.lat && destInput.dataset.lon) {
+      destinationCoords = { lat: parseFloat(destInput.dataset.lat), lon: parseFloat(destInput.dataset.lon) };
+    } else {
+      destinationCoords = await geocodeLocation(destination, true);
+    }
+    const sellerCoords = await geocodeLocation(sellerLocation, true);
 
     const distanceKm = getDistanceKm(sellerCoords.lat, sellerCoords.lon, destinationCoords.lat, destinationCoords.lon);
     const isInternational = sellerCoords.address?.country && destinationCoords.address?.country && sellerCoords.address.country !== destinationCoords.address.country;
@@ -4178,6 +4201,11 @@ async function calculateShippingRate(listingId) {
     setTimeout(() => {
       if (typeof am5 === 'undefined') return;
       
+      // SYSTEMATIC STABILITY: Cleanup previous instances to prevent ID conflicts
+      am5.array.each(am5.registry.rootElements, function(root) {
+        if (root.dom.id == mapId) { root.dispose(); }
+      });
+
       const root = am5.Root.new(mapId);
       root.setThemes([am5themes_Animated.new(root)]);
 
@@ -4354,11 +4382,14 @@ async function generatePickupRoute(listingId) {
   resultContainer.innerHTML = '<div class="spinner"></div> Geocoding locations...';
 
   try {
-    // 1. Geocode both locations
-    const [startCoords, endCoords] = await Promise.all([
-      geocodeLocation(start),
-      geocodeLocation(destination)
-    ]);
+    // 1. Geocode locations (using cached coordinates if available from GPS detection)
+    let startCoords;
+    if (startInput.dataset.lat && startInput.dataset.lon) {
+      startCoords = { lat: parseFloat(startInput.dataset.lat), lon: parseFloat(startInput.dataset.lon) };
+    } else {
+      startCoords = await geocodeLocation(start);
+    }
+    const endCoords = await geocodeLocation(destination);
 
     resultContainer.innerHTML = '<div class="spinner"></div> Fetching driving route...';
 
