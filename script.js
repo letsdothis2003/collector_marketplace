@@ -146,53 +146,47 @@ function formatRouteInstruction(step, index = 0, total = 0) {
 async function callGemini(prompt, responseType = 'text/plain') {
   await geminiKeyReady;
   if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
-    showToast('Gemini API key is missing. Copy config.example.js to config.js and add your key locally, or configure GEMINI_API_KEY in your deployment workflow.', 'error');
-    throw new Error("AI service is not configured. Please add your Gemini API Key.");
+    console.warn('[OBTAINUM AI] API key is missing or invalid.');
+    throw new Error("AI service is not configured.");
   }
 
-  const models = [
-    'gemini-3-flash-preview',
-   'gemini-2.0-flash-preview',
-    'gemini-2.0-flash-exp',
-    'gemini-1.5-flash',
-    'gemini-1.5-pro',
-    'gemini-pro'
+  // Priority list of stable model configurations to minimize 404s
+  const configs = [
+    { version: 'v1beta', model: 'gemini-3-flash-preview' },
+    { version: 'v1', model: 'gemini-1.5-flash' },
+    { version: 'v1beta', model: 'gemini-2.0-flash-exp' },
+    { version: 'v1beta', model: 'gemini-1.5-pro' },
+    { version: 'v1', model: 'gemini-pro' }
   ];
-  const apiVersions = ['v1', 'v1beta'];
 
-  for (const version of apiVersions) {
-    for (const model of models) {
-      try {
-        console.log(`[OBTAINUM AI] Trying ${model} via ${version}...`);
+  for (const config of configs) {
+    try {
+      console.log(`[OBTAINUM AI] Calling ${config.model} (${config.version})...`);
 
-        const body = { contents: [{ parts: [{ text: prompt }] }] };
+      const url = `https://generativelanguage.googleapis.com/${config.version}/models/${config.model}:generateContent`;
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': GEMINI_API_KEY
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }]
+        })
+      });
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/${version}/models/${model}:generateContent`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': GEMINI_API_KEY
-          },
-          body: JSON.stringify(body)
-        });
+      const data = await response.json();
 
-        const data = await response.json();
-
-        if (!response.ok || data.error) {
-          console.warn(`[OBTAINUM AI] ${model} via ${version} error:`, data.error?.message || response.statusText);
-          continue;
-        }
-
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
-          || data?.candidates?.[0]?.output
-          || data?.output;
-
-        if (text) return text;
-        console.warn(`[OBTAINUM AI] ${model} via ${version} returned no usable text.`);
-      } catch (err) {
-        console.warn(`[OBTAINUM AI] ${model} via ${version} request failed:`, err);
+      if (!response.ok || data.error) {
+        console.warn(`[OBTAINUM AI] ${config.model} failed:`, data.error?.message || response.statusText);
         continue;
       }
+
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) return text;
+    } catch (err) {
+      console.warn(`[OBTAINUM AI] Network error calling ${config.model}:`, err.message);
     }
   }
 
@@ -4793,4 +4787,3 @@ async function getCharityDirections(name, address) {
 }
 
 window.getCharityDirections = getCharityDirections;
-
