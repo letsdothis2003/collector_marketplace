@@ -3,10 +3,10 @@ name: Inject Secrets and Deploy
 on:
   push:
     branches: ["**"]
-  workflow_dispatch: # Allows manual triggering from the Actions tab
+  workflow_dispatch:
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true # Opt into Node.js 24 to silence deprecation warnings
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 permissions:
   contents: read
@@ -19,35 +19,43 @@ concurrency:
 
 jobs:
   build-and-deploy:
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
+      url: ${{ steps.deploy.outputs.page_url }}
+
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Inject Gemini API Key
+      - name: Validate and inject Gemini API key
         env:
           GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           if [ -z "$GEMINI_KEY" ]; then
-            echo "ERROR: GEMINI_API_KEY secret is not set in GitHub Settings."
-            echo "Go to Settings > Secrets and variables > Actions to add it."
+            echo "ERROR: GEMINI_API_KEY secret is missing."
+            echo "Add it under: Settings > Secrets and variables > Actions."
             exit 1
           fi
-          
-          # Inject the key directly into script.js for production
-          # This replaces the placeholder variable assignment
-          sed -i "s|YOUR_GEMINI_API_KEY_PLACEHOLDER|$GEMINI_KEY|g" script.js
-          echo "Successfully injected API key into script.js."
 
-      - name: Setup Pages
+          if ! grep -q "YOUR_GEMINI_API_KEY_PLACEHOLDER" script.js; then
+            echo "ERROR: Placeholder not found in script.js."
+            exit 1
+          fi
+
+          sed -i "s|YOUR_GEMINI_API_KEY_PLACEHOLDER|$GEMINI_KEY|g" script.js
+          echo "API key successfully injected into script.js."
+
+      - name: Configure GitHub Pages
         uses: actions/configure-pages@v4
-      - name: Upload artifact
+
+      - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.'
+          path: "."
+
       - name: Deploy to GitHub Pages
-        id: deployment
+        id: deploy
         uses: actions/deploy-pages@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
