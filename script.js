@@ -11,6 +11,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
 // Do not change the placeholder string; it must match deploy.yml.
 let GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_PLACEHOLDER";
 let geminiKeyReady = Promise.resolve();
+let assistantConversationHistory = [];
 
 // Dynamically load local config when the placeholder key is present.
 // config.js is gitignored and should be used only for local development.
@@ -135,40 +136,53 @@ async function callGemini(prompt, responseType = 'text/plain') {
     throw new Error("AI service is not configured. Please add your Gemini API Key.");
   }
 
-  // SYSTEMATIC IMPROVEMENT: Standardized Gemini API Integration
-  // Uses gemini-1.5-flash via generateContent for optimal performance and broader API project compatibility.
-  const model = "gemini-1.5-flash";
-  let retries = 2;
-  let delay = 2000;
+  const models = [
+    'gemini-3-flash-preview',
+    'gemini-2.5-flash',
+    'gemini-1.5-flash'
+  ];
 
-  while (retries >= 0) {
-    console.log(`[OBTAINUM AI] Calling ${model}...`);
-    try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }]
-        })
-      });
+  const endpoints = ['generateContent', 'generateText'];
 
-      if (response.status === 429) {
-        await new Promise(res => setTimeout(res, delay));
-        retries--; delay *= 2; continue;
+  for (const model of models) {
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`[OBTAINUM AI] Trying ${model}:${endpoint}...`);
+
+        const body = endpoint === 'generateContent'
+          ? { contents: [{ parts: [{ text: prompt }] }] }
+          : { text: prompt };
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:${endpoint}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': GEMINI_API_KEY
+          },
+          body: JSON.stringify(body)
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+          console.warn(`[OBTAINUM AI] ${model}:${endpoint} error:`, data.error.message);
+          continue;
+        }
+
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
+          || data?.candidates?.[0]?.output
+          || data?.output;
+
+        if (text) return text;
+        console.warn(`[OBTAINUM AI] ${model}:${endpoint} returned no usable text.`);
+      } catch (err) {
+        console.warn(`[OBTAINUM AI] ${model}:${endpoint} request failed:`, err);
+        continue;
       }
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data?.error?.message || 'API service error');
-
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || data?.candidates?.[0]?.output;
-      if (text) return text;
-      throw new Error("No valid text returned from AI.");
-    } catch (err) {
-      if (retries === 0) throw err;
-      retries--; await new Promise(res => setTimeout(res, delay));
     }
   }
-  throw new Error("AI service currently unavailable. Please check your API key.");
+
+  throw new Error('Could not connect to any Gemini model. Please check your API key and model availability.');
 }
 
 // ==================== CHARITY FINDER (RAG-STYLE AI) ====================
@@ -1056,6 +1070,7 @@ async function askAssistant() {
   const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   userMsgDiv.innerHTML = escHtml(question) + `<div style="font-size:0.65rem; opacity:0.6; margin-top:4px;">${timeStr}</div>`;
   messagesDiv.appendChild(userMsgDiv);
+  assistantConversationHistory.push({ role: 'user', content: question });
   
   await saveAIMessage('user', question);
   
@@ -1077,6 +1092,7 @@ async function askAssistant() {
     botMsgDiv.innerHTML = formatMarkdown(aiResponse) + 
       `<div style="font-size:0.65rem; opacity:0.6; margin-top:4px;">${botTime}</div>`;
     messagesDiv.appendChild(botMsgDiv);
+    assistantConversationHistory.push({ role: 'assistant', content: aiResponse });
     
     await saveAIMessage('ai', aiResponse);
     
@@ -1093,27 +1109,22 @@ async function askAssistant() {
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
-async function getGeminiResponse(userMessage) {
-  // Simple direct pass-through to Gemini - assume user talks about products
+function buildAssistantPrompt(userMessage) {
   const systemPrompt = `You are OBTAINUM AI assistant, helping users with marketplace questions about products, pricing, and buying/selling. Be concise and helpful.`;
-  
-  // Build simple conversation context
-  const messages = [];
-  messages.push({ role: 'user', content: systemPrompt });
-  
-  // Add last few messages for context
-  State.aiMessages.slice(-4).forEach(m => {
-    messages.push({ 
-      role: m.sender_type === 'user' ? 'user' : 'assistant', 
-      content: m.content 
+  let prompt = `${systemPrompt}\n\n`;
+
+  if (assistantConversationHistory.length > 0) {
+    assistantConversationHistory.slice(-6).forEach(msg => {
+      prompt += `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}\n`;
     });
-  });
-  
-  messages.push({ role: 'user', content: userMessage });
-  
-  // Simplified prompt - just the user message with minimal context
-  const finalPrompt = `${systemPrompt}\n\nUser: ${userMessage}`;
-  
+  }
+
+  prompt += `User: ${userMessage}\nAssistant:`;
+  return prompt;
+}
+
+async function getGeminiResponse(userMessage) {
+  const finalPrompt = buildAssistantPrompt(userMessage);
   return await callGemini(finalPrompt);
 }
 
