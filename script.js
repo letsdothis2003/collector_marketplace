@@ -113,13 +113,15 @@ async function callGemini(prompt, responseType = 'text/plain') {
   }
 
   // Priority list of specific model and API version pairs
-  const configs = [
-    { model: 'gemini-1.5-flash', version: 'v1' },
-    { model: 'gemini-1.5-pro', version: 'v1' },
-    { model: 'gemini-2.0-flash-exp', version: 'v1beta' }
+  const models = [
+    'gemini-3-flash-preview',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+    'gemini-pro'
   ];
 
-  for (const { model, version } of configs) {
+  for (const model of models) {
+    const version = model === 'gemini-pro' ? 'v1' : 'v1beta';
     try {
       const url = `https://generativelanguage.googleapis.com/${version}/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
       const keyPreview = `${GEMINI_API_KEY.substring(0, 6)}...${GEMINI_API_KEY.slice(-4)}`;
@@ -136,6 +138,13 @@ async function callGemini(prompt, responseType = 'text/plain') {
       const data = await response.json();
 
       if (!response.ok || data.error) {
+        if (response.status === 429) {
+          console.warn(`[OBTAINUM AI] ${model} rate limited (429). Waiting 2s before switching to next available model...`);
+          // Simple backoff delay to avoid hitting global rate limits too quickly when switching models
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          continue;
+        }
+
         const errMsg = data.error?.message || response.statusText;
         console.warn(`[OBTAINUM AI] ${model} error:`, errMsg);
         
