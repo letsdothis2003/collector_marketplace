@@ -4061,18 +4061,31 @@ function getDistanceKm(lat1, lon1, lat2, lon2) {
 }
 
 function estimateShippingCost(distanceKm, shippingMode, isInternational) {
-  // Fix: Zero or near-zero distance makes zero sense to charge for shipping
-  if (shippingMode === 'free' || distanceKm < 1) return 0;
-  
-  const handlingFee = 5.50; // Base packaging/handling
-  const baseTransit = isInternational ? 25.00 : 12.00;
-  const ratePerKm = isInternational ? 0.08 : 0.04;
-  
-  let total = handlingFee + baseTransit + (distanceKm * ratePerKm);
-  
-  // Apply a minimum floor for transit costs
-  const floor = isInternational ? 45.00 : 15.00;
-  return Math.max(floor, Math.round(total * 100) / 100);
+  // Logic: Heuristic based on commercial carrier rates (FedEx/UPS style)
+  if (shippingMode === 'free' || distanceKm < 1) {
+    return { cost: 0, minDays: 1, maxDays: 3 };
+  }
+
+  const handlingFee = 6.75;
+  const fuelSurcharge = 1.12; 
+  const baseTransit = isInternational ? 35.00 : 14.50;
+  const ratePerKm = isInternational ? 0.09 : 0.045;
+
+  let total = handlingFee + fuelSurcharge + baseTransit + (distanceKm * ratePerKm);
+  const floor = isInternational ? 55.00 : 18.00;
+  const finalCost = Math.max(floor, Math.round(total * 100) / 100);
+
+  // ETA Calculation logic
+  let minDays = 3, maxDays = 5;
+  if (isInternational) {
+    minDays = 7; maxDays = 21;
+  } else if (distanceKm < 400) {
+    minDays = 1; maxDays = 2;
+  } else if (distanceKm > 2000) {
+    minDays = 4; maxDays = 8;
+  }
+
+  return { cost: finalCost, minDays, maxDays };
 }
 
 function buildShippingPrompt(start, destination, shippingMode, isInternational) {
@@ -4119,8 +4132,10 @@ async function calculateShippingRate(listingId) {
 
     const distanceKm = getDistanceKm(sellerCoords.lat, sellerCoords.lon, destinationCoords.lat, destinationCoords.lon);
     const isInternational = sellerCoords.address?.country && destinationCoords.address?.country && sellerCoords.address.country !== destinationCoords.address.country;
-    const cost = estimateShippingCost(distanceKm, listing.shipping, isInternational);
+    const { cost, minDays, maxDays } = estimateShippingCost(distanceKm, listing.shipping, isInternational);
+    
     const costDisplay = cost === 0 ? 'Free shipping' : `$${cost.toFixed(2)}`;
+    const etaDisplay = `${minDays}-${maxDays} business days`;
 
     let aiText = '';
     try {
@@ -4132,13 +4147,10 @@ async function calculateShippingRate(listingId) {
 
     const mapId = `shipping-map-${listingId}`;
     resultContainer.innerHTML = `
-      <div style="background: var(--bg-2); border-radius: var(--radius-lg); padding: 20px; border: 1px solid var(--border); animation: fadeIn 0.4s ease-out;">
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom:15px;">
-          <span style="font-size:1.2rem;">🚚</span>
-          <strong style="color: var(--neon); font-family:'Orbitron';">SHIPPING LOGISTICS</strong>
-        </div>
+      <div style="background: var(--bg-2); border-radius: var(--radius-lg); padding: 20px; border: 1px solid var(--border); animation: slideUpFade 0.4s ease-out;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:15px;"><span style="font-size:1.2rem;">🚚</span><strong style="color: var(--neon); font-family:'Orbitron';">SHIPPING LOGISTICS</strong></div>
         
-        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap:10px; margin-bottom:20px;">
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-bottom:20px;">
           <div style="background:var(--bg-3); padding:10px; border-radius:8px; border:1px solid var(--border);">
             <div style="font-size:0.65rem; color:var(--text-muted);">DISTANCE</div>
             <div style="font-weight:bold; color:var(--neon);">${distanceKm.toFixed(1)} km</div>
@@ -4146,6 +4158,10 @@ async function calculateShippingRate(listingId) {
           <div style="background:var(--bg-3); padding:10px; border-radius:8px; border:1px solid var(--border);">
             <div style="font-size:0.65rem; color:var(--text-muted);">ESTIMATED COST</div>
             <div style="font-weight:bold; color:var(--neon);">${costDisplay}</div>
+          </div>
+          <div style="background:var(--bg-3); padding:10px; border-radius:8px; border:1px solid var(--border);">
+            <div style="font-size:0.65rem; color:var(--text-muted);">ESTIMATED ARRIVAL</div>
+            <div style="font-weight:bold; color:var(--blue);">${etaDisplay}</div>
           </div>
         </div>
 
@@ -4172,22 +4188,31 @@ async function calculateShippingRate(listingId) {
 
       const polygonSeries = chart.series.push(am5map.MapPolygonSeries.new(root, {
         geoJSON: am5geodata_worldLow,
-        fill: am5.color(0x2a2a2a),
-        stroke: am5.color(0x3f3f3f)
+        fill: am5.color(0x1a1a2e),
+        stroke: am5.color(0x00ff41),
+        strokeOpacity: 0.15
       }));
 
       const pointSeries = chart.series.push(am5map.MapPointSeries.new(root, {}));
       const lineSeries = chart.series.push(am5map.MapLineSeries.new(root, {}));
-      lineSeries.mapLines.template.setAll({ stroke: am5.color(0x00ff41), strokeOpacity: 0.6, strokeWidth: 2 });
+      lineSeries.mapLines.template.setAll({ stroke: am5.color(0x00ff41), strokeOpacity: 0.8, strokeWidth: 2, strokeDasharray: [4, 4] });
 
       pointSeries.data.setAll([
-        { geometry: { type: "Point", coordinates: [sellerCoords.lon, sellerCoords.lat] }, name: "Origin" },
-        { geometry: { type: "Point", coordinates: [destinationCoords.lon, destinationCoords.lat] }, name: "Destination" }
+        { geometry: { type: "Point", coordinates: [sellerCoords.lon, sellerCoords.lat] }, name: "Pickup" },
+        { geometry: { type: "Point", coordinates: [destinationCoords.lon, destinationCoords.lat] }, name: "Delivery" }
       ]);
+      
+      pointSeries.bullets.push(() => am5.Bullet.new(root, { sprite: am5.Circle.new(root, { radius: 5, fill: am5.color(0x00ff41), tooltipText: "{name}" }) }));
 
       lineSeries.data.setAll([{
         geometry: { type: "LineString", coordinates: [[sellerCoords.lon, sellerCoords.lat], [destinationCoords.lon, destinationCoords.lat]] }
       }]);
+
+      // Auto-zoom to fit the route
+      chart.zoomToGeoPoint({ 
+        latitude: (sellerCoords.lat + destinationCoords.lat) / 2, 
+        longitude: (sellerCoords.lon + destinationCoords.lon) / 2 
+      }, 3);
 
       chart.appear(1000, 100);
     }, 100);
