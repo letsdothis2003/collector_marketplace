@@ -22,8 +22,9 @@ if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
   const script = document.createElement('script');
   script.src = 'config.js';
   script.onload = () => {
-    if (typeof CONFIG !== 'undefined' && CONFIG.GEMINI_API_KEY && !CONFIG.GEMINI_API_KEY.includes('PLACEHOLDER')) {
-      GEMINI_API_KEY = CONFIG.GEMINI_API_KEY;
+    const cfg = window.CONFIG || (typeof CONFIG !== 'undefined' ? CONFIG : null);
+    if (cfg && cfg.GEMINI_API_KEY && !cfg.GEMINI_API_KEY.includes('PLACEHOLDER')) {
+      GEMINI_API_KEY = cfg.GEMINI_API_KEY;
       console.log('[OBTAINUM AI] Local API key successfully loaded from config.js.');
     } else {
       console.warn('[OBTAINUM AI] config.js loaded but CONFIG.GEMINI_API_KEY is missing or invalid.');
@@ -44,8 +45,9 @@ async function reloadGeminiConfig() {
     const reloadScript = document.createElement('script');
     reloadScript.src = `config.js?reload=${Date.now()}`;
     reloadScript.onload = () => {
-      if (typeof CONFIG !== 'undefined' && CONFIG.GEMINI_API_KEY && !CONFIG.GEMINI_API_KEY.includes('PLACEHOLDER')) {
-        GEMINI_API_KEY = CONFIG.GEMINI_API_KEY;
+      const cfg = window.CONFIG || (typeof CONFIG !== 'undefined' ? CONFIG : null);
+      if (cfg && cfg.GEMINI_API_KEY && !cfg.GEMINI_API_KEY.includes('PLACEHOLDER')) {
+        GEMINI_API_KEY = cfg.GEMINI_API_KEY;
         console.log('[OBTAINUM AI] Reloaded local Gemini API key from config.js.');
         resolve(true);
       } else {

@@ -35,7 +35,7 @@ jobs:
           
           # Create the config.js file that script.js expects
           # This mimics your local setup and keeps the key out of source control.
-          echo "const CONFIG = { GEMINI_API_KEY: '$GEMINI_KEY' };" > config.js
+          echo "window.CONFIG = { GEMINI_API_KEY: '$GEMINI_KEY' };" > config.js
           
           echo "Successfully generated config.js for deployment."
 
