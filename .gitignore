@@ -1,6 +1,5 @@
-# Local configuration and secrets
+# Local configuration secrets
 config.js
 
 # OS generated files
 .DS_Store
-node_modules
