@@ -3346,11 +3346,18 @@ async function loadConversationThread(partnerId, listingId = null) {
   
   // Mark messages as read in the database
   if (State.user) {
-    await db.from('messages')
-      .update({ is_read: true })
-      .eq('receiver_id', State.user.id)
-      .eq('sender_id', partnerId)
-      .eq('is_read', false);
+    try {
+      const { error } = await db.from('messages')
+        .update({ is_read: true })
+        .eq('receiver_id', State.user.id)
+        .eq('sender_id', partnerId)
+        .eq('is_read', false);
+      if (error && (error.status === 403 || error.code === '42501')) {
+        console.warn('[OBTAINUM] Mark as read forbidden. Check Supabase RLS policies.');
+      } else if (error) {
+        throw error;
+      }
+    } catch (e) { /* Suppress RLS Forbidden errors */ }
   }
 
   document.querySelectorAll('.convo-item').forEach(el => {

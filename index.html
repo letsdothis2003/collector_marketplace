@@ -651,6 +651,19 @@
   </div>
 </div>
 
+  <!-- Sensitive Message Warning Modal -->
+  <div class="modal-overlay" id="sensitive-message-modal" onclick="closeOnOverlay(event, 'sensitive-message-modal')">
+    <div class="modal" style="max-width:400px;">
+      <button class="modal-close" onclick="closeModal('sensitive-message-modal')">&times;</button>
+      <div class="modal-logo" style="font-size:1.1rem; color:var(--warning);">⚠️ PRIVACY WARNING</div>
+      <p id="sensitive-message-detail" style="margin: 16px 0; font-size: 0.9rem; line-height: 1.5;"></p>
+      <div style="display:flex; gap:12px; margin-top:20px;">
+        <button class="btn btn-primary" style="flex:1;" onclick="confirmSensitiveMessageProceed()">YES, SEND IT</button>
+        <button class="btn btn-ghost" style="flex:1;" onclick="cancelSensitiveMessage()">CANCEL</button>
+      </div>
+    </div>
+  </div>
+
 
 
   <!-- ====== REVIEW PAGE ====== -->
