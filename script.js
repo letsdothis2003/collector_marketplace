@@ -150,20 +150,20 @@ async function callGemini(prompt, responseType = 'text/plain') {
     throw new Error("AI service is not configured.");
   }
 
-  // Strictly using the requested model tiers
-  const models = [
-    'gemini-3-flash-preview',
-    'gemini-2.5-flash-preview', // Current latest 2.x tier
-    'gemini-1.5-flash',
-    'gemini-1.5-pro'
+  // Priority list of specific model and API version pairs to minimize 404s
+  const configs = [
+    { model: 'gemini-3-flash-preview', version: 'v1beta' },
+    { model: 'gemini-2.5-flash-preview', version: 'v1beta' },
+    { model: 'gemini-1.5-flash', version: 'v1' },
+    { model: 'gemini-1.5-pro', version: 'v1' },
+    { model: 'gemini-1.5-flash', version: 'v1beta' }
   ];
 
-  for (const modelName of models) {
+  for (const { model, version } of configs) {
     try {
-      console.log(`[OBTAINUM AI] Calling ${modelName}...`);
+      console.log(`[OBTAINUM AI] Requesting ${model} via ${version}...`);
 
-      // Using v1beta for newest features/models, standardizing on :generateContent
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`;
+      const url = `https://generativelanguage.googleapis.com/${version}/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
       
       const response = await fetch(url, {
         method: 'POST',
@@ -176,14 +176,14 @@ async function callGemini(prompt, responseType = 'text/plain') {
       const data = await response.json();
 
       if (!response.ok || data.error) {
-        console.warn(`[OBTAINUM AI] ${modelName} failed:`, data.error?.message || response.statusText);
+        console.warn(`[OBTAINUM AI] ${model} (${version}) failed:`, data.error?.message || response.statusText);
         continue;
       }
 
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (text) return text;
     } catch (err) {
-      console.warn(`[OBTAINUM AI] Network error calling ${modelName}:`, err.message);
+      console.warn(`[OBTAINUM AI] Network error for ${model}:`, err.message);
     }
   }
 
