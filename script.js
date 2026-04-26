@@ -148,6 +148,8 @@ async function callGemini(prompt, responseType = 'text/plain') {
   if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
     console.warn('[OBTAINUM AI] API key is missing or invalid.');
     throw new Error("AI service is not configured.");
+  if (!db) {
+    throw new Error("AI service unavailable: database connection not initialized.");
   }
 
   // Priority list of specific model and API version pairs to minimize 404s
@@ -157,6 +159,7 @@ async function callGemini(prompt, responseType = 'text/plain') {
     { model: 'gemini-1.5-pro', version: 'v1' },
     { model: 'gemini-1.5-flash', version: 'v1beta' }
   ];
+  console.log(`[OBTAINUM AI] Requesting AI via backend proxy...`);
 
   for (const { model, version } of configs) {
     try {
@@ -170,19 +173,33 @@ async function callGemini(prompt, responseType = 'text/plain') {
           contents: [{ parts: [{ text: prompt }] }]
         })
       });
+  try {
+    const { data, error } = await db.functions.invoke('gemini-proxy', {
+      body: { prompt, responseType }
+    });
 
       const data = await response.json();
+    if (error) {
+      console.error('[OBTAINUM AI] Proxy error:', error);
+      throw new Error(error.message || 'AI completion failed via proxy.');
+    }
 
       if (!response.ok || data.error) {
         console.warn(`[OBTAINUM AI] ${model} (${version}) failed:`, data.error?.message || response.statusText);
         continue;
       }
+    if (data && data.text) return data.text;
+    if (typeof data === 'string') return data;
 
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (text) return text;
     } catch (err) {
       console.warn(`[OBTAINUM AI] Network error for ${model}:`, err.message);
     }
+    throw new Error('Invalid response from AI proxy.');
+  } catch (err) {
+    console.error('[OBTAINUM AI] connectivity error:', err.message);
+    throw err;
   }
 
   throw new Error('Could not connect to any Gemini model. Please check your API key and model availability.');
