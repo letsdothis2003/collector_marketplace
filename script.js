@@ -643,6 +643,19 @@ function navigate(page, options = {}) {
   if (page === 'assistant') {
     updateAssistantUI();
     loadAIChatHistory();
+    // TYPED.JS: Terminal effect for the assistant header
+    const headerText = document.querySelector('.assistant-header p');
+    if (headerText && !headerText.dataset.typedInitialized) {
+      headerText.textContent = '';
+      new Typed(headerText, {
+        strings: ['Establishing secure link...', 'Market insights active.', 'Price checks online.', 'Ready to assist, Collector.'],
+        typeSpeed: 40,
+        backSpeed: 20,
+        loop: false,
+        cursorChar: '_'
+      });
+      headerText.dataset.typedInitialized = 'true';
+    }
   }
 
   if (options.updateUrl !== false) {
@@ -2810,6 +2823,14 @@ async function confirmMarkSold() {
     closeModal('mark-sold-modal');
     showToast('Listing marked as sold!', 'success');
     
+    // CONFETTI: Celebrate the sale!
+    confetti({
+      particleCount: 150,
+      spread: 70,
+      origin: { y: 0.6 },
+      colors: ['#00ff41', '#0af5ff', '#ffffff']
+    });
+
     const idx = State.listings.findIndex(l => l.id === listingId);
     if (idx !== -1) State.listings.splice(idx, 1);
     applyFilters();
@@ -3123,7 +3144,14 @@ async function loadSimilarItems(listing) {
 // ==================== RENDER ENGINE ====================
 function createListingCard(listing, showOwnerActions = false) {
   const card = document.createElement('div');
-  card.className = 'listing-card animate-fade';
+  // TILT: Added data-tilt attributes for automatic initialization
+  card.className = 'listing-card animate-fade js-tilt';
+  card.setAttribute('data-tilt', '');
+  card.setAttribute('data-tilt-max', '10');
+  card.setAttribute('data-tilt-speed', '400');
+  card.setAttribute('data-tilt-glare', 'true');
+  card.setAttribute('data-tilt-max-glare', '0.3');
+
   card.onclick = (e) => {
     if (e.target.closest('.wishlist-btn, .owner-btn, .carousel-btn, .carousel-dot')) return;
     openListing(listing.id);
@@ -3212,6 +3240,11 @@ function renderListings(listings) {
   
   grid.innerHTML = '';
   listings.forEach(l => grid.appendChild(createListingCard(l)));
+
+  // RE-INIT TILT: Since cards are dynamic, we must re-init after rendering
+  if (window.VanillaTilt) {
+    VanillaTilt.init(document.querySelectorAll(".js-tilt"));
+  }
 }
 
 function showSkeletons() {

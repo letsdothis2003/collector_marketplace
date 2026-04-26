@@ -174,13 +174,25 @@ body.light-mode #header { background: rgba(255, 255, 255, 0.95); }
   font-family: 'Orbitron', sans-serif;
   font-weight: 900;
   font-size: 1.8rem;
-  color: var(--neon);
   cursor: pointer;
   white-space: nowrap;
-  animation: neonPulse 3.5s ease-in-out infinite;
+  animation: logoPulseDark 2s ease-in-out infinite;
 }
 
-body.light-mode .logo { animation: none; text-shadow: none; }
+body.light-mode .logo {
+  animation: logoPulseLight 2s ease-in-out infinite;
+  text-shadow: none;
+}
+
+@keyframes logoPulseDark {
+  0%, 100% { color: #ff3b3b; text-shadow: 0 0 10px rgba(255, 0, 0, 0.7), 0 0 20px rgba(255, 0, 0, 0.3); }
+  50% { color: #ff8e8e; text-shadow: 0 0 20px rgba(255, 0, 0, 0.9), 0 0 40px rgba(255, 0, 0, 0.5); }
+}
+
+@keyframes logoPulseLight {
+  0%, 100% { color: #3b82f6; text-shadow: 0 0 10px rgba(37, 99, 235, 0.7), 0 0 20px rgba(37, 99, 235, 0.3); }
+  50% { color: #93c5fd; text-shadow: 0 0 20px rgba(37, 99, 235, 0.9), 0 0 40px rgba(37, 99, 235, 0.5); }
+}
 
 .header-search { flex: 0 1 240px; min-width: 180px; max-width: 280px; position: relative; transition: max-width var(--transition), flex var(--transition), width var(--transition); }
 .header-search.expanded { flex: 1 1 760px; max-width: 760px; }
@@ -1343,14 +1355,6 @@ body.light-mode::after { opacity: 0; }
   }
 }
 
-/* ========== NEON TEXT GLOW ENHANCEMENT ========== */
-.logo {
-  transition: text-shadow 0.3s ease;
-}
-
-.logo:hover {
-  text-shadow: 0 0 20px var(--neon), 0 0 40px var(--neon-glow-strong);
-}
 
 /* ========== LOADING SPINNER ENHANCEMENT ========== */
 .spinner {
