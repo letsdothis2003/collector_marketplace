@@ -152,8 +152,7 @@ async function callGemini(prompt, responseType = 'text/plain') {
 
   // Priority list of specific model and API version pairs to minimize 404s
   const configs = [
-    { model: 'gemini-3-flash-preview', version: 'v1beta' },
-    { model: 'gemini-2.5-flash-preview', version: 'v1beta' },
+    { model: 'gemini-2.0-flash-exp', version: 'v1beta' },
     { model: 'gemini-1.5-flash', version: 'v1' },
     { model: 'gemini-1.5-pro', version: 'v1' },
     { model: 'gemini-1.5-flash', version: 'v1beta' }
@@ -161,9 +160,8 @@ async function callGemini(prompt, responseType = 'text/plain') {
 
   for (const { model, version } of configs) {
     try {
-      console.log(`[OBTAINUM AI] Requesting ${model} via ${version}...`);
-
       const url = `https://generativelanguage.googleapis.com/${version}/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+      console.log(`[OBTAINUM AI] Requesting ${model} via ${version}... URL: ${scrub(url)}`);
       
       const response = await fetch(url, {
         method: 'POST',
