@@ -3,6 +3,7 @@ name: Inject Secrets and Deploy
 on:
   push:
     branches: ["**"]
+  workflow_dispatch: # Allows manual triggering from the Actions tab
 
 permissions:
   contents: read

@@ -9,7 +9,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_5yKRomyjh2o4Hh9Nbi6LjQ_jgooOoWs";
 
 // 1. This placeholder is replaced by GitHub Actions during deployment.
 // Do not change the placeholder string; it must match deploy.yml.
-let GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_PLACEHOLDER";
+let GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_PLACEHOLDER"; // Auto-injected on deploy
 let geminiKeyReady = Promise.resolve();
 let assistantConversationHistory = [];
 
@@ -33,7 +33,11 @@ if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
     resolveGeminiKey();
   };
   script.onerror = () => {
-    console.warn('[OBTAINUM AI] ❌ config.js not found. If this is local, create it. If this is GitHub Pages, the injection failed.');
+    if (window.location.hostname.includes('github.io')) {
+      console.error('[OBTAINUM AI] ❌ API Key Injection Failed. Ensure you have added the "GEMINI_API_KEY" secret in your GitHub Repository Settings.');
+    } else {
+      console.warn('[OBTAINUM AI] ❌ config.js not found. Local development requires config.js. Copy config.example.js to config.js and add your API key.');
+    }
     resolveGeminiKey();
   };
   document.head.appendChild(script);
@@ -147,9 +151,8 @@ async function callGemini(prompt, responseType = 'text/plain') {
   }
 
   const models = [
-    'gemini-3-flash-preview',
-    'gemini-2.5-flash',
-    'gemini-1.5-flash'
+    'gemini-1.5-flash',
+    'gemini-1.5-pro'
   ];
 
   const endpoints = ['generateContent', 'generateText'];
