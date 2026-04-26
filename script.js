@@ -108,22 +108,23 @@ function formatRouteInstruction(step, index = 0, total = 0) {
 // ==================== DIRECT API HELPER (REPLACES LIBRARY) ====================
 async function callGemini(prompt, responseType = 'text/plain') {
   await geminiKeyReady;
-  if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
+  if (!GEMINI_API_KEY || GEMINI_API_KEY.includes("PLACEHOLDER")) {
     throw new Error("AI service is not configured.");
   }
 
   // Priority list of specific model and API version pairs
   const configs = [
-    { model: 'gemini-1.5-flash', version: 'v1beta' },
-    { model: 'gemini-1.5-pro', version: 'v1beta' },
+    { model: 'gemini-1.5-flash', version: 'v1' },
+    { model: 'gemini-1.5-pro', version: 'v1' },
     { model: 'gemini-2.0-flash-exp', version: 'v1beta' }
   ];
 
   for (const { model, version } of configs) {
     try {
       const url = `https://generativelanguage.googleapis.com/${version}/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
-      console.log(`[OBTAINUM AI] Requesting ${model} via ${version}... (URL scrubbed: ${scrub(url)})`);
-      
+      const keyPreview = `${GEMINI_API_KEY.substring(0, 6)}...${GEMINI_API_KEY.slice(-4)}`;
+      console.log(`[OBTAINUM AI] Trying ${model} (${version}) | Key: ${keyPreview}`);
+
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -135,9 +136,11 @@ async function callGemini(prompt, responseType = 'text/plain') {
       const data = await response.json();
 
       if (!response.ok || data.error) {
-        console.warn(`[OBTAINUM AI] ${model} failed:`, data.error?.message || response.statusText);
-        if (data.error?.message?.includes("leaked") || data.error?.message?.includes("expired")) {
-            throw new Error(data.error.message);
+        const errMsg = data.error?.message || response.statusText;
+        console.warn(`[OBTAINUM AI] ${model} error:`, errMsg);
+        
+        if (errMsg.includes("expired") || errMsg.includes("API_KEY_INVALID")) {
+          throw new Error("API Key is reported as expired/invalid by Google. If you just replaced it, ensure your deployment or config.js is using the NEW key.");
         }
         continue;
       }
