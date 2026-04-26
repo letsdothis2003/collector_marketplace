@@ -150,27 +150,24 @@ async function callGemini(prompt, responseType = 'text/plain') {
     throw new Error("AI service is not configured.");
   }
 
-  // Priority list of stable model configurations to minimize 404s
-  const configs = [
-    { version: 'v1beta', model: 'gemini-3-flash-preview' },
-    { version: 'v1', model: 'gemini-1.5-flash' },
-    { version: 'v1beta', model: 'gemini-2.0-flash-exp' },
-    { version: 'v1beta', model: 'gemini-1.5-pro' },
-    { version: 'v1', model: 'gemini-pro' }
+  // Strictly using the requested model tiers
+  const models = [
+    'gemini-3-flash-preview',
+    'gemini-2.5-flash-preview', // Current latest 2.x tier
+    'gemini-1.5-flash',
+    'gemini-1.5-pro'
   ];
 
-  for (const config of configs) {
+  for (const modelName of models) {
     try {
-      console.log(`[OBTAINUM AI] Calling ${config.model} (${config.version})...`);
+      console.log(`[OBTAINUM AI] Calling ${modelName}...`);
 
-      const url = `https://generativelanguage.googleapis.com/${config.version}/models/${config.model}:generateContent`;
+      // Using v1beta for newest features/models, standardizing on :generateContent
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`;
       
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': GEMINI_API_KEY
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }]
         })
@@ -179,14 +176,14 @@ async function callGemini(prompt, responseType = 'text/plain') {
       const data = await response.json();
 
       if (!response.ok || data.error) {
-        console.warn(`[OBTAINUM AI] ${config.model} failed:`, data.error?.message || response.statusText);
+        console.warn(`[OBTAINUM AI] ${modelName} failed:`, data.error?.message || response.statusText);
         continue;
       }
 
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (text) return text;
     } catch (err) {
-      console.warn(`[OBTAINUM AI] Network error calling ${config.model}:`, err.message);
+      console.warn(`[OBTAINUM AI] Network error calling ${modelName}:`, err.message);
     }
   }
 
