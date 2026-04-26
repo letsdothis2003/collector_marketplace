@@ -21,7 +21,7 @@ if (GEMINI_API_KEY.includes("PLACEHOLDER")) {
   geminiKeyReady = new Promise((resolve) => { resolveGeminiKey = resolve; });
   console.log('[OBTAINUM AI] 🛠️ Local development mode detected. Loading config.js...');
   const script = document.createElement('script');
-  script.src = 'config.js';
+  script.src = `config.js?v=${Date.now()}`; // Added cache-buster to prevent 404 on newly created files
   script.onload = () => {
     const cfg = window.CONFIG || (typeof CONFIG !== 'undefined' ? CONFIG : null);
     if (cfg && cfg.GEMINI_API_KEY && !cfg.GEMINI_API_KEY.includes('PLACEHOLDER')) {
@@ -72,10 +72,20 @@ if (typeof window.db === 'undefined') {
 let db = window.db;
 
 try {
-  if (!db) db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  if (!db) {
+    db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+      }
+    });
+  }
   console.log('[OBTAINUM] Supabase client initialized');
 } catch (e) {
-  console.error('[OBTAINUM] Init failed:', e);
+  console.warn('[OBTAINUM] Supabase init warning:', e.message);
+  // If session is corrupt, clearing storage can help
+  if (e.message.includes('Refresh Token')) localStorage.clear();
 }
 
 // Debugging utility to prevent accidental key leaks in logs
