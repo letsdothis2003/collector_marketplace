@@ -769,7 +769,7 @@ body.light-mode::after { opacity: 0; }
   #header { flex-wrap: wrap; align-items: flex-start; padding: 16px; height: auto; min-height: auto; }
   .logo { width: 100%; margin-bottom: 10px; }
   .header-search { order: 1; width: 100%; max-width: 100%; margin-bottom: 12px; }
-  .nav-menu { order: 2; display: none; }
+  .nav-menu { order: 2; display: flex; margin-bottom: 12px; } /* Keep navbar visible on mobile */
   .hamburger { display: flex; order: 3; margin-left: auto; }
   .nav-menu .nav-btn { flex: 0 1 120px; min-width: 90px; max-width: 160px; padding: 10px 12px; }
   .header-actions { order: 4; width: 100%; justify-content: space-between; margin-top: 12px; flex-wrap: wrap; gap: 10px; }
@@ -890,6 +890,7 @@ body.light-mode::after { opacity: 0; }
 .stat-card:hover {
   transform: translateY(-4px);
   border-color: var(--neon);
+  box-shadow: 0 0 20px var(--neon-glow-strong);
 }
 
 .stat-number {

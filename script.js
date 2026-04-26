@@ -4343,7 +4343,7 @@ async function calculateShippingRate(listingId) {
 
     // Initialize amCharts v5
     setTimeout(() => {
-      if (typeof am5 === 'undefined') return;
+      if (typeof am5 === 'undefined' || typeof am5map === 'undefined') return;
       
       // SYSTEMATIC STABILITY: Cleanup previous instances to prevent ID conflicts
       am5.array.each(am5.registry.rootElements, function(root) {
