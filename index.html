@@ -11,6 +11,7 @@
 
   <!-- Styles -->
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   
   <!-- External libraries (defer to not block rendering) -->
@@ -101,23 +102,23 @@
 
   <!-- ===================== HEADER ===================== -->
   <header id="header">
-    <div class="logo glitch" data-text="OBTAINUM" onclick="navigate('shop')">OBTAINUM</div>
+    <div class="logo" onclick="navigate('shop')">OBTAINUM</div>
 
     <div class="header-search">
-      <span class="search-icon">🔍</span>
+      <span class="search-icon"><i class="fa-solid fa-magnifying-glass"></i></span>
       <input type="text" id="search-input" placeholder="Search collectibles, electronics, gear..." />
     </div>
 
     <nav class="nav-menu" id="nav-menu">
-      <button class="nav-btn active" id="nav-shop" onclick="navigate('shop')">🛒 SHOP</button>
-      <button class="nav-btn nav-extra" id="nav-create" onclick="navigate('create')">+ CREATE</button>
-      <button class="nav-btn nav-extra" id="nav-wishlist" onclick="navigate('wishlist')">❤️ WISHLIST</button>
-      <button class="nav-btn nav-extra" id="nav-profile" onclick="navigateProfile()">⚙️ PROFILE</button>
-      <button class="nav-btn nav-extra" id="nav-assistant" onclick="navigate('assistant')">🤖 ASSISTANT</button>
-      <button class="nav-btn nav-extra" id="nav-messages" onclick="navigate('messages')">💬 MESSAGES</button>
-      <button class="nav-btn" id="nav-about" onclick="navigate('about')">📖 ABOUT</button>
-      <button class="nav-btn" id="nav-contact" onclick="navigate('contact')">📧 CONTACT</button>
-      <button class="nav-btn nav-extra" id="nav-donate" onclick="navigate('donate')">🎁 DONATE</button>
+      <button class="nav-btn active" id="nav-shop" onclick="navigate('shop')"><i class="fa-solid fa-cart-shopping"></i> SHOP</button>
+      <button class="nav-btn nav-extra" id="nav-create" onclick="navigate('create')"><i class="fa-solid fa-plus"></i> CREATE</button>
+      <button class="nav-btn nav-extra" id="nav-wishlist" onclick="navigate('wishlist')"><i class="fa-solid fa-heart"></i> WISHLIST</button>
+      <button class="nav-btn nav-extra" id="nav-profile" onclick="navigateProfile()"><i class="fa-solid fa-user"></i> PROFILE</button>
+      <button class="nav-btn nav-extra" id="nav-assistant" onclick="navigate('assistant')"><i class="fa-solid fa-robot"></i> AI</button>
+      <button class="nav-btn nav-extra" id="nav-messages" onclick="navigate('messages')"><i class="fa-solid fa-message"></i> MESSAGES</button>
+      <button class="nav-btn" id="nav-about" onclick="navigate('about')"><i class="fa-solid fa-circle-info"></i> ABOUT</button>
+      <button class="nav-btn" id="nav-contact" onclick="navigate('contact')"><i class="fa-solid fa-envelope"></i> CONTACT</button>
+      <button class="nav-btn nav-extra" id="nav-donate" onclick="navigate('donate')"><i class="fa-solid fa-hand-holding-heart"></i> DONATE</button>
     </nav>
 
     <div class="header-actions">
@@ -140,15 +141,15 @@
 
   <!-- Mobile Nav Drawer -->
   <nav class="mobile-nav" id="mobile-nav">
-    <button class="nav-btn" onclick="navigate('shop'); closeMobileNav()">🛒 SHOP</button>
-    <button class="nav-btn mobile-nav-extra" onclick="navigate('create'); closeMobileNav()">+ CREATE</button>
-    <button class="nav-btn mobile-nav-extra" onclick="navigate('wishlist'); closeMobileNav()">❤️ WISHLIST</button>
-    <button class="nav-btn mobile-nav-extra" onclick="navigate('profile'); closeMobileNav()">⚙️ PROFILE</button>
-    <button class="nav-btn mobile-nav-extra" onclick="navigate('assistant'); closeMobileNav()">🤖 ASSISTANT</button>
-    <button class="nav-btn mobile-nav-extra" onclick="navigate('messages'); closeMobileNav()">💬 MESSAGES</button>
-    <button class="nav-btn" onclick="navigate('about'); closeMobileNav()">📖 ABOUT</button>
-    <button class="nav-btn" onclick="navigate('contact'); closeMobileNav()">📧 CONTACT</button>
-    <button class="nav-btn mobile-nav-extra" onclick="navigate('donate'); closeMobileNav()">🎁 DONATE</button>
+    <button class="nav-btn" onclick="navigate('shop'); closeMobileNav()"><i class="fa-solid fa-cart-shopping"></i> SHOP</button>
+    <button class="nav-btn mobile-nav-extra" onclick="navigate('create'); closeMobileNav()"><i class="fa-solid fa-plus"></i> CREATE</button>
+    <button class="nav-btn mobile-nav-extra" onclick="navigate('wishlist'); closeMobileNav()"><i class="fa-solid fa-heart"></i> WISHLIST</button>
+    <button class="nav-btn mobile-nav-extra" onclick="navigate('profile'); closeMobileNav()"><i class="fa-solid fa-user"></i> PROFILE</button>
+    <button class="nav-btn mobile-nav-extra" onclick="navigate('assistant'); closeMobileNav()"><i class="fa-solid fa-robot"></i> AI</button>
+    <button class="nav-btn mobile-nav-extra" onclick="navigate('messages'); closeMobileNav()"><i class="fa-solid fa-message"></i> MESSAGES</button>
+    <button class="nav-btn" onclick="navigate('about'); closeMobileNav()"><i class="fa-solid fa-circle-info"></i> ABOUT</button>
+    <button class="nav-btn" onclick="navigate('contact'); closeMobileNav()"><i class="fa-solid fa-envelope"></i> CONTACT</button>
+    <button class="nav-btn mobile-nav-extra" onclick="navigate('donate'); closeMobileNav()"><i class="fa-solid fa-hand-holding-heart"></i> DONATE</button>
   </nav>
 
   <!-- ===================== APP PAGES ===================== -->
@@ -159,7 +160,7 @@
     <section class="page active" id="page-shop">
       <div class="shop-layout">
         <aside class="sidebar" id="sidebar">
-          <h3 class="sidebar-title">⚙️ FILTERS</h3>
+          <h3 class="sidebar-title"><i class="fa-solid fa-sliders"></i> FILTERS</h3>
           <div class="filter-section">
             <div class="filter-title">Category</div>
             <div class="filter-chips" id="category-chips"></div>
@@ -203,7 +204,7 @@
             <div class="results-info">
               <span class="results-count" id="results-count">—</span> listings found
             </div>
-            <button class="btn btn-outline btn-sm" id="mobile-filter-toggle" onclick="toggleMobileSidebar()" style="display: none;">⚙️ Filters</button>
+            <button class="btn btn-outline btn-sm" id="mobile-filter-toggle" onclick="toggleMobileSidebar()" style="display: none;"><i class="fa-solid fa-sliders"></i> Filters</button>
             <select class="sort-select" id="sort-select">
               <option value="newest">Newest First</option>
               <option value="price-asc">Price: Low to High</option>
@@ -234,7 +235,7 @@
       <div class="create-container">
         <h1 class="page-title" id="create-page-title">+ Create New Listing</h1>
         <div id="create-auth-notice" class="empty-state hidden">
-          <div class="empty-icon">🔒</div>
+          <div class="empty-icon"><i class="fa-solid fa-lock"></i></div>
           <div class="empty-title">LOGIN REQUIRED</div>
           <div class="empty-sub">You need to be logged in to create listings.</div>
           <br />
@@ -242,13 +243,13 @@
         </div>
         <form class="create-form" id="create-form">
           <div class="form-group">
-            <label class="form-label">📸 Images (up to 10)</label>
+            <label class="form-label"><i class="fa-solid fa-image"></i> Images (up to 10)</label>
             <div id="existing-images-section" class="hidden">
               <div class="form-label" style="margin-bottom:6px;">Current Images</div>
               <div class="image-preview-grid" id="existing-image-grid"></div>
             </div>
             <div class="image-upload-zone" id="upload-zone">
-              <div class="upload-icon">📷</div>
+              <div class="upload-icon"><i class="fa-solid fa-camera"></i></div>
               <div class="upload-text">Drop images here or <span>click to upload</span></div>
               <input type="file" class="upload-input" id="image-input" multiple accept="image/*" />
             </div>
@@ -353,7 +354,7 @@
             <div class="stat-item"><div class="stat-value" id="stat-favorites">0</div><div class="stat-label">Favorites</div></div>
             <div class="stat-item"><div class="stat-value" id="stat-sold">0</div><div class="stat-label">Sold</div></div>
           </div>
-          <button class="btn btn-outline btn-sm" onclick="openEditProfile()">✏️ Edit Profile</button>
+          <button class="btn btn-outline btn-sm" onclick="openEditProfile()"><i class="fa-solid fa-user-pen"></i> Edit Profile</button>
         </div>
         <div class="profile-tabs">
           <button class="profile-tab active" data-ptab="my-listings" onclick="switchProfileTab(this)">Active Listings</button>
@@ -364,7 +365,7 @@
         <div id="ptab-sold" class="hidden"><div class="listings-grid" id="profile-sold-grid"></div></div>
         <div id="ptab-reviews" class="hidden">
           <div id="no-reviews-message" class="empty-state hidden">
-            <div class="empty-icon">⭐</div>
+            <div class="empty-icon"><i class="fa-solid fa-star"></i></div>
             <div class="empty-title">NO REVIEWS YET</div>
             <div class="empty-sub">This user hasn't received any feedback from the community.</div>
           </div>
@@ -373,29 +374,29 @@
         <div id="ptab-settings" class="hidden">
           <form class="create-form" onsubmit="saveProfile(event)" style="max-width:600px;">
             <div class="form-group">
-              <label class="form-label">👤 Username *</label>
+              <label class="form-label"><i class="fa-solid fa-user"></i> Username *</label>
               <input class="form-input" id="s-username" type="text" placeholder="Your username" required minlength="3" maxlength="30" />
               <small style="color:var(--text-muted);font-size:0.7rem;">Letters, numbers, and underscores only</small>
             </div>
             <div class="form-group">
-              <label class="form-label">📝 Bio</label>
+              <label class="form-label"><i class="fa-solid fa-pen"></i> Bio</label>
               <textarea class="form-input" id="s-bio" rows="3" placeholder="Tell buyers about yourself..." maxlength="500"></textarea>
               <small style="color:var(--text-muted);font-size:0.7rem;">Max 500 characters</small>
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label class="form-label">📍 Location</label>
+                <label class="form-label"><i class="fa-solid fa-location-dot"></i> Location</label>
                 <input class="form-input" id="s-location" type="text" placeholder="City, State" />
               </div>
               <div class="form-group">
-                <label class="form-label">📞 Phone Number</label>
+                <label class="form-label"><i class="fa-solid fa-phone"></i> Phone Number</label>
                 <input class="form-input" id="s-phone" type="tel" placeholder="+1 555 000 0000" />
               </div>
             </div>
             <div id="profile-save-error" class="auth-error"></div>
             <div style="display:flex;gap:12px;margin-top:8px;">
-              <button type="submit" class="btn btn-primary">💾 SAVE PROFILE</button>
-              <button type="button" class="btn btn-danger" onclick="signOut()">🚪 SIGN OUT</button>
+              <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> SAVE PROFILE</button>
+              <button type="button" class="btn btn-danger" onclick="signOut()"><i class="fa-solid fa-right-from-bracket"></i> SIGN OUT</button>
             </div>
           </form>
         </div>
@@ -405,8 +406,8 @@
     <!-- ====== WISHLIST PAGE ====== -->
     <section class="page" id="page-wishlist">
       <div class="wishlist-container">
-        <h1 class="page-title">❤️ My Wishlist</h1>
-        <div id="wishlist-auth-notice" class="empty-state hidden"><div class="empty-icon">❤️</div><div class="empty-title">LOGIN TO VIEW YOUR WISHLIST</div><button class="btn btn-primary" onclick="openAuthModal()">Login / Register</button></div>
+        <h1 class="page-title"><i class="fa-solid fa-heart"></i> My Wishlist</h1>
+        <div id="wishlist-auth-notice" class="empty-state hidden"><div class="empty-icon"><i class="fa-solid fa-heart"></i></div><div class="empty-title">LOGIN TO VIEW YOUR WISHLIST</div><button class="btn btn-primary" onclick="openAuthModal()">Login / Register</button></div>
         <div class="listings-grid" id="wishlist-grid"></div>
       </div>
     </section>
@@ -414,12 +415,12 @@
     <!-- ====== MESSAGES PAGE ====== -->
     <section class="page" id="page-messages">
       <div class="chat-container">
-        <aside class="chat-sidebar"><div class="chat-header">📬 Conversations</div><div id="conversationList" class="convo-list"></div></aside>
+        <aside class="chat-sidebar"><div class="chat-header"><i class="fa-solid fa-inbox"></i> Conversations</div><div id="conversationList" class="convo-list"></div></aside>
         <main class="chat-window">
           <div id="activeChatHeader" class="active-chat-header">Select a conversation...</div>
           <div id="chatThread" class="chat-thread"></div>
           <form id="chatForm" class="chat-input-area" style="display:none;">
-            <label for="chatImageInput" class="attach-btn">📎</label><input type="file" id="chatImageInput" accept="image/*" hidden>
+            <label for="chatImageInput" class="attach-btn"><i class="fa-solid fa-paperclip"></i></label><input type="file" id="chatImageInput" accept="image/*" hidden>
             <input type="text" id="chatMessageInput" placeholder="Write a message..." maxlength="1000"><button type="submit" class="btn btn-primary">SEND</button>
           </form>
           <div id="messages-login-notice" class="messages-login-notice hidden" style="text-align:center;padding:40px;background:var(--bg-2);">
@@ -434,7 +435,7 @@
     <section class="page" id="page-assistant">
       <div class="assistant-container">
         <div class="assistant-header">
-          <span class="assistant-icon">🤖</span>
+          <span class="assistant-icon"><i class="fa-solid fa-robot"></i></span>
           <h2>OBTAINUM AI ASSISTANT</h2>
           <p>Market insights · price checks · product recommendations</p>
         </div>
@@ -454,12 +455,12 @@
             <button class="btn btn-primary" id="askAssistantBtn">ASK</button>
           </div>
           <div class="assistant-suggestions">
-            <button class="suggestion-chip" onclick="askSuggestion('What are trending collectibles?')">📈 Trending collectibles</button>
-            <button class="suggestion-chip" onclick="askSuggestion('How to avoid scams on marketplace?')">🛡️ Avoid scams</button>
-            <button class="suggestion-chip" onclick="askSuggestion('Price check: vintage video game')">🎮 Price check</button>
+            <button class="suggestion-chip" onclick="askSuggestion('What are trending collectibles?')"><i class="fa-solid fa-chart-line"></i> Trending collectibles</button>
+            <button class="suggestion-chip" onclick="askSuggestion('How to avoid scams on marketplace?')"><i class="fa-solid fa-shield-halved"></i> Avoid scams</button>
+            <button class="suggestion-chip" onclick="askSuggestion('Price check: vintage video game')"><i class="fa-solid fa-gamepad"></i> Price check</button>
           </div>
           <div id="assistant-login-notice" class="assistant-login-notice hidden" style="text-align:center;padding:16px;background:var(--bg-3);margin-top:12px;border-radius:var(--radius);">
-            <p>🔐 <strong>Login to use AI Assistant</strong> — Get personalized market insights!</p>
+            <p><i class="fa-solid fa-lock"></i> <strong>Login to use AI Assistant</strong> — Get personalized market insights!</p>
             <button class="btn btn-primary btn-sm" onclick="openAuthModal()">Login / Register</button>
           </div>
           <!-- AI Usage Counter -->
@@ -474,26 +475,26 @@
     <section class="page" id="page-about">
       <div class="about-container">
         <div class="about-hero">
-          <h1>📖 About OBTAINUM</h1>
+          <h1><i class="fa-solid fa-book-open"></i> About OBTAINUM</h1>
           <p>The techno marketplace for collectors and hobbyists</p>
         </div>
         <div class="about-content">
           <div class="about-section">
-            <h2>🎯 Our Mission</h2>
+            <h2><i class="fa-solid fa-bullseye"></i> Our Mission</h2>
             <p>OBTAINUM was born from a simple idea: create a fair marketplace where collectors can buy and sell without fear of scalping or unfair pricing. We believe in transparency, community, and the thrill of the hunt.</p>
           </div>
           <div class="about-section">
-            <h2>✨ What Makes Us Different</h2>
+            <h2><i class="fa-solid fa-wand-magic-sparkles"></i> What Makes Us Different</h2>
             <ul>
-              <li>🤖 <strong>AI-Powered Price Analysis</strong> - Our AI analyzes market value to help you make informed decisions</li>
-              <li>🛡️ <strong>No Scalping Policy</strong> - We actively monitor and prevent price gouging</li>
-              <li>💬 <strong>Direct Seller Communication</strong> - Chat directly with sellers, no middlemen</li>
-              <li>⭐ <strong>Community Driven</strong> - Built by collectors, for collectors</li>
-              <li>🔒 <strong>Secure Transactions</strong> - Your data and privacy are protected</li>
+              <li><i class="fa-solid fa-robot"></i> <strong>AI-Powered Price Analysis</strong> - Our AI analyzes market value to help you make informed decisions</li>
+              <li><i class="fa-solid fa-shield-halved"></i> <strong>No Scalping Policy</strong> - We actively monitor and prevent price gouging</li>
+              <li><i class="fa-solid fa-comments"></i> <strong>Direct Seller Communication</strong> - Chat directly with sellers, no middlemen</li>
+              <li><i class="fa-solid fa-users"></i> <strong>Community Driven</strong> - Built by collectors, for collectors</li>
+              <li><i class="fa-solid fa-lock"></i> <strong>Secure Transactions</strong> - Your data and privacy are protected</li>
             </ul>
           </div>
           <div class="about-section">
-            <h2>📜 Our Story</h2>
+            <h2><i class="fa-solid fa-scroll"></i> Our Story</h2>
             <p>Founded in 2024, OBTAINUM started as a passion project for vintage toy collectors who were tired of bots and scalpers ruining the hobby. Today, we've grown into a full-featured marketplace serving thousands of collectors across categories including electronics, collectibles, clothing, and more.</p>
           </div>
           <div class="about-section">
@@ -522,13 +523,13 @@
     <section class="page" id="page-contact">
       <div class="contact-container">
         <div class="contact-hero">
-          <h1>📧 Contact Us</h1>
+          <h1><i class="fa-solid fa-envelope"></i> Contact Us</h1>
           <p>We'd love to hear from you!</p>
         </div>
         <div class="contact-grid">
          
           <div class="contact-form">
-            <h2>Send us a message</h2>
+            <h2><i class="fa-solid fa-paper-plane"></i> Send us a message</h2>
             <form id="contactForm">
               <div class="form-group">
                 <label class="form-label">Name *</label>
@@ -581,12 +582,12 @@
     <!-- ====== DONATE PAGE ====== -->
     <section class="page" id="page-donate">
       <div class="donate-container">
-        <h1>☕ Support OBTAINUM</h1>
+        <h1><i class="fa-solid fa-mug-hot"></i> Support OBTAINUM</h1>
         <p>Looking to give back? Use our AI to find highly-rated charities in your local area where you can donate goods or funds.</p>
         
         <div class="charity-search-box" style="margin: 30px 0; padding: 24px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg);">
           <div style="display:flex; align-items:center; gap:10px; margin-bottom:15px;">
-            <span style="font-size:1.5rem;">🔍</span>
+            <span style="font-size:1.5rem;"><i class="fa-solid fa-magnifying-glass"></i></span>
             <h3 style="color: var(--neon); font-family: 'Orbitron', sans-serif; margin:0;">LOCAL CHARITY FINDER</h3>
           </div>
           <div style="display:flex; gap:12px; flex-wrap:wrap;">
@@ -616,7 +617,7 @@
   <!-- Report Bug Modal -->
   <div class="modal-overlay" id="report-modal" onclick="closeOnOverlay(event, 'report-modal')">
     <div class="modal" style="max-width:500px;"><button class="modal-close" onclick="closeModal('report-modal')">&times;</button>
-      <div class="modal-logo" style="font-size:1.1rem;">🐛 Report a Bug</div>
+      <div class="modal-logo" style="font-size:1.1rem;"><i class="fa-solid fa-bug"></i> Report a Bug</div>
       <form onsubmit="submitBugReport(event)">
         <div class="form-group">
           <input class="form-input" id="bug-title" name="title" placeholder="Bug title" required>
@@ -647,7 +648,7 @@
 <div class="modal-overlay" id="route-safety-modal" onclick="closeOnOverlay(event, 'route-safety-modal')">
   <div class="modal" style="max-width: 600px; max-height: 90vh; overflow-y: auto;">
     <button class="modal-close" onclick="closeModal('route-safety-modal')">&times;</button>
-    <div class="modal-logo" style="font-size:1.1rem;">🗺️ AI Route Safety Check</div>
+    <div class="modal-logo" style="font-size:1.1rem;"><i class="fa-solid fa-map-location-dot"></i> AI Route Safety Check</div>
     <div id="route-safety-content"></div>
   </div>
 </div>
@@ -671,7 +672,7 @@
 <section class="page" id="page-review">
   <div class="container" style="max-width: 1000px; margin: 0 auto; padding: 40px 20px;">
     <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-      <h2 class="section-title" style="font-family: 'Orbitron', sans-serif; color: var(--neon);">⭐ REVIEW SELLER</h2>
+      <h2 class="section-title" style="font-family: 'Orbitron', sans-serif; color: var(--neon);"><i class="fa-solid fa-star"></i> REVIEW SELLER</h2>
       <button class="btn btn-outline btn-sm" onclick="navigate('profile', { meta: { profileId: State.currentReviewSellerId } })">BACK TO PROFILE</button>
     </div>
 
@@ -682,7 +683,7 @@
     <!-- Toggle to show all seller items -->
     <div style="margin-bottom: 24px; padding: 16px; background: var(--bg-2); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
       <div>
-        <h3 style="margin: 0 0 4px 0;">📦 Items from this seller</h3>
+        <h3 style="margin: 0 0 4px 0;"><i class="fa-solid fa-box"></i> Items from this seller</h3>
         <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Click an item to reference in your review</p>
       </div>
       <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
@@ -696,7 +697,7 @@
     </div>
 
     <div class="review-box" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px;">
-      <h3 style="margin: 0 0 16px 0; color: var(--neon);">✍️ Write Your Review</h3>
+      <h3 style="margin: 0 0 16px 0; color: var(--neon);"><i class="fa-solid fa-pen-to-square"></i> Write Your Review</h3>
       <form id="review-form" onsubmit="handleReviewSubmit(event)">
         <div class="form-group">
           <label class="form-label">Rating *</label>
@@ -719,7 +720,7 @@
         <div class="form-group">
           <label class="form-label">Photos (Optional - up to 3)</label>
           <div class="upload-zone" id="review-upload-zone" style="padding: 24px; border: 2px dashed var(--border); text-align: center; cursor: pointer; border-radius: 8px; transition: border-color 0.2s;">
-            <div style="font-size: 2rem; margin-bottom: 8px;">📸</div>
+            <div style="font-size: 2rem; margin-bottom: 8px;"><i class="fa-solid fa-camera"></i></div>
             <div style="font-size: 0.9rem; font-weight: 600;">Click to upload photos</div>
             <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Max 3 images (JPG, PNG)</div>
             <input type="file" id="review-image-input" multiple accept="image/jpeg,image/png" hidden>

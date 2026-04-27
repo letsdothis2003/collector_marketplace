@@ -1,4 +1,4 @@
-/* ============================================================
+ /* ============================================================
    FILE: script.js (FULL VERSION with AI Route Safety + Pickup Planner)
    OBTAINUM MARKETPLACE — Complete logic for all pages
    ============================================================ */
@@ -212,7 +212,7 @@ async function findLocalCharities() {
   }
 
   setLoading(btn, true, "SEARCHING...");
-  resultsDiv.innerHTML = '<div class="spinner" style="margin: 20px auto;"></div><p style="text-align:center;">Identifying top-rated charities near you...</p>';
+  resultsDiv.innerHTML = '<div class="spinner" style="margin: 20px auto;"></div><p style="text-align:center;">Searching for charities near you...</p>';
   mapDiv.style.display = 'none';
 
   const prompt = `You are a helpful community assistant. Find the top 8 registered, highly-rated charities, non-profits, or donation centers in or near "${location}". 
@@ -246,7 +246,7 @@ async function findLocalCharities() {
             <div style="font-size: 0.65rem; color: var(--neon); font-weight: bold; margin-bottom: 4px;">#${i+1} ${c.focus.toUpperCase()}</div>
             <h4 style="margin: 0 0 8px 0; color: var(--text);">${escHtml(c.name)}</h4>
             <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px;">${escHtml(c.description)}</p>
-            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;">📍 ${escHtml(c.address)}</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px;">ADDR: ${escHtml(c.address)}</div>
             ${c.url ? `<a href="${c.url}" target="_blank" class="btn btn-ghost btn-sm" style="font-size: 0.7rem; padding: 4px 8px;">VISIT WEBSITE</a>` : ''}
           </div>
         `).join('')}
@@ -1042,7 +1042,7 @@ async function loadAIChatHistory() {
     const messagesDiv = document.getElementById('assistantMessages');
     if (messagesDiv) {
       if (recentMessages.length === 0) {
-        messagesDiv.innerHTML = '<div class="assistant-message bot">✨ Hi! I\'m your OBTAINUM AI assistant. Ask me anything about the marketplace!</div>';
+        messagesDiv.innerHTML = '<div class="assistant-message bot">Hi! I\'m your OBTAINUM AI assistant. Ask me anything about the marketplace!</div>';
       } else {
         messagesDiv.innerHTML = '';
         recentMessages.forEach(msg => {
@@ -1383,7 +1383,7 @@ async function displayListingSuggestion(listingId, forceRefresh = false) {
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
         <div style="display:flex; align-items:center; gap:8px;">
           <span class="ai-dot"></span>
-          <strong style="color:var(--neon);">🤖 AI PRICE ANALYSIS</strong>
+          <strong style="color:var(--neon);">AI PRICE ANALYSIS</strong>
         </div>
         <div style="background:${scoreColor}; color:#001a07; padding:4px 12px; border-radius:20px; font-weight:bold;">
           ${suggestion.valueAssessment.toUpperCase()} • ${suggestion.score}%
@@ -1392,30 +1392,30 @@ async function displayListingSuggestion(listingId, forceRefresh = false) {
       
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px,1fr)); gap:12px; margin-bottom:16px;">
         <div style="background:var(--bg-3); padding:10px; border-radius:8px;">
-          <div style="font-size:11px; color:var(--text-muted);">🔍 IDENTIFIED AS</div>
+          <div style="font-size:11px; color:var(--text-muted);">IDENTIFIED AS</div>
           <div style="font-weight:600;">${escHtml(suggestion.itemIdentification)}</div>
         </div>
         <div style="background:var(--bg-3); padding:10px; border-radius:8px;">
-          <div style="font-size:11px; color:var(--text-muted);">📅 CAME OUT IN</div>
+          <div style="font-size:11px; color:var(--text-muted);">RELEASED IN</div>
           <div style="font-weight:600;">${suggestion.releaseYear || 'N/A'}</div>
         </div>
         <div style="background:var(--bg-3); padding:10px; border-radius:8px;">
-          <div style="font-size:11px; color:var(--text-muted);">💰 ORIGINAL PRICE</div>
+          <div style="font-size:11px; color:var(--text-muted);">MSRP</div>
           <div style="font-weight:600;">${suggestion.originalRetailPrice || 'N/A'}</div>
         </div>
         <div style="background:var(--bg-3); padding:10px; border-radius:8px;">
-          <div style="font-size:11px; color:var(--text-muted);">📈 CURRENT VALUE</div>
+          <div style="font-size:11px; color:var(--text-muted);">MARKET VALUE</div>
           <div style="font-weight:600;">${suggestion.currentMarketValue || 'N/A'}</div>
         </div>
       </div>
       
       <div style="background:rgba(0,255,65,0.05); padding:12px; border-radius:8px; margin-bottom:12px;">
-        <div style="font-weight:600; margin-bottom:6px;">📝 ANALYSIS</div>
+        <div style="font-weight:600; margin-bottom:6px;">ANALYSIS</div>
         <div style="font-size:14px;">${escHtml(suggestion.reasoning)}</div>
       </div>
       
       <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; padding-top:12px; border-top:1px solid var(--border);">
-        <div style="font-size:13px;">🏷️ ${suggestion.recommendation === 'buy' ? '✅ RECOMMENDED' : (suggestion.recommendation === 'negotiate' ? '🤝 TRY NEGOTIATING' : '⚠️ CONSIDER ALTERNATIVES')}</div>
+        <div style="font-size:13px;">${suggestion.recommendation === 'buy' ? 'RECOMMENDED' : (suggestion.recommendation === 'negotiate' ? 'TRY NEGOTIATING' : 'CONSIDER ALTERNATIVES')}</div>
         <button class="btn btn-ghost btn-sm" onclick="displayListingSuggestion('${listingId}', true)" style="font-size:10px; padding:4px 8px;">🔄 REFRESH AI</button>
       </div>
     </div>
