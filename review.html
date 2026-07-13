@@ -1,38 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
-  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-  <meta name="referrer" content="strict-origin-when-cross-origin" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https:; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://cdn.jsdelivr.net https://api.web3forms.com https://nominatim.openstreetmap.org; style-src 'self' https://fonts.googleapis.com https://unpkg.com 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://gotzmuobwuubsugnowxq.supabase.co https://generativelanguage.googleapis.com https://api.web3forms.com https://nominatim.openstreetmap.org https://unpkg.com https://cdn.jsdelivr.net; object-src 'none'; base-uri 'self'; form-action 'self';" />
-  <link rel="preload" href="style.css?v=20260709" as="style">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-  <noscript><link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"></noscript>
-  <title>Review Seller — OBTAINUM</title>
-  <link rel="stylesheet" href="style.css?v=20260709" />
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="script.js?v=20260709" defer></script>
-</head>
-<body data-page="review">
-  <header id="header">
-    <div class="logo glitch" data-text="OBTAINUM" onclick="window.location.href='index.html#shop'">OBTAINUM</div>
-    <nav class="nav-menu">
-      <button class="nav-btn" onclick="window.location.href='index.html#shop'">🛒 SHOP</button>
-      <button class="nav-btn" onclick="window.location.href='index.html#profile'">⚙️ PROFILE</button>
-    </nav>
-  </header>
-
-  <main id="app">
-    <section class="page active" id="page-review">
+<!-- ====== REVIEW PAGE ====== -->
+<section class="page" id="page-review">
       <div class="container" style="max-width: 800px; margin: 0 auto; padding: 40px 20px;">
         <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-          <h2 class="section-title" style="font-family: 'Orbitron', sans-serif; color: var(--neon);">⭐ FEEDBACK & REVIEWS</h2>
+          <h2 class="section-title" style="font-family: 'Orbitron', sans-serif; color: var(--neon);">FEEDBACK & REVIEWS</h2>
           <button class="btn btn-outline btn-sm" id="btn-back-profile">BACK TO PROFILE</button>
         </div>
 
@@ -42,7 +12,7 @@
 
         <div style="margin-bottom: 24px; padding: 16px; background: var(--bg-2); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: space-between; border-left: 4px solid var(--neon);">
           <div>
-            <h3 style="margin: 0 0 4px 0;">📦 Select Purchased Item</h3>
+            <h3 style="margin: 0 0 4px 0;">Select Purchased Item</h3>
             <p style="margin: 0; font-size: 0.8rem; color: var(--text-muted);">Which item are you reviewing?</p>
           </div>
           <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
@@ -56,7 +26,7 @@
         </div>
 
         <div class="review-box" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 32px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
-          <h3 style="margin: 0 0 24px 0; color: var(--neon); text-transform: uppercase; letter-spacing: 1px;" id="review-form-title">✍️ Post a Review</h3>
+          <h3 style="margin: 0 0 24px 0; color: var(--neon); text-transform: uppercase; letter-spacing: 1px;" id="review-form-title">Post a Review</h3>
           <form id="review-form" onsubmit="handleReviewSubmit(event)">
             
             <div class="form-group">
@@ -83,7 +53,7 @@
             <div class="form-group">
               <label class="form-label">Proof Photos (Optional)</label>
               <div class="upload-zone" id="review-upload-zone" style="padding: 30px; border: 2px dashed var(--border); text-align: center; cursor: pointer; border-radius: 12px; transition: all 0.3s; background: rgba(255,255,255,0.02);">
-                <div style="font-size: 2.5rem; margin-bottom: 8px;">📸</div>
+                <div style="font-size: 2.5rem; margin-bottom: 8px;"></div>
                 <div style="font-size: 1rem; font-weight: 600; color: var(--text);">Drop images or click to upload</div>
                 <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px;">Max 3 images (JPG, PNG)</div>
                 <input type="file" id="review-image-input" multiple accept="image/jpeg,image/png" hidden>
@@ -95,16 +65,15 @@
             <div id="review-form-error" class="auth-error" style="display:none; padding: 15px; background: rgba(255,45,85,0.1); border-radius: 8px; border-left: 4px solid var(--danger); margin-bottom: 20px; font-size: 0.9rem;"></div>
             
             <div style="display: flex; gap: 16px; margin-top: 32px;">
-              <button type="submit" class="btn btn-primary btn-lg" id="submit-review-btn" style="flex: 2;">✓ SUBMIT REVIEW</button>
+              <button type="submit" class="btn btn-primary btn-lg" id="submit-review-btn" style="flex: 2;">SUBMIT REVIEW</button>
               <button type="button" class="btn btn-outline btn-lg" id="btn-cancel-review" style="flex: 1;">CANCEL</button>
             </div>
           </form>
         </div>
       </div>
-    </section>
-  </main>
+</section>
 
-  <style>
+<style>
     .seller-item-card.selected { border-color: var(--neon) !important; background: rgba(0,255,65,0.05); transform: scale(1.02); }
     .review-card .review-details { max-height: 0; opacity: 0; pointer-events: none; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
     .review-card.expanded .review-details { max-height: 1000px; opacity: 1; pointer-events: auto; padding-top: 16px; margin-top: 16px; border-top: 1px solid var(--border); }
@@ -113,6 +82,4 @@
     .star-rating-input input:checked ~ label { color: var(--neon) !important; }
     .listings-grid::-webkit-scrollbar { width: 6px; }
     .listings-grid::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
-  </style>
-</body>
-</html>
+</style>

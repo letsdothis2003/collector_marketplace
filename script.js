@@ -34,12 +34,32 @@ function scrub(text) {
   return text.split(GEMINI_API_KEY).join('[REDACTED_KEY]');
 }
 
+// ==================== AI RATE LIMITER ====================
+const aiCallTimestamps = [];
+const AI_CALL_LIMIT = 5; // Max 5 calls
+const AI_CALL_WINDOW = 10 * 1000; // within 10 seconds
+
+function checkAiRateLimit() {
+  const now = Date.now();
+  // Remove timestamps older than the window
+  while (aiCallTimestamps.length > 0 && aiCallTimestamps[0] < now - AI_CALL_WINDOW) {
+    aiCallTimestamps.shift();
+  }
+  if (aiCallTimestamps.length >= AI_CALL_LIMIT) {
+    showToast('AI is cooling down. Please wait a moment.', 'warning');
+    return false; // Limit exceeded
+  }
+  aiCallTimestamps.push(now);
+  return true; // OK to proceed
+}
+
 // ==================== DIRECT API HELPER (REPLACES LIBRARY) ====================
 /** Direct fetch call to Gemini API with robust model fallback and versioning */
 async function callGemini(prompt, responseType = 'text/plain') {
   if (!isAiConfigured()) {
     throw new Error("AI service is not configured. API Key is missing.");
   }
+  if (!checkAiRateLimit()) throw new Error("AI rate limit exceeded. Please wait.");
 
   const models = [
     'gemini-3-flash-preview',
@@ -381,9 +401,9 @@ function slugify(text) {
 }
 
 function getRouteHash(page, meta = {}) {
-  if (page === 'detail' && meta.listingId && meta.listingName) {
-    const slug = slugify(meta.listingName);
-    return `#shop-${slug}--${meta.listingId}`; // Double-dash separator for UUIDs
+  // Use the new, shorter listing slug instead of the full UUID
+  if (page === 'detail' && meta.listingSlug) {
+    return `#shop/${meta.listingSlug}`;
   }
   if (page === 'profile' && meta.profileId) {
     return `#profile/${meta.profileId}`;
@@ -424,12 +444,10 @@ function parseRouteFromHash() {
   if (!hash) return { page: 'shop' };
   const knownPages = ['shop', 'create', 'profile', 'wishlist', 'messages', 'assistant', 'about', 'contact', 'donate', 'review'];
   if (knownPages.includes(hash)) return { page: hash };
-  if (hash.startsWith('shop-')) {
-    const parts = hash.split('--');
-    const id = parts[parts.length - 1];
-    if (id && id.length >= 32) { // Validate UUID format
-      return { page: 'detail', listingId: id };
-    }
+  if (hash.startsWith('shop/')) {
+    const slug = hash.split('/')[1];
+    // The slug is now the identifier for the detail page
+    return { page: 'detail', listingSlug: slug };
   }
   if (hash.startsWith('profile/')) {
     const id = hash.split('/')[1];
@@ -445,9 +463,9 @@ function parseRouteFromHash() {
 let ignoreHashChange = false;
 function handleHashChange() {
   if (ignoreHashChange) return;
-  const route = parseRouteFromHash();
-  if (route.page === 'detail' && route.listingId) {
-    openListing(route.listingId);
+  const route = parseRouteFromHash();  
+  if (route.page === 'detail' && route.listingSlug) {
+    openListing(null, route.listingSlug); // Find by slug
     return;
   }
   if (route.page === 'profile' && route.profileId) {
@@ -463,54 +481,71 @@ function handleHashChange() {
 }
 
 // ==================== NAVIGATION ====================
-function navigate(page, options = {}) {
+async function loadPageContent(page) {
+  const appContainer = document.getElementById('app');
+  if (!appContainer) return;
+
+  try {
+    const pageUrl = `${page}.html`;
+    const response = await fetch(`${pageUrl}?v=20260709`);
+    if (!response.ok) throw new Error(`Could not load ${page}.html`);
+
+    const html = await response.text();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const pageContent = doc.querySelector(`#page-${page}`);
+
+    if (pageContent) {
+      appContainer.innerHTML = ''; // Clear previous content
+      appContainer.appendChild(pageContent);
+      pageContent.classList.add('active');
+    } else {
+      throw new Error(`Element #page-${page} not found in ${pageUrl}`);
+    }
+  } catch (error) {
+    console.error('Failed to load page:', error);
+    appContainer.innerHTML = `<div class="empty-state"><div class="empty-icon">!</div><div class="empty-title">ERROR LOADING PAGE</div><div class="empty-sub">${error.message}</div></div>`;
+  }
+}
+
+async function navigate(page, options = {}) {
   const pages = ['shop', 'detail', 'create', 'profile', 'wishlist', 'messages', 'assistant', 'about', 'contact', 'donate', 'review'];
   if (!pages.includes(page)) page = 'shop';
 
   // Guard restricted pages for unsigned users
   const restricted = ['create', 'wishlist', 'messages', 'assistant', 'review'];
   if (restricted.includes(page) && !State.user) {
-    openAuthModal();
-    return;
+    return openAuthModal();
   }
 
-  pages.forEach(p => {
-    document.getElementById(`page-${p}`)?.classList.remove('active');
-  });
-  
-  document.getElementById(`page-${page}`)?.classList.add('active');
+  // For detail page, we load 'listing.html' but call it 'detail'
+  const pageToLoad = page === 'detail' ? 'listing' : page; // The file is listing.html
+  await loadPageContent(pageToLoad);
+
   State.currentPage = page;
   updateNavActive(page);
-  
   updateRestrictedPageUI();
-  
+
   if (page === 'shop') loadListings();
-  if (page === 'profile') loadProfile();
+  if (page === 'profile') loadProfile(); // loadProfile will render the UI after content is loaded
   if (page === 'wishlist' && State.user) loadWishlist();
   if (page === 'create' && State.user) initCreatePage();
   if (page === 'review') loadReviewPage(options.meta?.sellerId);
-  if (page === 'messages' && State.user) loadMessages();
-  if (page === 'assistant') {
-    updateAssistantUI();
-    loadAIChatHistory();
+  if (page === 'messages' && State.user) loadMessages(); 
+  if (page === 'assistant') { 
+    updateAssistantUI(); loadAIChatHistory(); 
   }
 
-  if (options.updateUrl !== false) {
+  if (options.updateUrl !== false && page !== 'detail') { // URL for detail is handled in openListing
     ignoreHashChange = true;
     updateUrlForPage(page, options.meta);
     setTimeout(() => { ignoreHashChange = false; }, 0);
   }
 
-  // Fix: Hide global AI route finder button unless on detail page
-  const globalRouteBtn = document.getElementById('btn-global-route-safety');
-  if (globalRouteBtn) globalRouteBtn.style.display = (State.currentPage === 'detail') ? 'inline-flex' : 'none';
 }
 
 function navigateProfile() {
-  if (!State.user) {
-    openAuthModal();
-    return;
-  }
+  if (!State.user) return openAuthModal();
   navigate('profile');
 }
 
@@ -745,7 +780,7 @@ async function handleRegister(e) {
       if (wrap) {
         wrap.innerHTML = `
           <div class="auth-confirm-panel" style="text-align:center;padding:20px;">
-            <div class="confirm-icon" style="font-size:3rem;">✉️</div>
+            <div class="confirm-icon" style="font-size:3rem;"></div>
             <div class="confirm-title" style="font-weight:bold;margin:16px 0;">CHECK YOUR EMAIL</div>
             <div class="confirm-msg">Click the confirmation link to activate your account.</div>
             <button class="btn btn-outline w-full" onclick="closeModal('auth-modal')">GOT IT</button>
@@ -1429,7 +1464,7 @@ async function loadWishlist() {
     const listings = (data || []).map(w => w.listings).filter(Boolean);
     if (container) {
       if (listings.length === 0) {
-        container.innerHTML = `<div class="empty-state"><div class="empty-icon">❤️</div><div class="empty-title">YOUR WISHLIST IS EMPTY</div></div>`;
+        container.innerHTML = `<div class="empty-state"><div class="empty-icon"></div><div class="empty-title">YOUR WISHLIST IS EMPTY</div></div>`;
       } else {
         container.innerHTML = '';
         listings.forEach(l => container.appendChild(createListingCard(l)));
@@ -1788,6 +1823,9 @@ async function submitListing(e) {
     const subcategoryEl = document.getElementById('c-subcategory');
     const subcategory = subcategoryEl && subcategoryEl.value ? subcategoryEl.value : null;
     
+    // Generate a unique slug for the listing
+    const slug = slugify(name) + '-' + Math.random().toString(36).substring(2, 8);
+
     const isFair = msrp ? price <= msrp * 1.2 : true;
     
     const listingData = {
@@ -1805,7 +1843,8 @@ async function submitListing(e) {
       tags: tags,
       payment_methods: paymentMethods,
       is_fair: isFair,
-      images: allImages
+      images: allImages,
+      slug: slug
     };
     
     let savedListing;
@@ -1880,7 +1919,8 @@ async function loadProfile() {
   
   const { data: profile, error } = await db
     .from('profiles')
-    .select('*')
+    // Be specific about public columns to avoid leaking sensitive data
+    .select('id, username, bio, location, avatar_url, rating, created_at')
     .eq('id', profileIdToLoad)
     .single();
   
@@ -1899,7 +1939,6 @@ async function renderProfileUI(profile) {
 
   const avatarEl = document.getElementById('profile-avatar-lg');
   const usernameEl = document.getElementById('profile-username');
-  const emailEl = document.getElementById('profile-email');
   const bioEl = document.getElementById('profile-bio');
   const locationEl = document.getElementById('profile-location');
   
@@ -1924,7 +1963,6 @@ async function renderProfileUI(profile) {
         </span>`;
   }
 
-  if (emailEl) emailEl.textContent = isOwnProfile ? profile.email : '';
   if (bioEl) bioEl.textContent = profile?.bio || '';
   if (locationEl) locationEl.textContent = profile?.location ? '📍 ' + profile.location : '';
   
@@ -2107,7 +2145,7 @@ async function loadProfileListings(profileId, isOwnProfile) {
   
   const statListings = document.getElementById('stat-listings');
   const statViews = document.getElementById('stat-views');
-  const statFavs = document.getElementById('stat-favorites');
+  const statFavs = document.getElementById('stat-favorites'); 
   const statSold = document.getElementById('stat-sold');
   
   if (statListings) animateNumber(statListings, active.length);
@@ -2118,14 +2156,14 @@ async function loadProfileListings(profileId, isOwnProfile) {
   const grid = document.getElementById('profile-listings-grid');
   if (grid) {
     if (active.length === 0) {
-      grid.innerHTML = `<div class="empty-state"><div class="empty-icon">📦</div><div class="empty-title">NO ACTIVE LISTINGS</div>${isOwnProfile ? '<div class="empty-sub">Click + CREATE to list your first item</div>' : ''}</div>`;
+      grid.innerHTML = `<div class="empty-state"><div class="empty-icon"></div><div class="empty-title">NO ACTIVE LISTINGS</div>${isOwnProfile ? '<div class="empty-sub">Click + CREATE to list your first item</div>' : ''}</div>`;
     } else {
       grid.innerHTML = '';
       active.forEach(l => grid.appendChild(createListingCard(l, isOwnProfile)));
     }
   }
   
-  const soldGrid = document.getElementById('profile-sold-grid');
+  const soldGrid = document.getElementById('profile-sold-grid'); 
   if (soldGrid) {
     if (sold.length === 0) {
       soldGrid.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">NO SOLD ITEMS YET</div><div class="empty-sub">Items you sell will appear here</div></div>`;
@@ -2692,34 +2730,44 @@ async function initListingMap(locationStr, elementId) {
   }
 }
 
-async function openListing(listingId) {
-  navigate('detail', { updateUrl: false });
-  State.currentListingId = listingId;
-  
-  const content = document.getElementById('detail-content');
+async function openListing(listingId, listingSlug = null) {
+  // Pass the slug to navigate so it can be used to set the URL immediately if available.
+  // This prevents the URL from briefly showing just '#detail'.
+  const navOptions = { updateUrl: false, meta: { listingSlug: listingSlug } };
+  await navigate('detail', navOptions);
+
+  State.currentListingId = listingId; // Keep for internal state if needed
+
+  const content = document.getElementById('detail-content'); 
   if (content) content.innerHTML = '<div class="empty-state"><div class="spinner spinner-lg"></div></div>';
   
   try {
     const { data: listing, error } = await db
       .from('listings')
       .select('*, profiles:seller_id(id, username, avatar_url, rating, location, bio)')
-      .eq('id', listingId)
+      .match(listingId ? { id: listingId } : { slug: listingSlug })
       .single();
     
     if (error) throw error;
     State.selectedListing = listing;
     
+    // Ensure listing.slug exists for URL update. This handles cases where old listings
+    // might not have a slug, or if the select query somehow misses it.
+    if (!listing.slug) {
+      listing.slug = slugify(listing.name) + '-' + listing.id.substring(0, 8);
+    }
+    State.currentListingId = listing.id; // Ensure current ID is set
+    
     try {
-      await db.rpc('increment_view_count', { listing_id: listingId });
+      await db.rpc('increment_view_count', { listing_id: listing.id });
     } catch (rpcErr) {
       console.warn('RPC function not found');
     }
     
     renderDetail(listing);
     loadSimilarItems(listing);
-    
     ignoreHashChange = true;
-    updateUrlForPage('detail', { listingId: listingId, listingName: listing.name });
+    updateUrlForPage('detail', { listingSlug: listing.slug });
     setTimeout(() => { ignoreHashChange = false; }, 0);
     
     if (!listing.ai_suggestions) {
@@ -2741,7 +2789,7 @@ function renderDetail(listing) {
   
   let imagesHtml = '';
   if (listing.images && listing.images.length > 0) {
-    if (listing.images.length === 1) {
+    if (listing.images.length === 1) { 
       imagesHtml = `<img src="${escHtml(listing.images[0])}" alt="${escHtml(listing.name)}" style="width:100%;border-radius:var(--radius-lg);" />`;
     } else {
       const detailCarouselId = `detail-carousel-${listing.id}`;
@@ -2770,7 +2818,7 @@ function renderDetail(listing) {
       }, 100);
     }
   } else {
-    imagesHtml = `<div class="card-no-image">📦</div>`;
+    imagesHtml = `<div class="card-no-image"></div>`;
   }
   
   const paymentMethodsList = listing.payment_methods && listing.payment_methods.length > 0
@@ -2780,20 +2828,20 @@ function renderDetail(listing) {
   let actionsHtml;
   if (isOwner) {
     actionsHtml = `
-      <button class="btn btn-outline" onclick="editListing('${listing.id}')">✏️ EDIT LISTING</button>
-      ${!listing.is_sold ? `<button class="btn btn-primary" onclick="openMarkSoldModal('${listing.id}')">✅ MARK AS SOLD</button>` : ''}
-      <button class="btn btn-danger" onclick="deleteListing('${listing.id}')">❌ DELETE</button>
+      <button class="btn btn-outline" onclick="editListing('${listing.id}')">EDIT LISTING</button>
+      ${!listing.is_sold ? `<button class="btn btn-primary" onclick="openMarkSoldModal('${listing.id}')">MARK AS SOLD</button>` : ''}
+      <button class="btn btn-danger" onclick="deleteListing('${listing.id}')">DELETE</button>
     `;
   } else {
     const contactBtn = State.user 
-      ? `<button class="btn btn-primary btn-lg" onclick="startChat('${listing.seller_id}', '${listing.id}')">💬 CONTACT SELLER</button>`
-      : `<button class="btn btn-primary btn-lg" onclick="openAuthModal()">🔐 LOGIN TO CONTACT</button>`;
+      ? `<button class="btn btn-primary btn-lg" onclick="startChat('${listing.seller_id}', '${listing.id}')">CONTACT SELLER</button>`
+      : `<button class="btn btn-primary btn-lg" onclick="openAuthModal()">LOGIN TO CONTACT</button>`;
     
     const wishlistBtn = State.user 
       ? `<button class="btn btn-outline wishlist-btn ${isWished ? 'active' : ''}" onclick="toggleWishlist(event, '${listing.id}')">
-          ${isWished ? '❤️ REMOVE FROM WISHLIST' : '🤍 ADD TO WISHLIST'}
+          ${isWished ? 'REMOVE FROM WISHLIST' : 'ADD TO WISHLIST'}
         </button>`
-      : `<button class="btn btn-outline" onclick="openAuthModal()">🤍 LOGIN TO SAVE</button>`;
+      : `<button class="btn btn-outline" onclick="openAuthModal()">LOGIN TO SAVE</button>`;
     
     actionsHtml = `${contactBtn}${wishlistBtn}`;
   }
@@ -2809,10 +2857,10 @@ function renderDetail(listing) {
           ${listing.msrp ? `<span class="detail-msrp" style="text-decoration:line-through;color:var(--text-muted);margin-left:12px;">$${parseFloat(listing.msrp).toFixed(2)} MSRP</span>` : ''}
         </div>
         <div class="detail-meta-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0;">
-          ${listing.location ? `<div class="detail-meta-item"><strong>📍 Location</strong><br>${escHtml(listing.location)}</div>` : ''}
-          <div class="detail-meta-item"><strong>💳 Payment Methods</strong><br>${paymentMethodsList}</div>
-          <div class="detail-meta-item"><strong>📦 Condition</strong><br>${listing.condition || 'N/A'}</div>
-          <div class="detail-meta-item"><strong>🚚 Shipping</strong><br>${listing.shipping || 'paid'}</div>
+          ${listing.location ? `<div class="detail-meta-item"><strong>Location</strong><br>${escHtml(listing.location)}</div>` : ''}
+          <div class="detail-meta-item"><strong>Payment Methods</strong><br>${paymentMethodsList}</div>
+          <div class="detail-meta-item"><strong>Condition</strong><br>${listing.condition || 'N/A'}</div>
+          <div class="detail-meta-item"><strong>Shipping</strong><br>${listing.shipping || 'paid'}</div>
         </div>
         <div class="detail-description">${escHtml(listing.description)}</div>
 
@@ -2834,7 +2882,7 @@ function renderDetail(listing) {
 
         <div class="pickup-route-planner" style="margin: 24px 0; padding: 24px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); animation: fadeIn 0.5s ease-out;">
           <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
-            <span style="font-size:1.5rem;">🗺️</span>
+            <span style="font-size:1.5rem;"></span>
             <h3 style="color: var(--neon); font-family: 'Orbitron', sans-serif; font-size: 1.1rem;">AI PICKUP ROUTE PLANNER</h3>
           </div>
           <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 20px;">Planning a pickup? Get AI-powered travel routes and area safety assessments.</p>
@@ -2848,8 +2896,8 @@ function renderDetail(listing) {
         <div class="seller-card">
           <div class="seller-avatar">${seller.username?.charAt(0) || '?'}</div>
           <div><div class="seller-name">${escHtml(seller.username || 'Anonymous')}</div>
-          ${seller.rating > 0 ? `<div class="seller-rating">⭐ ${parseFloat(seller.rating).toFixed(1)}</div>` : ''}
-          ${seller.location ? `<div class="seller-location">📍 ${escHtml(seller.location)}</div>` : ''}</div>
+          ${seller.rating > 0 ? `<div class="seller-rating">${parseFloat(seller.rating).toFixed(1)}</div>` : ''}
+          ${seller.location ? `<div class="seller-location">${escHtml(seller.location)}</div>` : ''}</div>
           <button onclick="viewSellerProfile('${seller.id}')" class="btn btn-outline btn-sm">View Profile</button>
         </div>
         <div class="detail-actions" style="display:flex;flex-direction:column;gap:10px;">${actionsHtml}</div>
@@ -2933,8 +2981,8 @@ function createListingCard(listing, showOwnerActions = false) {
   const card = document.createElement('div');
   card.className = 'listing-card animate-fade';
   card.onclick = (e) => {
-    if (e.target.closest('.wishlist-btn, .owner-btn, .carousel-btn, .carousel-dot')) return;
-    openListing(listing.id);
+    if (e.target.closest('.wishlist-btn, .owner-btn, .carousel-btn, .carousel-dot')) return;    
+    openListing(listing.id, listing.slug);
   };
   
   const isWished = State.wishlistIds.has(listing.id);
@@ -2947,14 +2995,14 @@ function createListingCard(listing, showOwnerActions = false) {
   } else if (listing.images && listing.images.length === 1) {
     imageHtml = `<img src="${escHtml(listing.images[0])}" alt="${escHtml(listing.name)}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" decoding="async" />`;
   } else {
-    imageHtml = `<div class="card-no-image">📦</div>`;
+    imageHtml = `<div class="card-no-image"></div>`;
   }
   
   const paymentIcons = {
-    'cash': '💵', 'card': '💳', 'paypal': '🅿️', 'venmo': 'V', 'crypto': '₿', 'trade': '🔄'
+    'cash': 'Cash', 'card': 'Card', 'paypal': 'PayPal', 'venmo': 'Venmo', 'crypto': 'Crypto', 'trade': 'Trade'
   };
   const paymentDisplay = listing.payment_methods && listing.payment_methods.length > 0
-    ? listing.payment_methods.slice(0, 3).map(p => paymentIcons[p] || p).join(' ')
+    ? listing.payment_methods.slice(0, 3).map(p => paymentIcons[p] || p).join(' · ')
     : '💵';
   
   let wishlistBtn = '';
@@ -2963,7 +3011,7 @@ function createListingCard(listing, showOwnerActions = false) {
       <button class="wishlist-btn ${isWished ? 'active' : ''}"
         onclick="toggleWishlist(event, '${listing.id}')"
         style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;z-index:20;transition:all 0.2s;"
-      >${isWished ? '❤️' : '🤍'}</button>
+      >${isWished ? 'Saved' : 'Save'}</button>
     `;
   }
   
@@ -2980,13 +3028,13 @@ function createListingCard(listing, showOwnerActions = false) {
   const hasAiSuggestion = listing.ai_suggestions ? true : false;
   
   const soldOverlay = listing.is_sold ? '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);padding:8px 16px;border-radius:8px;font-weight:bold;color:var(--danger);z-index:15;">SOLD</div>' : '';
-  const locationDisplay = listing.location ? `📍 ${listing.location.substring(0, 25)}` : '';
+  const locationDisplay = listing.location ? `${listing.location.substring(0, 25)}` : '';
   
   card.innerHTML = `
     <div class="card-image-wrap" style="position:relative;aspect-ratio:1;background:var(--bg-3);overflow:hidden;">
       ${imageHtml}
       ${listing.is_fair ? '<span style="position:absolute;top:8px;left:8px;background:var(--neon);color:#001a07;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:bold;z-index:20;">AI FAIR</span>' : ''}
-      ${hasAiSuggestion ? '<span style="position:absolute;top:8px;left:70px;background:var(--blue);color:#001a07;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:bold;z-index:20;">🤖 AI ANALYZED</span>' : ''}
+      ${hasAiSuggestion ? '<span style="position:absolute;top:8px;left:70px;background:var(--blue);color:#001a07;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:bold;z-index:20;">AI ANALYZED</span>' : ''}
       ${soldOverlay}
       ${wishlistBtn}
     </div>
@@ -2994,12 +3042,12 @@ function createListingCard(listing, showOwnerActions = false) {
       <div class="card-title" style="font-weight:700;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:4px;">${escHtml(listing.name)}</div>
       <div class="card-price" style="color:var(--neon);font-weight:bold;font-size:1.1rem;margin-bottom:4px;">$${parseFloat(listing.price).toFixed(2)}</div>
       <div class="card-meta" style="font-size:0.7rem;color:var(--text-muted);display:flex;flex-wrap:wrap;gap:8px;margin-bottom:4px;">
-        <span>🏷️ ${listing.condition || 'N/A'}</span>
-        <span>📦 ${listing.type || 'buy-now'}</span>
+        <span>${listing.condition || 'N/A'}</span>
+        <span>${listing.type || 'buy-now'}</span>
       </div>
       ${locationDisplay ? `<div class="card-location" style="font-size:0.7rem;color:var(--text-muted);margin-bottom:4px;display:flex;align-items:center;gap:4px;">${locationDisplay}</div>` : ''}
       <div class="card-payment" style="font-size:0.7rem;color:var(--text-muted);display:flex;align-items:center;gap:6px;background:rgba(0,255,65,0.08);padding:4px 8px;border-radius:6px;margin-top:4px;flex-wrap:wrap;">
-        <span>💳 Accepts:</span>
+        <span>Accepts:</span>
         <span>${paymentDisplay}</span>
       </div>
       ${ownerActions}
@@ -3014,7 +3062,7 @@ function renderListings(listings) {
   if (!grid) return;
   
   if (listings.length === 0) {
-    grid.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">NO LISTINGS FOUND</div></div>`;
+    grid.innerHTML = `<div class="empty-state"><div class="empty-icon"></div><div class="empty-title">NO LISTINGS FOUND</div></div>`;
     return;
   }
   
@@ -3533,8 +3581,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   initChat();
 
   const route = parseRouteFromHash();
-  
-  // FIX: Properly handle meta-data for all routes on refresh
+
+  // Handle initial page load from hash
   if (route.page === 'detail' && route.listingId) {
     openListing(route.listingId);
   } else if (route.page === 'profile' && route.profileId) {
