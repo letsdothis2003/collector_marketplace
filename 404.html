@@ -25,7 +25,23 @@
 <script crossorigin="anonymous" defer="" referrerpolicy="no-referrer" src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <!-- Main application script -->
 <script defer="" src="script.js?v=20260709"></script>
-</link></head>
+
+<!-- GitHub Pages SPA Redirect -->
+<script>
+  (function() {
+    const redirect = sessionStorage.redirect;
+    delete sessionStorage.redirect;
+    if (redirect && redirect !== location.href) {
+      history.replaceState(null, null, redirect);
+    }
+    const path = location.pathname.split('/').pop();
+    if (path) {
+      history.replaceState(null, null, location.pathname.slice(0, -path.length) + '#/' + path);
+    }
+  })();
+</script>
+
+</head>
 <body data-page="shop">
 <!-- Error Banner -->
 <div id="error-banner">OBTAINUM IS EXPERIENCING ISSUES — PLEASE WAIT WHILE WE RESTORE SERVICE</div>
@@ -81,54 +97,5 @@
 <main id="app">
   <!-- Page content will be loaded here dynamically -->
 </main>
-
-<!-- ===================== AUTH MODAL ===================== -->
-<div class="modal-overlay" id="auth-modal" onclick="closeOnOverlay(event, 'auth-modal')">
-  <div class="modal"><button class="modal-close" onclick="closeModal('auth-modal')">×</button>
-    <div class="modal-logo">OBTAINUM</div><div class="modal-tagline">Enter the marketplace</div>
-    <div class="modal-tabs"><button class="modal-tab active" id="tab-login" onclick="switchAuthTab('login')">LOGIN</button><button class="modal-tab" id="tab-register" onclick="switchAuthTab('register')">REGISTER</button></div>
-    <div id="auth-login"><form class="auth-form" onsubmit="handleLogin(event)"><button type="button" class="btn btn-outline w-full" onclick="signInWithGoogle()">CONTINUE WITH GOOGLE</button><div class="auth-divider"><span>OR</span></div><input class="form-input" id="login-email" type="email" placeholder="Email" required=""><input class="form-input" id="login-pass" type="password" placeholder="Password" required=""><div id="login-error" class="auth-error"></div><button type="submit" class="btn btn-primary btn-lg w-full" id="login-btn">LOGIN</button></form></div>
-    <div id="auth-register" class="hidden"><form class="auth-form" onsubmit="handleRegister(event)"><button type="button" class="btn btn-outline w-full" onclick="signInWithGoogle()">CONTINUE WITH GOOGLE</button><div class="auth-divider"><span>OR</span></div><input class="form-input" id="reg-username" placeholder="Username" required=""><input class="form-input" id="reg-email" type="email" placeholder="Email" required=""><input class="form-input" id="reg-pass" type="password" placeholder="Password" required=""><div id="register-error" class="auth-error"></div><button type="submit" class="btn btn-primary btn-lg w-full" id="register-btn">CREATE ACCOUNT</button></form></div>
-  </div>
-</div>
-
-<!-- Report Bug Modal -->
-<div class="modal-overlay" id="report-modal" onclick="closeOnOverlay(event, 'report-modal')">
-  <div class="modal" style="max-width:500px;"><button class="modal-close" onclick="closeModal('report-modal')">×</button>
-    <div class="modal-logo" style="font-size:1.1rem;">Report a Bug</div>
-    <form onsubmit="submitBugReport(event)">
-      <div class="form-group">
-        <input class="form-input" id="bug-title" placeholder="Bug title" required="">
-      </div>
-      <div class="form-group">
-        <textarea class="form-input" id="bug-description" rows="4" placeholder="Describe the issue..." required=""></textarea>
-      </div>
-      <div class="form-group">
-        <input class="form-input" id="bug-url" placeholder="Page URL where it happened">
-      </div>
-      <button type="submit" class="btn btn-primary w-full">Submit Report</button>
-    </form>
-  </div>
-</div>
-
-<!-- Mark Sold Modal -->
-<div class="modal-overlay" id="mark-sold-modal" onclick="closeOnOverlay(event, 'mark-sold-modal')">
-  <div class="modal" style="max-width:380px;"><button class="modal-close" onclick="closeModal('mark-sold-modal')">×</button>
-    <div class="modal-logo" style="font-size:1.1rem;">MARK AS SOLD</div>
-    <p>This will mark the listing as sold and remove it from the marketplace.</p>
-    <input type="hidden" id="mark-sold-listing-id">
-    <button class="btn btn-primary w-full" onclick="confirmMarkSold()">YES, MARK AS SOLD</button>
-    <button class="btn btn-ghost w-full" onclick="closeModal('mark-sold-modal')">CANCEL</button>
-  </div>
-</div>
-
-<!-- AI Route Safety Modal with Map -->
-<div class="modal-overlay" id="route-safety-modal" onclick="closeOnOverlay(event, 'route-safety-modal')">
-  <div class="modal" style="max-width: 600px; max-height: 90vh; overflow-y: auto;"><button class="modal-close" onclick="closeModal('route-safety-modal')">×</button>
-    <div class="modal-logo" style="font-size:1.1rem;">AI Route Safety Check</div>
-    <div id="route-safety-content"></div>
-  </div>
-</div>
-
 </body>
 </html>
